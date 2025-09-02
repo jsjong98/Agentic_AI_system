@@ -441,8 +441,7 @@ const useStructuraAPI = () => {
 
 ---
 
-**개발자**: PwC RA Team  
 **버전**: 1.0.0 (Structura Edition)  
 **xAI 지원**: SHAP, LIME, Feature Importance  
 **React 연동**: 최적화 완료  
-**최종 업데이트**: 2024년
+**최종 업데이트**: 2025년
