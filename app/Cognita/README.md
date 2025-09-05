@@ -512,8 +512,7 @@ const useCognitaAPI = () => {
 
 ---
 
-**개발자**: PwC RA Team  
 **버전**: 1.0.0 (Cognita Edition)  
 **Neo4j 지원**: 관계형 데이터 분석 특화  
 **React 연동**: 최적화 완료  
-**최종 업데이트**: 2024년
+**최종 업데이트**: 2025년
