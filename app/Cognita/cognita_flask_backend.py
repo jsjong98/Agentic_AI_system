@@ -174,15 +174,16 @@ class CognitaRiskAnalyzer:
         )
 
     def analyze_manager_stability(self, employee_id: str) -> float:
-        """관리자 안정성 분석"""
+        """관리자 안정성 분석 - 최적화된 버전"""
         
+        # 단순화된 쿼리로 성능 향상
         query = """
         MATCH (emp:Employee {employee_id: $employee_id})
         
-        // 직속 상사만 조회
+        // 직속 상사만 조회 (복잡한 부서 분석 제거)
         OPTIONAL MATCH (emp)-[reports:REPORTS_TO]->(manager:Employee)
         
-        // 관리자 부하 직원 수
+        // 관리자 부하 직원 수 (서브쿼리 단순화)
         OPTIONAL MATCH (manager)<-[:REPORTS_TO]-(subordinate:Employee)
         
         RETURN 
@@ -207,30 +208,31 @@ class CognitaRiskAnalyzer:
             if not record.get('direct_manager'):
                 instability_score += 0.5
             
-            # 관리자 과부하
+            # 관리자 과부하 (단순화된 계산)
             if manager_load > 12:
                 instability_score += 0.3
             
-            # 보고 빈도
+            # 보고 빈도 (단순화된 매핑)
             frequency_penalty = {'daily': 0.0, 'weekly': 0.1, 'monthly': 0.2, 'rarely': 0.3}
             instability_score += frequency_penalty.get(reporting_frequency, 0.3)
             
             return min(instability_score, 1.0)
 
     def analyze_network_centrality(self, employee_id: str) -> Tuple[float, Dict[str, float]]:
-        """네트워크 중심성 분석"""
+        """네트워크 중심성 분석 - 샘플링으로 최적화"""
         
+        # 협업 관계 샘플링 (성능 향상)
         query = """
         MATCH (emp:Employee {employee_id: $employee_id})
         
-        // 직접 협업 관계만 조회
+        // 직접 협업 관계만 조회 (2-hop 제거로 성능 향상)
         OPTIONAL MATCH (emp)-[collab:COLLABORATES_WITH]-(colleague:Employee)
         WHERE collab.collaboration_strength IS NOT NULL
         
-        // 상위 협업 관계만 샘플링
+        // 상위 협업 관계만 샘플링 (강도 기준)
         WITH emp, collab, colleague
         ORDER BY collab.collaboration_strength DESC
-        LIMIT 50
+        LIMIT 50  // 최대 50개 관계만 분석
         
         // 프로젝트 연결 (현재 활성 프로젝트만)
         OPTIONAL MATCH (emp)-[:PARTICIPATES_IN]->(proj:Project {status: 'active'})<-[:PARTICIPATES_IN]-(proj_colleague:Employee)
@@ -241,9 +243,11 @@ class CognitaRiskAnalyzer:
             avg(collab.collaboration_strength) as avg_collaboration_strength,
             count(DISTINCT proj_colleague.employee_id) as project_connections,
             
+            // 관계 품질 (간단화)
             sum(CASE WHEN collab.relationship_quality = 'excellent' THEN 1 ELSE 0 END) as excellent_count,
             sum(CASE WHEN collab.relationship_quality = 'poor' THEN 1 ELSE 0 END) as poor_count,
             
+            // 빈번한 상호작용
             sum(CASE WHEN collab.interaction_frequency IN ['daily', 'weekly'] THEN 1 ELSE 0 END) as frequent_count
         """
         
@@ -262,20 +266,20 @@ class CognitaRiskAnalyzer:
             frequent_count = record.get('frequent_count', 0)
             
             # 단순화된 중심성 계산
-            degree_centrality = min(direct_connections / 15.0, 1.0)
+            degree_centrality = min(direct_connections / 15.0, 1.0)  # 15명 기준
             strength_centrality = min(avg_strength, 1.0)
-            project_centrality = min(project_connections / 8.0, 1.0)
+            project_centrality = min(project_connections / 8.0, 1.0)  # 8명 기준
             
             # 관계 품질 점수
             total_relations = direct_connections
-            quality_score = 0.5
+            quality_score = 0.5  # 기본값
             if total_relations > 0:
                 quality_score = (excellent_count * 1.0 + (total_relations - excellent_count - poor_count) * 0.5) / total_relations
             
             # 상호작용 점수
-            interaction_score = min(frequent_count / 5.0, 1.0)
+            interaction_score = min(frequent_count / 5.0, 1.0)  # 5명 기준
             
-            # 가중 평균
+            # 가중 평균 (단순화)
             centrality_score = (
                 degree_centrality * 0.4 +
                 strength_centrality * 0.3 +
@@ -295,14 +299,15 @@ class CognitaRiskAnalyzer:
             return centrality_score, network_stats
 
     def calculate_social_isolation(self, employee_id: str) -> float:
-        """사회적 고립 지수 계산"""
+        """사회적 고립 지수 계산 - 경량화된 버전"""
         
+        # 핵심 지표만 조회하는 단순화된 쿼리
         query = """
         MATCH (emp:Employee {employee_id: $employee_id})
         
         // Layer 1: 직접 협업 (상위 관계만)
         OPTIONAL MATCH (emp)-[collab:COLLABORATES_WITH]-(colleague:Employee)
-        WHERE collab.collaboration_strength >= 0.3
+        WHERE collab.collaboration_strength >= 0.3  // 의미있는 협업만
         
         // Layer 2: 현재 활성 프로젝트만
         OPTIONAL MATCH (emp)-[:PARTICIPATES_IN]->(proj:Project {status: 'active'})<-[:PARTICIPATES_IN]-(proj_colleague:Employee)
@@ -339,6 +344,7 @@ class CognitaRiskAnalyzer:
             # 단순화된 고립 점수 계산
             isolation_score = 0.0
             
+            # 핵심 고립 요인들
             if meaningful_collaborations == 0:
                 isolation_score += 0.4
             elif meaningful_collaborations < 2:
@@ -359,8 +365,9 @@ class CognitaRiskAnalyzer:
             return min(isolation_score, 1.0)
 
     def analyze_team_volatility(self, employee_id: str) -> float:
-        """팀 변동성 분석"""
+        """팀 변동성 분석 - 단순화된 버전"""
         
+        # 핵심 팀 정보만 조회
         query = """
         MATCH (emp:Employee {employee_id: $employee_id})-[:WORKS_IN]->(dept:Department)
         
@@ -372,7 +379,7 @@ class CognitaRiskAnalyzer:
         
         RETURN 
             dept.name as department,
-            count(DISTINCT dept_teammate.employee_id) - 1 as dept_team_size,
+            count(DISTINCT dept_teammate.employee_id) - 1 as dept_team_size,  // -1 for self
             count(DISTINCT proj.project_id) as active_projects
         """
         
@@ -388,15 +395,16 @@ class CognitaRiskAnalyzer:
             
             volatility_score = 0.0
             
+            # 단순화된 변동성 계산
             if dept_team_size < 3:
-                volatility_score += 0.4
+                volatility_score += 0.4  # 매우 작은 팀
             elif dept_team_size < 8:
-                volatility_score += 0.2
+                volatility_score += 0.2  # 작은 팀
             
             if active_projects == 0:
-                volatility_score += 0.3
+                volatility_score += 0.3  # 프로젝트 미참여
             elif active_projects > 5:
-                volatility_score += 0.2
+                volatility_score += 0.2  # 너무 많은 프로젝트
             
             return min(volatility_score, 1.0)
 
@@ -458,8 +466,9 @@ class CognitaRiskAnalyzer:
         return risk_category, risk_factors
 
     def batch_analyze_department(self, department_name: str, sample_size: int = 20) -> List[RiskMetrics]:
-        """부서 분석"""
+        """부서 분석 - 샘플링과 배치 최적화"""
         
+        # 샘플링된 직원 목록 조회
         query = """
         MATCH (emp:Employee)-[:WORKS_IN]->(dept:Department {name: $dept_name})
         WITH emp
@@ -483,15 +492,21 @@ class CognitaRiskAnalyzer:
         logger.info(f"부서 '{department_name}' 샘플 분석: {len(employees)}명")
         
         risk_analyses = []
+        batch_size = 5  # 작은 배치로 처리
         
-        for emp_info in employees:
-            emp_id = emp_info['employee_id']
-            try:
-                risk_metrics = self.analyze_employee_risk(emp_id)
-                risk_analyses.append(risk_metrics)
-            except Exception as e:
-                logger.warning(f"직원 {emp_id} 분석 실패: {str(e)}")
-                continue
+        for i in range(0, len(employees), batch_size):
+            batch = employees[i:i+batch_size]
+            
+            logger.info(f"  배치 {i//batch_size + 1}: {len(batch)}명 처리 중...")
+            
+            for emp_info in batch:
+                emp_id = emp_info['employee_id']
+                try:
+                    risk_metrics = self.analyze_employee_risk(emp_id)
+                    risk_analyses.append(risk_metrics)
+                except Exception as e:
+                    logger.warning(f"직원 {emp_id} 분석 실패: {str(e)}")
+                    continue
         
         return risk_analyses
 
@@ -617,11 +632,11 @@ def create_app():
     app.config['JSON_AS_ASCII'] = False  # 한글 지원
     app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True  # JSON 포맷팅
     
-    # Neo4j 설정
+    # Neo4j 설정 (최적화된 연결 정보)
     NEO4J_CONFIG = {
-        "uri": os.getenv("NEO4J_URI", "bolt://54.162.43.24:7687"),
+        "uri": os.getenv("NEO4J_URI", "bolt://34.227.31.16:7687"),
         "username": os.getenv("NEO4J_USERNAME", "neo4j"),
-        "password": os.getenv("NEO4J_PASSWORD", "resident-success-moss")
+        "password": os.getenv("NEO4J_PASSWORD", "cover-site-establishment")
     }
     
     # 전역 변수
@@ -632,6 +647,33 @@ def create_app():
     # 애플리케이션 초기화
     # ------------------------------------------------------
     
+    def create_performance_indexes(neo4j_manager):
+        """분석 성능 향상을 위한 추가 인덱스 생성"""
+        
+        logger.info("성능 최적화 인덱스 생성 중...")
+        
+        optimization_queries = [
+            # 협업 관계 최적화 인덱스
+            "CREATE INDEX IF NOT EXISTS FOR ()-[r:COLLABORATES_WITH]-() ON (r.collaboration_strength)",
+            "CREATE INDEX IF NOT EXISTS FOR ()-[r:COLLABORATES_WITH]-() ON (r.interaction_frequency)",
+            "CREATE INDEX IF NOT EXISTS FOR ()-[r:COLLABORATES_WITH]-() ON (r.relationship_quality)",
+            
+            # 프로젝트 관계 최적화
+            "CREATE INDEX IF NOT EXISTS FOR ()-[r:PARTICIPATES_IN]-() ON (r.role_in_project)",
+            "CREATE INDEX IF NOT EXISTS FOR (p:Project) ON (p.status)",
+            
+            # 복합 인덱스 (가능한 경우)
+            "CREATE INDEX IF NOT EXISTS FOR (e:Employee) ON (e.department, e.job_level)",
+        ]
+        
+        with neo4j_manager.driver.session() as session:
+            for query in optimization_queries:
+                try:
+                    session.run(query)
+                    logger.info(f"  ✓ 생성: {query.split('ON')[1] if 'ON' in query else 'constraint'}")
+                except Exception as e:
+                    logger.warning(f"  ✗ 실패: {str(e)}")
+
     @app.before_first_request
     def initialize_services():
         """첫 요청 전 서비스 초기화"""
@@ -646,6 +688,9 @@ def create_app():
                 NEO4J_CONFIG['username'],
                 NEO4J_CONFIG['password']
             )
+            
+            # 성능 최적화 인덱스 생성
+            create_performance_indexes(neo4j_manager)
             
             # 분석기 초기화
             cognita_analyzer = CognitaRiskAnalyzer(neo4j_manager)

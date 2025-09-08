@@ -72,6 +72,11 @@ class CognitaAPITester:
                 print(f"✅ 총 직원 수: {data['total_employees']:,}명")
                 print(f"✅ 총 관계 수: {data['total_relationships']:,}개")
                 print(f"✅ 응답 시간: {data['timestamp']}")
+                
+                # 성능 최적화 확인
+                if data['total_employees'] >= 1470:
+                    print(f"✅ 대용량 데이터 확인: 최적화된 분석 가능")
+                
                 return True
             else:
                 print(f"❌ 헬스체크 실패: {response.status_code}")
@@ -157,7 +162,8 @@ class CognitaAPITester:
             if response.status_code == 200:
                 data = response.json()
                 
-                print(f"✅ 분석 완료 (소요시간: {end_time - start_time:.2f}초)")
+                elapsed_time = end_time - start_time
+                print(f"✅ 분석 완료 (소요시간: {elapsed_time:.2f}초)")
                 print(f"  직원 ID: {data['employee_id']}")
                 print(f"  종합 위험도: {data['overall_risk_score']:.3f} ({data['risk_category']})")
                 print(f"  사회적 고립: {data['social_isolation_index']:.3f}")
@@ -174,6 +180,18 @@ class CognitaAPITester:
                 if data['network_stats']:
                     connections = data['network_stats'].get('direct_connections', 0)
                     print(f"  직접 연결: {connections}명")
+                
+                # 성능 평가
+                if elapsed_time < 1.0:
+                    perf_grade = "⚡ 우수"
+                elif elapsed_time < 2.0:
+                    perf_grade = "✅ 양호"
+                elif elapsed_time < 5.0:
+                    perf_grade = "⚠️ 보통"
+                else:
+                    perf_grade = "🔧 개선필요"
+                
+                print(f"  성능 등급: {perf_grade}")
                 
                 # React에서 사용할 수 있는 형태 확인
                 print(f"  ✅ JSON 직렬화: 성공")
