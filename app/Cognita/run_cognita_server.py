@@ -20,10 +20,10 @@ def main():
     print("🚀 Cognita 관계형 위험도 분석 Flask 백엔드 서버 시작")
     print("=" * 60)
     
-    # 환경 변수 설정 (선택사항)
-    os.environ.setdefault("NEO4J_URI", "bolt://YOUR_NEO4J_HOST:7687")
+    # 환경 변수 설정 (최적화된 연결 정보)
+    os.environ.setdefault("NEO4J_URI", "bolt://34.227.31.16:7687")
     os.environ.setdefault("NEO4J_USERNAME", "neo4j")
-    os.environ.setdefault("NEO4J_PASSWORD", "YOUR_NEO4J_PASSWORD")
+    os.environ.setdefault("NEO4J_PASSWORD", "cover-site-establishment")
     
     # 서버 설정
     host = os.getenv("HOST", "0.0.0.0")
