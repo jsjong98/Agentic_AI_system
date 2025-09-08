@@ -1,3 +1,4 @@
 data/employee_relationships.json filter=lfs diff=lfs merge=lfs -text
 data/employee_relationships.xml filter=lfs diff=lfs merge=lfs -text
 *.csv filter=lfs diff=lfs merge=lfs -text
+*.ipynb filter=lfs diff=lfs merge=lfs -text
