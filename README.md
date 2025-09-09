@@ -1,8 +1,8 @@
 # 🤖 Agentic AI System - HR Analytics Platform
 
-**PwC RA팀의 에이전틱 AI 기반 HR 분석 플랫폼**
+**에이전틱 AI 기반 HR 분석 플랫폼**
 
-차세대 인사 분석을 위한 다중 에이전트 AI 시스템으로, 정형 데이터와 관계형 데이터를 동시에 분석하여 종합적인 인사 인사이트를 제공합니다.
+차세대 인사 분석을 위한 다중 에이전트 AI 시스템으로, 정형 데이터, 관계형 데이터, 시계열 데이터를 동시에 분석하여 종합적인 인사 인사이트를 제공합니다.
 
 ## 🌟 주요 특징
 
@@ -26,20 +26,20 @@
                                     │
         ┌───────────────────────────┼───────────────────────────┐
         │                           │                           │
-┌───────▼───────┐          ┌────────▼────────┐         ┌───────────────┐
-│  🏢 Structura  │          │  🕸️ Cognita     │         │  ⏳ 향후 확장   │
+┌───────▼───────┐          ┌────────▼────────┐         ┌───────▼───────┐
+│  🏢 Structura  │          │  🕸️ Cognita     │         │  ⏰ Chronos    │
 │   워커 에이전트  │          │   워커 에이전트   │         │   워커 에이전트  │
-│  (포트: 5001)  │          │  (포트: 5000)   │         │  (시계열/NLP)  │
+│  (포트: 5001)  │          │  (포트: 5000)   │         │  (포트: 5002)  │
 │               │          │                │         │               │
-│ 정형 데이터 분석 │          │ 관계형 데이터 분석│         │  추가 분석 모듈  │
-│ XGBoost + xAI │          │ Neo4j + Graph  │         │               │
-│ SHAP + LIME   │          │ Network Analytics│         │               │
+│ 정형 데이터 분석 │          │ 관계형 데이터 분석│         │ 시계열 데이터 분석│
+│ XGBoost + xAI │          │ Neo4j + Graph  │         │ GRU+CNN+Attention│
+│ SHAP + LIME   │          │ Network Analytics│         │ 딥러닝 예측 모델 │
 └───────────────┘          └─────────────────┘         └───────────────┘
         │                           │                           │
         ▼                           ▼                           ▼
 ┌───────────────┐          ┌─────────────────┐         ┌───────────────┐
-│ 📊 IBM HR CSV │          │ 🗄️ Neo4j Graph  │         │ 📈 시계열 DB   │
-│   데이터셋     │          │   데이터베이스    │         │   (향후 구현)   │
+│ 📊 IBM HR CSV │          │ 🗄️ Neo4j Graph  │         │ 📈 시계열 CSV  │
+│   데이터셋     │          │   데이터베이스    │         │   데이터셋     │
 └───────────────┘          └─────────────────┘         └───────────────┘
 ```
 
@@ -128,12 +128,37 @@ python test_agentic_system.py
 
 ---
 
+### ⏰ Chronos - 시계열 데이터 분석 에이전트
+
+**포트**: `5002` | **기술**: GRU+CNN+Attention 하이브리드 딥러닝
+
+#### 🎯 주요 기능
+- **시계열 패턴 분석**: 직원 행동 패턴의 시간적 변화 추적
+- **Attention 메커니즘**: 중요한 시점과 피처 자동 식별
+- **딥러닝 예측**: GRU+CNN 하이브리드 모델로 고정밀 예측
+- **인터랙티브 시각화**: Plotly 기반 동적 차트 제공
+
+#### 📈 성능 지표
+- **모델 아키텍처**: GRU + CNN + Feature/Temporal Attention
+- **시퀀스 길이**: 6주 단위 시계열 분석
+- **예측 정확도**: 딥러닝 기반 고정밀 예측
+- **시각화**: 실시간 인터랙티브 차트
+
+#### 🔗 주요 API
+- `POST /api/train` - 모델 학습 및 하이퍼파라미터 최적화
+- `POST /api/predict` - 시계열 기반 이직 예측
+- `POST /api/predict_batch` - 배치 예측 처리
+- `GET /api/visualize/attention` - Attention 가중치 시각화
+- `GET /api/visualize/features` - 피처 중요도 시각화
+
+---
+
 ## 🌐 React 연동 가이드
 
 ### 통합 API 사용 예시
 
 ```javascript
-// 🤖 개별 직원 통합 분석 (Structura + Cognita 동시 실행)
+// 🤖 개별 직원 통합 분석 (Structura + Cognita + Chronos 동시 실행)
 const analyzeEmployeeIntegrated = async (employeeData) => {
   const response = await fetch('http://localhost:8000/api/analyze/individual', {
     method: 'POST',
@@ -141,7 +166,8 @@ const analyzeEmployeeIntegrated = async (employeeData) => {
     body: JSON.stringify({
       ...employeeData,
       use_structura: true,  // 정형 데이터 분석 사용
-      use_cognita: true     // 관계형 데이터 분석 사용
+      use_cognita: true,    // 관계형 데이터 분석 사용
+      use_chronos: true     // 시계열 데이터 분석 사용
     })
   });
   
@@ -150,6 +176,7 @@ const analyzeEmployeeIntegrated = async (employeeData) => {
   // 🔍 통합 결과 활용
   console.log('Structura 결과:', result.structura_result);
   console.log('Cognita 결과:', result.cognita_result);
+  console.log('Chronos 결과:', result.chronos_result);
   console.log('통합 분석:', result.combined_analysis);
   
   return result;
@@ -164,7 +191,8 @@ const analyzeDepartmentIntegrated = async (departmentName) => {
       department_name: departmentName,
       sample_size: 20,
       use_structura: true,
-      use_cognita: true
+      use_cognita: true,
+      use_chronos: true
     })
   });
   return response.json();
@@ -204,7 +232,8 @@ const useAgenticAI = () => {
         body: JSON.stringify({
           ...employeeData,
           use_structura: true,
-          use_cognita: true
+          use_cognita: true,
+          use_chronos: true
         })
       });
       const result = await response.json();
@@ -248,17 +277,17 @@ const useAgenticAI = () => {
 
 ## 📊 시스템 비교
 
-| 특징 | 🏢 Structura | 🕸️ Cognita |
-|------|-------------|------------|
-| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 |
-| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB |
-| **주요 기술** | XGBoost + xAI | Graph Analytics |
-| **포트** | 5001 | 5000 |
-| **예측 대상** | 이직 확률 | 관계형 위험도 |
-| **설명 가능성** | SHAP, LIME | 네트워크 분석 |
-| **분석 범위** | 개별 중심 | 조직/팀 중심 |
-| **실시간성** | 즉시 예측 | 실시간 관계 분석 |
-| **성능** | 0.1초/명 | 0.82초/명 |
+| 특징 | 🏢 Structura | 🕸️ Cognita | ⏰ Chronos |
+|------|-------------|------------|-----------|
+| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 | 시계열 패턴 |
+| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB | 시계열 CSV |
+| **주요 기술** | XGBoost + xAI | Graph Analytics | GRU+CNN+Attention |
+| **포트** | 5001 | 5000 | 5002 |
+| **예측 대상** | 이직 확률 | 관계형 위험도 | 시계열 기반 예측 |
+| **설명 가능성** | SHAP, LIME | 네트워크 분석 | Attention 메커니즘 |
+| **분석 범위** | 개별 중심 | 조직/팀 중심 | 시간적 패턴 중심 |
+| **실시간성** | 즉시 예측 | 실시간 관계 분석 | 딥러닝 예측 |
+| **성능** | 0.1초/명 | 0.82초/명 | 딥러닝 기반 |
 
 ---
 
@@ -294,6 +323,17 @@ const useAgenticAI = () => {
 | `GET` | `/api/analyze/employee/{id}` | 직원 분석 |
 | `POST` | `/api/analyze/department` | 부서 분석 |
 
+### ⏰ Chronos 워커 (포트 5002)
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|------------|------|
+| `GET` | `/api/health` | 서버 상태 확인 |
+| `POST` | `/api/train` | 모델 학습 |
+| `POST` | `/api/predict` | 시계열 예측 |
+| `POST` | `/api/predict_batch` | 배치 예측 |
+| `GET` | `/api/visualize/attention` | Attention 시각화 |
+| `GET` | `/api/visualize/features` | 피처 중요도 시각화 |
+
 ---
 
 ## 🧪 테스트 실행
@@ -314,6 +354,9 @@ cd app/Structura && python test_structura_api.py
 
 # 🕸️ Cognita 워커 테스트  
 cd app/Cognita && python test_cognita_api.py
+
+# ⏰ Chronos 워커 테스트
+cd app/Chronos && python test_chronos_api.py
 ```
 
 ### 간단한 API 테스트
@@ -323,6 +366,7 @@ cd app/Cognita && python test_cognita_api.py
 curl http://localhost:8000/api/health    # 통합 시스템
 curl http://localhost:5001/api/health    # Structura
 curl http://localhost:5000/api/health    # Cognita
+curl http://localhost:5002/api/health    # Chronos
 
 # 간단한 예측 테스트 (Structura)
 curl -X POST http://localhost:5001/api/predict \
@@ -331,6 +375,11 @@ curl -X POST http://localhost:5001/api/predict \
 
 # 직원 분석 테스트 (Cognita)
 curl http://localhost:5000/api/analyze/employee/1
+
+# 시계열 예측 테스트 (Chronos)
+curl -X POST http://localhost:5002/api/predict \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id": 1, "sequence_data": []}'
 ```
 
 ---
@@ -353,10 +402,19 @@ Agentic_AI_system/
 │   │   ├── 📋 requirements.txt
 │   │   └── 📖 README.md
 │   │
-│   └── 📁 Cognita/                  # 관계형 데이터 분석 워커
-│       ├── 🕸️ cognita_flask_backend.py
-│       ├── 🚀 run_cognita_server.py
-│       ├── 🧪 test_cognita_api.py
+│   ├── 📁 Cognita/                  # 관계형 데이터 분석 워커
+│   │   ├── 🕸️ cognita_flask_backend.py
+│   │   ├── 🚀 run_cognita_server.py
+│   │   ├── 🧪 test_cognita_api.py
+│   │   ├── 📋 requirements.txt
+│   │   └── 📖 README.md
+│   │
+│   └── 📁 Chronos/                  # 시계열 데이터 분석 워커
+│       ├── ⏰ chronos_flask_backend.py
+│       ├── 🧠 chronos_models.py
+│       ├── 📊 chronos_processor.py
+│       ├── 🚀 run_chronos_server.py
+│       ├── 🧪 test_chronos_api.py
 │       ├── 📋 requirements.txt
 │       └── 📖 README.md
 │
@@ -401,6 +459,13 @@ Agentic_AI_system/
 - **처리량**: ~4,400명/시간
 - **메모리 사용**: 300MB-1GB (40% 감소)
 - **자동 인덱스**: 성능 최적화 자동 설정
+
+### ⏰ Chronos 성능
+- **모델 아키텍처**: GRU + CNN + Dual Attention
+- **시퀀스 길이**: 6주 단위 시계열 분석
+- **학습 시간**: 하이퍼파라미터 최적화 지원
+- **예측 속도**: 딥러닝 기반 실시간 예측
+- **시각화**: Plotly 인터랙티브 차트
 
 ### 확장성 평가
 - **소규모 조직** (100명 미만): 실시간 분석 가능
@@ -476,21 +541,21 @@ conda install -c conda-forge shap lime
 
 ## 🔮 향후 계획
 
-### 단기 (1-2개월)
+### 단기 (1-2주)
 - [ ] **React 프론트엔드 개발**: 통합 대시보드 구현
 - [ ] **실시간 모니터링**: 시스템 성능 및 분석 결과 추적
 - [ ] **배치 처리 시스템**: 대용량 데이터 처리 최적화
-- [ ] **모델 성능 개선**: 예측 정확도 향상
-
-### 중기 (3-6개월)
-- [ ] **워커 에이전트 3**: 시계열 데이터 분석 (Chronos)
+- [x] **모델 성능 개선**: 예측 정확도 향상
+- [x] **워커 에이전트 3**: 시계열 데이터 분석 (Chronos) - 완료
 - [ ] **워커 에이전트 4**: 자연어 데이터 분석 (NLP)
+- [ ] **워커 에이전트 5**: 외부 시장 분석
+
+### 중기 (3-4주)
 - [ ] **Supervisor 에이전트**: 전체 워커 조정 및 관리
+- [ ] **최종 종합 에이전트**: 모든 분석 결과 통합
 - [ ] **클라우드 배포**: AWS/Azure 기반 확장
 
 ### 장기 (6개월+)
-- [ ] **워커 에이전트 5**: 외부 시장 분석
-- [ ] **최종 종합 에이전트**: 모든 분석 결과 통합
 - [ ] **실시간 스트리밍**: 실시간 데이터 처리
 - [ ] **AI 추천 시스템**: 자동화된 인사 정책 제안
 
@@ -500,22 +565,24 @@ conda install -c conda-forge shap lime
 
 ### 기술적 성과
 - ✅ **다중 에이전트 아키텍처** 구현
-- ✅ **설명 가능한 AI** (SHAP, LIME) 적용
+- ✅ **설명 가능한 AI** (SHAP, LIME, Attention) 적용
 - ✅ **관계형 네트워크 분석** 시스템 구축
+- ✅ **시계열 딥러닝 분석** 시스템 구축 (Chronos)
 - ✅ **실시간 통합 분석** 플랫폼 완성
 - ✅ **React 연동** 최적화
 
 ### 성능 성과
 - ✅ **Structura**: 0.1초/명 예측 속도 달성
 - ✅ **Cognita**: 30% 성능 향상 (v1.1.0)
-- ✅ **통합 시스템**: 다중 워커 동시 실행
+- ✅ **Chronos**: GRU+CNN+Attention 하이브리드 모델 구현
+- ✅ **통합 시스템**: 3개 워커 에이전트 동시 실행
 - ✅ **확장성**: 대규모 조직 지원 가능
 
 ---
 
 ## 👥 기여자
 
-**PwC RA팀**
+**개발팀**
 - 시스템 아키텍처 설계
 - AI 모델 개발 및 최적화
 - 웹 서비스 구현
@@ -525,7 +592,7 @@ conda install -c conda-forge shap lime
 
 ## 📄 라이선스
 
-이 프로젝트는 PwC RA팀의 내부 연구 프로젝트입니다.
+이 프로젝트는 오픈소스 연구 프로젝트입니다.
 
 ---
 
@@ -534,13 +601,12 @@ conda install -c conda-forge shap lime
 프로젝트 관련 문의사항이나 기술 지원이 필요한 경우:
 
 1. **GitHub Issues**: 버그 리포트 및 기능 요청
-2. **내부 문의**: PwC RA팀 연락
-3. **기술 문서**: `README/` 폴더 참조
+2. **기술 문서**: `README/` 폴더 참조
+3. **개별 워커 문서**: 각 워커 디렉토리의 README 참조
 
 ---
 
-**버전**: 1.1.0 (Performance Optimized)  
+**버전**: 1.2.0 (Chronos Integration)  
 **최종 업데이트**: 2025년  
-**개발팀**: PwC RA Team  
-**기술 스택**: Python, Flask, XGBoost, Neo4j, React  
+**기술 스택**: Python, Flask, XGBoost, Neo4j, PyTorch, React  
 **아키텍처**: Multi-Agent AI System  
