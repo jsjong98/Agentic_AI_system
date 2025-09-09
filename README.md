@@ -545,8 +545,13 @@ conda install -c conda-forge shap lime
 - [ ] **React 프론트엔드 개발**: 통합 대시보드 구현
 - [ ] **실시간 모니터링**: 시스템 성능 및 분석 결과 추적
 - [ ] **배치 처리 시스템**: 대용량 데이터 처리 최적화
+<<<<<<< HEAD
 - [x] **모델 성능 개선**: 예측 정확도 향상
 - [x] **워커 에이전트 3**: 시계열 데이터 분석 (Chronos) - 완료
+=======
+- [ ] **모델 성능 개선**: 예측 정확도 향상
+- [ ] **워커 에이전트 3**: 시계열 데이터 분석 (Chronos)
+>>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
 - [ ] **워커 에이전트 4**: 자연어 데이터 분석 (NLP)
 - [ ] **워커 에이전트 5**: 외부 시장 분석
 
@@ -582,7 +587,11 @@ conda install -c conda-forge shap lime
 
 ## 👥 기여자
 
+<<<<<<< HEAD
 **개발팀**
+=======
+**오종환**
+>>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
 - 시스템 아키텍처 설계
 - AI 모델 개발 및 최적화
 - 웹 서비스 구현
@@ -590,18 +599,22 @@ conda install -c conda-forge shap lime
 
 ---
 
+<<<<<<< HEAD
 ## 📄 라이선스
 
 이 프로젝트는 오픈소스 연구 프로젝트입니다.
 
 ---
 
+=======
+>>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
 ## 📞 지원 및 문의
 
 프로젝트 관련 문의사항이나 기술 지원이 필요한 경우:
 
 1. **GitHub Issues**: 버그 리포트 및 기능 요청
 2. **기술 문서**: `README/` 폴더 참조
+<<<<<<< HEAD
 3. **개별 워커 문서**: 각 워커 디렉토리의 README 참조
 
 ---
@@ -609,4 +622,12 @@ conda install -c conda-forge shap lime
 **버전**: 1.2.0 (Chronos Integration)  
 **최종 업데이트**: 2025년  
 **기술 스택**: Python, Flask, XGBoost, Neo4j, PyTorch, React  
+=======
+
+---
+
+**버전**: 1.1.0 (Performance Optimized)  
+**최종 업데이트**: 2025년   
+**기술 스택**: Python, Flask, XGBoost, Neo4j, React  
+>>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
 **아키텍처**: Multi-Agent AI System  
