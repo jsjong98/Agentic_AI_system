@@ -71,45 +71,89 @@ class BusinessCalendar:
 calendar = BusinessCalendar()
 
 class IndividualCharacteristics:
-    def __init__(self, employee_id, persona_code):
+    def __init__(self, employee_id, persona_code, attrition_status=None):
         self.employee_id = employee_id
         self.persona_code = persona_code
+        self.attrition_status = attrition_status
         
         # 직원 ID 기반 시드 설정 (재현 가능하지만 개인별 고유)
-        np.random.seed(int(str(employee_id)[-4:]))  # 직원ID 마지막 4자리 활용
+        individual_seed = int(str(employee_id)[-4:]) + hash(persona_code) % 1000
+        self.rng = np.random.RandomState(individual_seed)  # 개별 랜덤 생성기 사용
         
         self.individual_traits = self._generate_individual_traits()
         
-        # 시드 복원
-        np.random.seed(42)
+        # 🔥 시드 복원 제거! 개인별 차이를 유지하기 위해
+        # np.random.seed(42)  # 이 줄이 문제였음!
     
     def _generate_individual_traits(self):
         """개인별 고유 특성 생성"""
         
+        # 퇴사자 여부에 따른 기본 편향 설정
+        attrition_bias = self._get_attrition_bias()
+        
         traits = {
-            # 기본 성향 편향 (-0.2 ~ +0.2 범위)
-            'work_intensity_bias': np.random.uniform(-0.2, 0.2),
-            'social_tendency_bias': np.random.uniform(-0.2, 0.2),
-            'stress_sensitivity_bias': np.random.uniform(-0.2, 0.2),
-            'routine_preference_bias': np.random.uniform(-0.2, 0.2),
+            # 기본 성향 편향 (퇴사자는 더 극단적) - 개별 랜덤 생성기 사용
+            'work_intensity_bias': self.rng.uniform(-0.4, 0.4) + attrition_bias.get('work_intensity', 0),
+            'social_tendency_bias': self.rng.uniform(-0.4, 0.4) + attrition_bias.get('social_tendency', 0),
+            'stress_sensitivity_bias': self.rng.uniform(-0.4, 0.4) + attrition_bias.get('stress_sensitivity', 0),
+            'routine_preference_bias': self.rng.uniform(-0.3, 0.3),
             
-            # 변동성 개인차 (0.5 ~ 1.5배)
-            'volatility_multiplier': np.random.uniform(0.5, 1.5),
+            # 변동성 개인차 (퇴사자는 더 불안정) - 범위 확대
+            'volatility_multiplier': self.rng.uniform(0.5, 1.8) * attrition_bias.get('volatility_mult', 1.0),
             
             # 반응 속도 차이 (페르소나 변화가 얼마나 빨리/늦게 나타나는가)
-            'change_rate_multiplier': np.random.uniform(0.7, 1.3),
+            'change_rate_multiplier': self.rng.uniform(0.6, 1.6),
             
-            # 특정 변수에 대한 개인적 민감도
-            'login_hours_sensitivity': np.random.uniform(0.8, 1.2),
-            'communication_sensitivity': np.random.uniform(0.8, 1.2),
-            'social_eating_sensitivity': np.random.uniform(0.8, 1.2),
-            'stress_eating_tendency': np.random.uniform(0.6, 1.4),
+            # 특정 변수에 대한 개인적 민감도 (퇴사자 특성 반영) - 범위 확대
+            'login_hours_sensitivity': self.rng.uniform(0.6, 1.5) * attrition_bias.get('login_sensitivity', 1.0),
+            'communication_sensitivity': self.rng.uniform(0.6, 1.5) * attrition_bias.get('comm_sensitivity', 1.0),
+            'social_eating_sensitivity': self.rng.uniform(0.6, 1.5),
+            'stress_eating_tendency': self.rng.uniform(0.5, 2.0) * attrition_bias.get('stress_eating_mult', 1.0),
+            
+            # 퇴사자 특별 지표들
+            'attrition_indicators': attrition_bias.get('indicators', {}),
             
             # 페르소나별 특화 개인차
             'persona_specific_traits': self._get_persona_specific_traits()
         }
         
         return traits
+    
+    def _get_attrition_bias(self):
+        """퇴사 여부에 따른 행동 편향 설정"""
+        
+        if self.attrition_status == 'Yes':
+            # 퇴사자: 2025년 퇴직 예정자들의 행동 패턴
+            return {
+                'work_intensity': -0.15,        # 업무 강도 감소
+                'social_tendency': -0.1,        # 사회적 활동 감소  
+                'stress_sensitivity': 0.2,      # 스트레스 민감도 증가
+                'volatility_mult': 1.4,         # 행동 변동성 증가
+                'login_sensitivity': 0.85,      # 로그인 시간 불규칙
+                'comm_sensitivity': 0.75,       # 소통량 감소 경향
+                'stress_eating_mult': 1.3,      # 스트레스 식습관 증가
+                'indicators': {
+                    'disengagement_trend': 0.002,    # 점진적 이탈 경향
+                    'routine_disruption': 1.2,       # 루틴 파괴 경향
+                    'social_withdrawal': 1.15        # 사회적 위축
+                }
+            }
+        else:
+            # 재직자: 안정적인 패턴 유지
+            return {
+                'work_intensity': 0.05,         # 약간의 긍정적 편향
+                'social_tendency': 0.0,         # 중립적
+                'stress_sensitivity': -0.05,    # 스트레스 관리 양호
+                'volatility_mult': 0.9,         # 안정적 행동
+                'login_sensitivity': 1.0,       # 규칙적 로그인
+                'comm_sensitivity': 1.05,       # 활발한 소통
+                'stress_eating_mult': 0.9,      # 건강한 식습관
+                'indicators': {
+                    'engagement_stability': 1.0,     # 안정적 몰입
+                    'routine_consistency': 1.0,      # 일관된 루틴
+                    'social_integration': 1.0        # 사회적 통합
+                }
+            }
     
     def _get_persona_specific_traits(self):
         """페르소나별 특화된 개인 특성"""
@@ -219,18 +263,18 @@ class RealisticPersonaPatterns:
             # 고위험군
             'P01_burnout': {
                 'description': '번아웃에 직면한 직원',
-                # 공간 사용 비율 (합계 = 1.0)
-                'work_focused_ratio': {'stage1': 0.70, 'stage2': 0.58, 'stage3': 0.42, 'volatility': 0.15},
-                'meeting_collaboration_ratio': {'stage1': 0.18, 'stage2': 0.12, 'stage3': 0.08, 'volatility': 0.08},
-                'social_dining_ratio': {'stage1': 0.08, 'stage2': 0.05, 'stage3': 0.03, 'volatility': 0.03},
-                'break_relaxation_ratio': {'stage1': 0.03, 'stage2': 0.18, 'stage3': 0.37, 'volatility': 0.12},
-                'shared_work_ratio': {'stage1': 0.01, 'stage2': 0.07, 'stage3': 0.10, 'volatility': 0.05},
+                # 공간 사용 비율 (합계 = 1.0) - 더 극단적 변화
+                'work_focused_ratio': {'stage1': 0.75, 'stage2': 0.50, 'stage3': 0.30, 'volatility': 0.20},
+                'meeting_collaboration_ratio': {'stage1': 0.15, 'stage2': 0.08, 'stage3': 0.05, 'volatility': 0.10},
+                'social_dining_ratio': {'stage1': 0.06, 'stage2': 0.03, 'stage3': 0.02, 'volatility': 0.04},
+                'break_relaxation_ratio': {'stage1': 0.03, 'stage2': 0.25, 'stage3': 0.45, 'volatility': 0.15},
+                'shared_work_ratio': {'stage1': 0.01, 'stage2': 0.14, 'stage3': 0.18, 'volatility': 0.08},
                 
-                # 현실적 측정 가능한 변수들
-                'system_login_hours': {'stage1': 9.5, 'stage2': 11.2, 'stage3': 7.8, 'volatility': 1.5},
-                'internal_comm_volume': {'stage1': 25, 'stage2': 15, 'stage3': 8, 'volatility': 8},
-                'cafeteria_usage': {'stage1': 1.2, 'stage2': 0.8, 'stage3': 0.3, 'volatility': 0.4},
-                'convenience_food_usage': {'stage1': 1.5, 'stage2': 3.2, 'stage3': 4.8, 'volatility': 1.2}
+                # 현실적 측정 가능한 변수들 - 더 명확한 차이
+                'system_login_hours': {'stage1': 10.5, 'stage2': 12.8, 'stage3': 5.2, 'volatility': 2.0},
+                'internal_comm_volume': {'stage1': 35, 'stage2': 12, 'stage3': 3, 'volatility': 10},
+                'cafeteria_usage': {'stage1': 1.4, 'stage2': 0.6, 'stage3': 0.2, 'volatility': 0.5},
+                'convenience_food_usage': {'stage1': 1.2, 'stage2': 4.5, 'stage3': 7.8, 'volatility': 1.5}
             },
             
             'P02_onboarding_failure': {
@@ -284,18 +328,18 @@ class RealisticPersonaPatterns:
             # 안정 및 몰입군
             'S01_anchor': {
                 'description': '안정적인 핵심인재',
-                # 공간 사용 비율 (합계 = 1.0)
-                'work_focused_ratio': {'base': 0.65, 'volatility': 0.03},
-                'meeting_collaboration_ratio': {'base': 0.18, 'volatility': 0.02},
-                'social_dining_ratio': {'base': 0.12, 'volatility': 0.01},
-                'break_relaxation_ratio': {'base': 0.04, 'volatility': 0.01},
-                'shared_work_ratio': {'base': 0.01, 'volatility': 0.01},
+                # 공간 사용 비율 (합계 = 1.0) - 매우 안정적
+                'work_focused_ratio': {'base': 0.68, 'volatility': 0.02},
+                'meeting_collaboration_ratio': {'base': 0.20, 'volatility': 0.01},
+                'social_dining_ratio': {'base': 0.08, 'volatility': 0.01},
+                'break_relaxation_ratio': {'base': 0.03, 'volatility': 0.01},
+                'shared_work_ratio': {'base': 0.01, 'volatility': 0.005},
                 
-                # 현실적 측정 가능한 변수들
-                'system_login_hours': {'base': 8.5, 'volatility': 0.3},
-                'internal_comm_volume': {'base': 22, 'volatility': 3},
-                'cafeteria_usage': {'base': 1.0, 'volatility': 0.1},
-                'convenience_food_usage': {'base': 0.8, 'volatility': 0.2}
+                # 현실적 측정 가능한 변수들 - 높고 안정적
+                'system_login_hours': {'base': 8.7, 'volatility': 0.2},
+                'internal_comm_volume': {'base': 28, 'volatility': 2},
+                'cafeteria_usage': {'base': 1.2, 'volatility': 0.08},
+                'convenience_food_usage': {'base': 0.5, 'volatility': 0.1}
             },
             
             'S02_rising_star': {
@@ -387,11 +431,11 @@ class RealisticPersonaPatterns:
 persona_patterns = RealisticPersonaPatterns()
 print("현실적 페르소나 패턴 객체 생성 완료")
 
-def generate_realistic_variables_consistent(employee_id, persona_code, day_index, date):
+def generate_realistic_variables_consistent(employee_id, persona_code, day_index, date, attrition_status=None):
     """일관성 있는 현실적 변수만 생성하는 함수"""
     
-    # 개인 특성 로드
-    individual = IndividualCharacteristics(employee_id, persona_code)
+    # 개인 특성 로드 (퇴사 정보 포함)
+    individual = IndividualCharacteristics(employee_id, persona_code, attrition_status)
     traits = individual.individual_traits
     
     # 기본 패턴 로드
@@ -400,13 +444,13 @@ def generate_realistic_variables_consistent(employee_id, persona_code, day_index
     
     # 1. 공간별 비율 생성 (합계 = 1.0)
     space_ratios = generate_space_ratios_consistent(
-        persona_code, day_index, date, pattern, traits
+        employee_id, persona_code, day_index, date, pattern, traits
     )
     all_vars.update(space_ratios)
     
     # 2. 시스템 로그인 시간 생성
     login_hours = generate_login_hours_consistent(
-        persona_code, day_index, date, pattern, traits
+        employee_id, persona_code, day_index, date, pattern, traits
     )
     all_vars.update(login_hours)
     
@@ -422,13 +466,83 @@ def generate_realistic_variables_consistent(employee_id, persona_code, day_index
     
     # 4. 소통 및 식생활 변수 생성
     comm_food_vars = generate_communication_food_variables(
-        persona_code, day_index, date, pattern, traits
+        employee_id, persona_code, day_index, date, pattern, traits
     )
     all_vars.update(comm_food_vars)
     
+    # 5. 퇴사자 특별 처리 (시간 경과에 따른 이탈 패턴)
+    if attrition_status == 'Yes':
+        all_vars = apply_attrition_patterns(all_vars, day_index, traits)
+    
     return all_vars
 
-def generate_space_ratios_consistent(persona_code, day_index, date, pattern, traits):
+def apply_attrition_patterns(variables, day_index, traits):
+    """퇴사자의 시간 경과에 따른 이탈 패턴 적용"""
+    
+    # 시간 경과에 따른 이탈 강도 (0 -> 1로 점진적 증가)
+    total_days = 105  # 전체 기간
+    disengagement_progress = min(day_index / total_days, 1.0)
+    
+    # 퇴사자 특별 지표들
+    attrition_indicators = traits.get('attrition_indicators', {})
+    
+    # 점진적 이탈 경향 적용
+    disengagement_trend = attrition_indicators.get('disengagement_trend', 0)
+    routine_disruption = attrition_indicators.get('routine_disruption', 1.0)
+    social_withdrawal = attrition_indicators.get('social_withdrawal', 1.0)
+    
+    # 업무 집중도 점진적 감소
+    if 'work_focused_ratio' in variables:
+        decline_factor = 1.0 - (disengagement_progress * disengagement_trend * 50)
+        variables['work_focused_ratio'] *= max(0.3, decline_factor)
+    
+    # 휴식 시간 점진적 증가
+    if 'break_relaxation_ratio' in variables:
+        increase_factor = 1.0 + (disengagement_progress * routine_disruption * 0.5)
+        variables['break_relaxation_ratio'] *= increase_factor
+    
+    # 소통량 감소
+    if 'internal_comm_volume' in variables:
+        comm_decline = 1.0 - (disengagement_progress * social_withdrawal * 0.4)
+        variables['internal_comm_volume'] = int(variables['internal_comm_volume'] * max(0.2, comm_decline))
+    
+    # 카페테리아 사용 감소 (사회적 위축)
+    if 'cafeteria_usage' in variables:
+        social_decline = 1.0 - (disengagement_progress * social_withdrawal * 0.3)
+        variables['cafeteria_usage'] *= max(0.1, social_decline)
+    
+    # 편의점 음식 증가 (스트레스 식습관)
+    if 'convenience_food_usage' in variables:
+        stress_increase = 1.0 + (disengagement_progress * routine_disruption * 0.6)
+        variables['convenience_food_usage'] *= stress_increase
+    
+    # 로그인 시간 불규칙성 증가 - 개별 랜덤 생성기 사용
+    if 'system_login_hours' in variables:
+        # employee_id 정보를 traits에서 추출 (임시 방법)
+        emp_id = hash(str(traits)) % 10000  # traits 기반으로 고유 ID 생성
+        rng_irreg = np.random.RandomState(emp_id + day_index + 5000)
+        irregularity = 1.0 + (disengagement_progress * routine_disruption * 0.3 * rng_irreg.uniform(-1, 1))
+        variables['system_login_hours'] *= max(0.5, irregularity)
+    
+    # 비율 재정규화 (공간 사용 비율들)
+    ratio_keys = [k for k in variables.keys() if k.endswith('_ratio')]
+    if ratio_keys:
+        total_ratio = sum(variables[k] for k in ratio_keys)
+        for k in ratio_keys:
+            variables[k] = variables[k] / total_ratio
+    
+    # 시간 재계산
+    if 'system_login_hours' in variables:
+        total_hours = variables['system_login_hours']
+        for space in ['work_focused', 'meeting_collaboration', 'social_dining', 'break_relaxation', 'shared_work']:
+            ratio_key = f"{space}_ratio"
+            hour_key = f"{space}_hours"
+            if ratio_key in variables:
+                variables[hour_key] = variables[ratio_key] * total_hours
+    
+    return variables
+
+def generate_space_ratios_consistent(employee_id, persona_code, day_index, date, pattern, traits):
     """일관성 있는 공간별 비율 생성 (합계 = 1.0)"""
     
     day_chars = calendar.get_day_characteristics(date)
@@ -468,9 +582,11 @@ def generate_space_ratios_consistent(persona_code, day_index, date, pattern, tra
         if space == 'social_dining_ratio' and date.weekday() == 4:  # 금요일
             base_ratio *= 1.3
         
-        # 노이즈 적용
+        # 노이즈 적용 - 개별 랜덤 생성기 사용
         volatility = space_config.get('volatility', 0.05) * traits.get('volatility_multiplier', 1.0)
-        base_ratio *= (1 + np.random.normal(0, volatility))
+        # 전역 np.random 대신 개인별 시드 사용
+        noise = np.random.RandomState(employee_id + day_index).normal(0, volatility)
+        base_ratio *= (1 + noise)
         
         space_vars[space] = max(0.01, base_ratio)
     
@@ -481,7 +597,7 @@ def generate_space_ratios_consistent(persona_code, day_index, date, pattern, tra
     
     return space_vars
 
-def generate_login_hours_consistent(persona_code, day_index, date, pattern, traits):
+def generate_login_hours_consistent(employee_id, persona_code, day_index, date, pattern, traits):
     """일관성 있는 시스템 로그인 시간 생성"""
     
     hours_config = pattern.get('system_login_hours', {'base': 8.5, 'volatility': 0.5})
@@ -503,14 +619,15 @@ def generate_login_hours_consistent(persona_code, day_index, date, pattern, trai
     base_hours *= traits.get('login_hours_sensitivity', 1.0)
     base_hours *= day_chars['energy']
     
-    # 노이즈 적용
+    # 노이즈 적용 - 개별 랜덤 생성기 사용
     volatility = hours_config.get('volatility', 0.5)
-    base_hours += np.random.normal(0, volatility)
+    noise = np.random.RandomState(employee_id + day_index + 1000).normal(0, volatility)
+    base_hours += noise
     base_hours = max(4.0, min(16.0, base_hours))
     
     return {'system_login_hours': base_hours}
 
-def generate_communication_food_variables(persona_code, day_index, date, pattern, traits):
+def generate_communication_food_variables(employee_id, persona_code, day_index, date, pattern, traits):
     """소통 및 식생활 관련 변수 생성"""
     
     comm_food_vars = {}
@@ -536,15 +653,17 @@ def generate_communication_food_variables(persona_code, day_index, date, pattern
     base_comm *= day_chars['social']
     base_comm *= traits.get('communication_sensitivity', 1.0)
     
-    # 특수 패턴 (도움 요청 폭증)
+    # 특수 패턴 (도움 요청 폭증) - 개별 랜덤 생성기 사용
     if comm_config.get('help_seeking_bursts', False):
-        if np.random.random() < 0.15:
-            base_comm *= np.random.uniform(2.0, 3.5)
+        rng_burst = np.random.RandomState(employee_id + day_index + 1500)
+        if rng_burst.random() < 0.15:
+            base_comm *= rng_burst.uniform(2.0, 3.5)
     
     volatility = comm_config.get('volatility', 5)
-    comm_food_vars['internal_comm_volume'] = max(0, int(
-        noise_generator.gaussian_noise(base_comm, volatility/max(base_comm, 1))
-    ))
+    # 개별 랜덤 생성기 사용
+    rng = np.random.RandomState(employee_id + day_index + 2000)
+    noise_factor = 1 + rng.normal(0, volatility/max(base_comm, 1))
+    comm_food_vars['internal_comm_volume'] = max(0, int(base_comm * noise_factor))
     
     # Cafeteria Usage
     cafe_config = pattern.get('cafeteria_usage', {'base': 1.0, 'volatility': 0.2})
@@ -567,9 +686,10 @@ def generate_communication_food_variables(persona_code, day_index, date, pattern
     # 개인별 특성 적용
     base_cafe *= traits.get('social_eating_sensitivity', 1.0)
     
-    comm_food_vars['cafeteria_usage'] = max(0, min(3, 
-        noise_generator.gaussian_noise(base_cafe, cafe_config.get('volatility', 0.2))
-    ))
+    # 개별 랜덤 생성기 사용
+    rng_cafe = np.random.RandomState(employee_id + day_index + 3000)
+    cafe_noise = 1 + rng_cafe.normal(0, cafe_config.get('volatility', 0.2))
+    comm_food_vars['cafeteria_usage'] = max(0, min(3, base_cafe * cafe_noise))
     
     # Convenience Food Usage
     conv_config = pattern.get('convenience_food_usage', {'base': 1.5, 'volatility': 0.5})
@@ -588,9 +708,10 @@ def generate_communication_food_variables(persona_code, day_index, date, pattern
     # 스트레스와 상관관계
     base_conv *= traits.get('stress_eating_tendency', 1.0)
     
-    comm_food_vars['convenience_food_usage'] = max(0, min(8,
-        noise_generator.gaussian_noise(base_conv, conv_config.get('volatility', 0.5))
-    ))
+    # 개별 랜덤 생성기 사용
+    rng_conv = np.random.RandomState(employee_id + day_index + 4000)
+    conv_noise = 1 + rng_conv.normal(0, conv_config.get('volatility', 0.5))
+    comm_food_vars['convenience_food_usage'] = max(0, min(8, base_conv * conv_noise))
     
     return comm_food_vars
 
@@ -942,11 +1063,19 @@ def generate_employee_timeseries_realistic(employee_id, persona_code, business_d
             daily_data.update(realistic_variables)
             
         except NameError:
-            print(f"generate_realistic_variables_consistent 함수가 없습니다. 백업 함수를 사용합니다.")
-            # 백업용 현실적 변수 생성
-            realistic_variables = generate_realistic_backup_variables(
-                employee_id, persona_code, day_idx, date
-            )
+            print(f"generate_realistic_variables_consistent 함수가 없습니다. 기본값을 사용합니다.")
+            # 기본값으로 채우기
+            realistic_variables = {
+                'work_focused_ratio': 0.6,
+                'meeting_collaboration_ratio': 0.15,
+                'social_dining_ratio': 0.1,
+                'break_relaxation_ratio': 0.1,
+                'shared_work_ratio': 0.05,
+                'system_login_hours': 8.0,
+                'internal_comm_volume': 20,
+                'cafeteria_usage': 1.0,
+                'convenience_food_usage': 1.5
+            }
             daily_data.update(realistic_variables)
             
         except Exception as e:
@@ -1396,7 +1525,7 @@ def visualize_chronos_patterns(df, personas_to_plot=None):
         for indicator in behavior_indicators:
             if indicator in df.columns:
                 behavior_values.append(persona_data[indicator].mean())
-                else:
+            else:
                 behavior_values.append(0)
         
         behavior_matrix.append(behavior_values)
@@ -1491,6 +1620,148 @@ def create_sample_employees(num_employees=1470):
         })
     
     return pd.DataFrame(employees_data)
+
+def generate_attrition_aware_chronos_dataset(ibm_hr_path="data/IBM_HR_personas_assigned.csv", num_employees=50, save_path=None):
+    """퇴사 정보를 활용한 Chronos 시계열 데이터셋 생성"""
+    
+    # IBM HR 데이터 로드
+    try:
+        ibm_df = pd.read_csv(ibm_hr_path)
+        print(f"IBM HR 데이터 로드 완료: {len(ibm_df)}명")
+        
+        # 필요한 컬럼 확인
+        required_cols = ['EmployeeNumber', 'Attrition', 'softmax_Persona_Code']
+        missing_cols = [col for col in required_cols if col not in ibm_df.columns]
+        if missing_cols:
+            print(f"경고: 누락된 컬럼들: {missing_cols}")
+            return pd.DataFrame()
+            
+        # 샘플 선택
+        sample_df = ibm_df.head(num_employees)[['EmployeeNumber', 'Attrition', 'softmax_Persona_Code']].copy()
+        
+        # 퇴사자/재직자 분포 확인
+        attrition_dist = sample_df['Attrition'].value_counts()
+        print(f"퇴사자 분포: {dict(attrition_dist)}")
+        
+    except Exception as e:
+        print(f"IBM HR 데이터 로드 실패: {e}")
+        return pd.DataFrame()
+    
+    # business_days 준비
+    try:
+        bdays = calendar.business_days
+    except NameError:
+        bdays = business_days
+    
+    all_timeseries = []
+    
+    total_employees = len(sample_df)
+    print(f"\n=== 퇴사 인식 Chronos 시계열 데이터 생성 시작 ===")
+    print(f"대상 직원 수: {total_employees}명")
+    print(f"기간: {len(bdays)}일")
+    
+    start_time = time.time()
+    
+    for idx, (_, employee) in enumerate(sample_df.iterrows()):
+        if idx % 10 == 0 and idx > 0:
+            elapsed = time.time() - start_time
+            estimated_total = (elapsed / idx) * total_employees
+            print(f"진행률: {idx:4d}/{total_employees} ({idx/total_employees*100:5.1f}%) - 예상 소요시간: {estimated_total/60:.1f}분")
+        
+        emp_id = employee['EmployeeNumber']
+        persona = employee['softmax_Persona_Code']
+        attrition = employee['Attrition']
+        
+        try:
+            employee_timeseries = generate_employee_timeseries_with_attrition(
+                emp_id, persona, attrition, bdays
+            )
+            all_timeseries.append(employee_timeseries)
+            
+        except Exception as e:
+            print(f"직원 {emp_id} 데이터 생성 실패: {e}")
+            continue
+    
+    if not all_timeseries:
+        print("ERROR: 생성된 데이터가 없습니다!")
+        return pd.DataFrame()
+    
+    # 전체 데이터 통합
+    final_dataset = pd.concat(all_timeseries, ignore_index=True)
+    
+    # CSV 저장
+    if save_path:
+        final_dataset.to_csv(save_path, index=False)
+        print(f"데이터셋이 '{save_path}'에 저장되었습니다.")
+    
+    total_time = time.time() - start_time
+    print(f"\n=== 퇴사 인식 Chronos 데이터셋 생성 완료 ===")
+    print(f"최종 Shape: {final_dataset.shape}")
+    print(f"소요시간: {total_time/60:.1f}분")
+    
+    # 퇴사자/재직자별 통계
+    print(f"\n=== 퇴사자/재직자별 주요 지표 비교 ===")
+    for attrition_status in ['Yes', 'No']:
+        subset = final_dataset[final_dataset['attrition_status'] == attrition_status]
+        if len(subset) > 0:
+            status_name = "퇴사자" if attrition_status == 'Yes' else "재직자"
+            print(f"\n{status_name} ({len(subset):,}개 레코드):")
+            
+            key_metrics = ['work_focused_ratio', 'system_login_hours', 'internal_comm_volume', 'convenience_food_usage']
+            for metric in key_metrics:
+                if metric in subset.columns:
+                    avg_val = subset[metric].mean()
+                    print(f"  {metric:25}: {avg_val:8.3f}")
+    
+    return final_dataset
+
+def generate_employee_timeseries_with_attrition(employee_id, persona_code, attrition_status, business_days):
+    """퇴사 정보를 포함한 직원별 시계열 데이터 생성"""
+    
+    timeseries_data = []
+    
+    print(f"직원 {employee_id} ({persona_code}, 퇴사:{attrition_status}) 데이터 생성 중...")
+    
+    for day_idx, date in enumerate(business_days):
+        daily_data = {
+            'employee_id': employee_id,
+            'date': date,
+            'day_of_week': date.weekday(),
+            'day_index': day_idx,
+            'persona_code': persona_code,
+            'attrition_status': attrition_status
+        }
+        
+        # 퇴사 정보를 포함한 현실적 변수 생성
+        try:
+            realistic_variables = generate_realistic_variables_consistent(
+                employee_id, persona_code, day_idx, date, attrition_status
+            )
+            daily_data.update(realistic_variables)
+            
+        except Exception as e:
+            print(f"Day {day_idx} 데이터 생성 중 오류: {e}")
+            # 기본값으로 채우기
+            daily_data.update({
+                'work_focused_ratio': 0.6,
+                'meeting_collaboration_ratio': 0.15,
+                'social_dining_ratio': 0.1,
+                'break_relaxation_ratio': 0.1,
+                'shared_work_ratio': 0.05,
+                'system_login_hours': 8.0,
+                'work_focused_hours': 4.8,
+                'meeting_collaboration_hours': 1.2,
+                'social_dining_hours': 0.8,
+                'break_relaxation_hours': 0.8,
+                'shared_work_hours': 0.4,
+                'internal_comm_volume': 20,
+                'cafeteria_usage': 1.0,
+                'convenience_food_usage': 1.5
+            })
+        
+        timeseries_data.append(daily_data)
+    
+    return pd.DataFrame(timeseries_data)
 
 def generate_consistent_chronos_dataset(num_employees=50, save_path=None, use_existing_employees=None):
     """일관성 있는 현실적 변수만 포함한 Chronos 시계열 데이터셋 생성"""
@@ -1804,15 +2075,65 @@ def generate_daily_data(employee_id, date, day_idx, persona, base_patterns, indi
     }
 
 # Chronos 데이터 생성 시스템 완료
-print("\n=== Chronos 데이터 생성 시스템 로드 완료 ===")
-print("사용 가능한 주요 함수:")
-print("- generate_consistent_chronos_dataset(): 1470명 전체 데이터 생성")
+print("\n=== 🔥 수정된 Chronos 데이터 생성 시스템 로드 완료 ===")
+print("🚀 주요 개선 사항:")
+print("✅ 개인별 랜덤성 복구 (시드 복원 버그 수정)")
+print("✅ 실제 퇴사 정보(Attrition) 활용")
+print("✅ 퇴사자 특별 행동 패턴 추가")
+print("✅ 페르소나 간 차이 강화")
+print("\n🛠️ 사용 가능한 주요 함수:")
+print("- generate_attrition_aware_chronos_dataset(): 🆕 퇴사 인식 데이터 생성")
+print("- generate_consistent_chronos_dataset(): 기존 일관성 데이터 생성")
 print("- generate_realistic_variables_consistent(): 개별 직원 변수 생성")
 print("- validate_chronos_dataset(): 데이터 검증")
 print("- visualize_chronos_patterns(): 데이터 시각화")
-print("\n생성되는 일관성 있는 변수들:")
+print("\n📊 생성되는 변수들:")
+print("- 기본 정보: employee_id, date, day_of_week, day_index, persona_code, attrition_status")
 print("- 공간별 비율: work_focused_ratio, meeting_collaboration_ratio, social_dining_ratio, break_relaxation_ratio, shared_work_ratio")
 print("- 공간별 시간: work_focused_hours, meeting_collaboration_hours, social_dining_hours, break_relaxation_hours, shared_work_hours") 
 print("- 시스템 변수: system_login_hours, internal_comm_volume")
 print("- 식생활 변수: cafeteria_usage, convenience_food_usage")
+print("\n🎯 퇴사자 특별 패턴:")
+print("- 시간 경과에 따른 업무 집중도 점진적 감소")
+print("- 휴식 시간 및 편의점 음식 사용 증가")
+print("- 소통량 및 카페테리아 사용 감소")
+print("- 로그인 시간 불규칙성 증가")
+
+# 🧪 간단한 테스트 실행
+print("\n=== 🧪 수정된 시스템 테스트 ===")
+try:
+    # 소규모 테스트 (10명)
+    print("소규모 테스트 데이터 생성 중...")
+    test_data = generate_attrition_aware_chronos_dataset(num_employees=10)
+    
+    if len(test_data) > 0:
+        print(f"✅ 테스트 성공! 생성된 데이터: {test_data.shape}")
+        
+        # 퇴사자/재직자 차이 확인
+        attrition_comparison = test_data.groupby('attrition_status')[
+            ['work_focused_ratio', 'internal_comm_volume', 'convenience_food_usage']
+        ].mean()
+        
+        print("\n📊 퇴사자 vs 재직자 평균 비교:")
+        print(attrition_comparison.round(3))
+        
+        # 개인별 차이 확인
+        individual_variance = test_data.groupby('employee_id')['work_focused_ratio'].std()
+        print(f"\n🎲 개인별 변동성 (work_focused_ratio 표준편차):")
+        print(f"평균: {individual_variance.mean():.4f}, 범위: [{individual_variance.min():.4f}, {individual_variance.max():.4f}]")
+        
+        if individual_variance.mean() > 0.01:
+            print("✅ 개인별 랜덤성 복구 성공!")
+        else:
+            print("❌ 개인별 랜덤성이 여전히 부족합니다.")
+            
+    else:
+        print("❌ 테스트 실패: 데이터가 생성되지 않았습니다.")
+        
+except Exception as e:
+    print(f"❌ 테스트 중 오류 발생: {e}")
+
+print("\n🎉 수정된 Chronos 데이터 생성 시스템 준비 완료!")
+print("이제 generate_attrition_aware_chronos_dataset() 함수를 사용하여")
+print("퇴사자와 재직자 간의 의미있는 차이가 있는 데이터를 생성할 수 있습니다.")
 
