@@ -931,7 +931,7 @@ def create_app():
 # 서버 실행 함수
 # ------------------------------------------------------
 
-def run_server(host='0.0.0.0', port=5001, debug=True):
+def run_server(host='0.0.0.0', port=5003, debug=True):
     """Flask 서버 실행"""
     app = create_app()
     
