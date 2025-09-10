@@ -604,13 +604,13 @@ class HRKeywordAnalyzer:
         results = {}
         
         # 1. Self-Performance Review 분석
-        results['self_review'] = self.analyze_feedback_type('Self-Performance Review', '1. Self-Performance Review')
+        results['self_review'] = self.analyze_feedback_type('SELF_REVIEW_text', '1. SELF_REVIEW_text')
         
         # 2. Peer Feedback 분석
-        results['peer_feedback'] = self.analyze_feedback_type('Peer Feedback', '2. Peer Feedback')
+        results['peer_feedback'] = self.analyze_feedback_type('PEER_FEEDBACK_text', '2. PEER_FEEDBACK_text')
         
         # 3. Weekly Survey 분석
-        results['weekly_survey'] = self.analyze_feedback_type('Weekly Survey', '3. Weekly Survey')
+        results['weekly_survey'] = self.analyze_feedback_type('WEEKLY_SURVEY_text', 'WEEKLY_SURVEY_text')
         
         # 종합 분석
         self.comprehensive_analysis(results)
@@ -787,9 +787,9 @@ def main():
     """메인 실행 함수"""
     # CSV 파일 경로 자동 탐지
     possible_paths = [
-        'data/IBM_HR_report.csv',
-        '../data/IBM_HR_report.csv',
-        'IBM_HR_report.csv',
+        'data/IBM_HR_text.csv',
+        '../data/IBM_HR_text.csv',
+        'IBM_HR_text.csv',
         'data/IBM_HR.csv',
         '../data/IBM_HR.csv',
         'IBM_HR.csv'
