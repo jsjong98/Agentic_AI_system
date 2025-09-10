@@ -4,6 +4,8 @@ import json
 import time
 from typing import Dict, List
 import random
+from dotenv import load_dotenv
+import os
 
 class HRTextGenerator:
     def __init__(self, api_key: str, csv_file_path: str):
@@ -230,33 +232,38 @@ class HRTextGenerator:
 # 사용 예시
 if __name__ == "__main__":
     # 설정
-    OPENAI_API_KEY = "OPENAI_API_KEY_REMOVED"  # 여기에 실제 API 키 입력
+    load_dotenv()
+
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     CSV_FILE_PATH = "data/IBM_HR_personas_assigned.csv"  # CSV 파일 경로
+
+    # API 키가 제대로 로드되었는지 확인합니다.
+    if not OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되지 않았습니다.")
     
-    # 텍스트 생성기 초기화
-    generator = HRTextGenerator(OPENAI_API_KEY, CSV_FILE_PATH)
-    
-    print("전체 1470명에 대한 텍스트 생성을 시작합니다...")
-    print("예상 소요 시간: 약 15-20분 (API 호출 제한 고려)")
-    
-    # 전체 데이터로 실행 (sample_size=None으로 설정)
-    generator.generate_all_texts(sample_size=None)
-    
-    # 결과를 data 폴더에 저장
-    generator.save_to_csv("data/IBM_HR_text.csv")
-    generator.save_to_json("data/IBM_HR_text.json")
-    
-    print("텍스트 생성 완료!")
-    print(f"총 {len(generator.generated_texts)}명의 텍스트가 생성되었습니다.")
-    print("결과 파일:")
-    print("- data/IBM_HR_text.csv")
-    print("- data/IBM_HR_text.json")
-    
-    # 결과 확인 예시
-    if generator.generated_texts:
-        sample_result = generator.generated_texts[0]
-        print(f"\n=== 샘플 결과 (직원 {sample_result['EmployeeNumber']}) ===")
-        print(f"페르소나: {sample_result['Persona_Name']} ({sample_result['Persona_Code']})")
-        print(f"자기평가: {sample_result['SELF_REVIEW_text'][:100]}...")
-        print(f"동료피드백: {sample_result['PEER_FEEDBACK_text'][:100]}...")
-        print(f"주간설문: {sample_result['WEEKLY_SURVEY_text'][:100]}...")
+    if OPENAI_API_KEY != "your-api-key-here":
+        # 텍스트 생성기 초기화
+        generator = HRTextGenerator(OPENAI_API_KEY, CSV_FILE_PATH)
+        
+        print("\n=== 실제 텍스트 생성 시작 ===")
+        print("실제 테스트: 1470명에 대해서 생성합니다...")
+        
+        # 전체 데ㅐ 테스트로 실행
+        generator.generate_all_texts(sample_size=1470)
+        
+        # 결과 저장
+        generator.save_to_csv("data/IBM_HR_text.csv")
+        generator.save_to_json("data/IBM_HR_text.json")
+        
+        print("텍스트 생성 완료!")
+        print(f"총 {len(generator.generated_texts)}명의 텍스트가 생성되었습니다.")
+        
+        # 결과 확인
+        if generator.generated_texts:
+            for i, result in enumerate(generator.generated_texts):
+                print(f"\n=== 샘플 {i+1} (직원 {result['EmployeeNumber']}) ===")
+                print(f"페르소나: {result['Persona_Name']} ({result['Persona_Code']})")
+                print(f"퇴사여부: {result['Attrition']}")
+                print(f"자기평가: {result['SELF_REVIEW_text'][:150]}...")
+    else:
+        print("\n실제 텍스트 생성을 위해서는 OPENAI_API_KEY를 설정해주세요.")

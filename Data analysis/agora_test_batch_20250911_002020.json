@@ -1,0 +1,68 @@
+{
+  "session_id": "batch_20250911_002020",
+  "analysis_summary": {
+    "total_employees": 5,
+    "successful_analyses": 5,
+    "failed_analyses": 0,
+    "success_rate": 100.0,
+    "processing_time_seconds": 1.52,
+    "average_time_per_employee": 0.3,
+    "timestamp": "2025-09-11T00:20:20.601602"
+  },
+  "employees": {
+    "339": {
+      "market_report": {
+        "market_pressure_index": 0.417,
+        "compensation_gap": 0.0,
+        "llm_interpretation": "Manufacturing Director (Research & Development) 직무의 외부 시장 분석 결과, 현재 137개의 관련 채용 공고가 활발히 게시되고 있어 해당 직무에 대한 시장 수요가 보통 상황입니다. 시장 평균 급여 수준을 고려할 때, 현재 보상 체계는 경쟁적인 것으로 분석됩니다. \n\n종합적으로 해당 직원에 대한 외부 유인 요인은 보통 수준으로 평가되며, 지속적인 모니터링이 권장됩니다.\n\n[기본 분석 모드 - LLM API 연결 시 더 상세한 분석 제공]",
+        "analysis_timestamp": "2025-09-11T00:20:19.086459",
+        "analysis_method": "LLM_Enhanced"
+      }
+    },
+    "1164": {
+      "market_report": {
+        "market_pressure_index": 0.262,
+        "compensation_gap": 0.0,
+        "llm_interpretation": "Human Resources (Human Resources) 직무의 외부 시장 분석 결과, 현재 72개의 관련 채용 공고가 활발히 게시되고 있어 해당 직무에 대한 시장 수요가 제한적인 상황입니다. 시장 평균 급여 수준을 고려할 때, 현재 보상 체계는 경쟁적인 것으로 분석됩니다. \n\n종합적으로 해당 직원에 대한 외부 유인 요인은 낮음 수준으로 평가되며, 현 상태 유지가 권장됩니다.\n\n[기본 분석 모드 - LLM API 연결 시 더 상세한 분석 제공]",
+        "analysis_timestamp": "2025-09-11T00:20:19.393291",
+        "analysis_method": "LLM_Enhanced"
+      }
+    },
+    "395": {
+      "market_report": {
+        "market_pressure_index": 0.342,
+        "compensation_gap": 1.0,
+        "llm_interpretation": "Research Scientist (Research & Development) 직무의 외부 시장 분석 결과, 현재 62개의 관련 채용 공고가 활발히 게시되고 있어 해당 직무에 대한 시장 수요가 보통 상황입니다. 시장 평균 급여 수준을 고려할 때, 현재 보상 체계는 경쟁력 확보가 필요한 것으로 분석됩니다. \n\n종합적으로 해당 직원에 대한 외부 유인 요인은 높음 수준으로 평가되며, 적극적인 관심과 대응 방안 검토가 권장됩니다.\n\n[기본 분석 모드 - LLM API 연결 시 더 상세한 분석 제공]",
+        "analysis_timestamp": "2025-09-11T00:20:19.696392",
+        "analysis_method": "LLM_Enhanced"
+      }
+    },
+    "579": {
+      "market_report": {
+        "market_pressure_index": 0.342,
+        "compensation_gap": 1.0,
+        "llm_interpretation": "Research Scientist (Research & Development) 직무의 외부 시장 분석 결과, 현재 62개의 관련 채용 공고가 활발히 게시되고 있어 해당 직무에 대한 시장 수요가 보통 상황입니다. 시장 평균 급여 수준을 고려할 때, 현재 보상 체계는 경쟁력 확보가 필요한 것으로 분석됩니다. \n\n종합적으로 해당 직원에 대한 외부 유인 요인은 높음 수준으로 평가되며, 적극적인 관심과 대응 방안 검토가 권장됩니다.\n\n[기본 분석 모드 - LLM API 연결 시 더 상세한 분석 제공]",
+        "analysis_timestamp": "2025-09-11T00:20:19.999000",
+        "analysis_method": "LLM_Enhanced"
+      }
+    },
+    "1824": {
+      "market_report": {
+        "market_pressure_index": 0.596,
+        "compensation_gap": 0.0,
+        "llm_interpretation": "Manager (Sales) 직무의 외부 시장 분석 결과, 현재 376개의 관련 채용 공고가 활발히 게시되고 있어 해당 직무에 대한 시장 수요가 보통 상황입니다. 시장 평균 급여 수준을 고려할 때, 현재 보상 체계는 경쟁적인 것으로 분석됩니다. \n\n종합적으로 해당 직원에 대한 외부 유인 요인은 보통 수준으로 평가되며, 지속적인 모니터링이 권장됩니다.\n\n[기본 분석 모드 - LLM API 연결 시 더 상세한 분석 제공]",
+        "analysis_timestamp": "2025-09-11T00:20:20.300967",
+        "analysis_method": "LLM_Enhanced"
+      }
+    }
+  },
+  "market_trends": {
+    "Unknown_Department": {
+      "avg_market_pressure": 0.392,
+      "avg_compensation_gap": 0.4,
+      "employee_count": 5,
+      "high_risk_employees": 0
+    }
+  },
+  "timestamp": 1757517620.602603
+}

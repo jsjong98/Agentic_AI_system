@@ -65,6 +65,12 @@ mlruns/
 # *.xlsx
 # *.xls
 
+# Google Drive specific files
+*.gsheet
+*.gdoc
+*.gslides
+*.gform
+
 # Google Colab
 .colab-settings
 

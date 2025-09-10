@@ -2,15 +2,17 @@
 
 **에이전틱 AI 기반 HR 분석 플랫폼**
 
-차세대 인사 분석을 위한 다중 에이전트 AI 시스템으로, 정형 데이터, 관계형 데이터, 시계열 데이터를 동시에 분석하여 종합적인 인사 인사이트를 제공합니다.
+차세대 인사 분석을 위한 다중 에이전트 AI 시스템으로, 정형 데이터, 관계형 데이터, 시계열 데이터, 텍스트 데이터를 동시에 분석하여 종합적인 인사 인사이트를 제공합니다.
 
 ## 🌟 주요 특징
 
-- **🤖 에이전틱 아키텍처**: 다중 AI 에이전트가 협력하여 분석
-- **🔍 다차원 분석**: 정형 데이터 + 관계형 네트워크 동시 분석
+- **🤖 에이전틱 아키텍처**: 4개 AI 에이전트가 협력하여 분석
+- **🔍 다차원 분석**: 정형 + 관계형 + 시계열 + 텍스트 데이터 통합 분석
 - **⚡ 실시간 처리**: 개별 직원부터 전체 조직까지 즉시 분석
-- **🔬 설명 가능한 AI**: SHAP, LIME 기반 투명한 의사결정
+- **🔬 설명 가능한 AI**: SHAP, LIME, Attention 기반 투명한 의사결정
 - **🕸️ 관계형 인사이트**: Neo4j 기반 조직 네트워크 분석
+- **📝 텍스트 감정 분석**: NLP 기반 퇴직 위험 신호 탐지
+- **📈 시계열 패턴 분석**: 딥러닝 기반 시간적 변화 추적
 - **🌐 React 연동**: 현대적 웹 인터페이스 완벽 지원
 
 ---
@@ -24,23 +26,23 @@
                     │      통합 조정 및 결과 합성         │
                     └─────────────────────────────────────┘
                                     │
-        ┌───────────────────────────┼───────────────────────────┐
-        │                           │                           │
-┌───────▼───────┐          ┌────────▼────────┐         ┌───────▼───────┐
-│  🏢 Structura  │          │  🕸️ Cognita     │         │  ⏰ Chronos    │
-│   워커 에이전트  │          │   워커 에이전트   │         │   워커 에이전트  │
-│  (포트: 5001)  │          │  (포트: 5000)   │         │  (포트: 5002)  │
-│               │          │                │         │               │
-│ 정형 데이터 분석 │          │ 관계형 데이터 분석│         │ 시계열 데이터 분석│
-│ XGBoost + xAI │          │ Neo4j + Graph  │         │ GRU+CNN+Attention│
-│ SHAP + LIME   │          │ Network Analytics│         │ 딥러닝 예측 모델 │
-└───────────────┘          └─────────────────┘         └───────────────┘
-        │                           │                           │
-        ▼                           ▼                           ▼
-┌───────────────┐          ┌─────────────────┐         ┌───────────────┐
-│ 📊 IBM HR CSV │          │ 🗄️ Neo4j Graph  │         │ 📈 시계열 CSV  │
-│   데이터셋     │          │   데이터베이스    │         │   데이터셋     │
-└───────────────┘          └─────────────────┘         └───────────────┘
+        ┌───────────────┬───────────┼───────────┬───────────────┐
+        │               │           │           │               │
+┌───────▼───────┐ ┌─────▼─────┐ ┌──▼──┐ ┌─────▼─────┐ ┌───────▼───────┐
+│  🏢 Structura  │ │🕸️ Cognita │ │⏰ Chronos│ │📝 Sentio │ │  🔮 Future    │
+│   워커 에이전트  │ │ 워커 에이전트│ │워커 에이전트│ │ 워커 에이전트│ │   워커 에이전트  │
+│  (포트: 5001)  │ │(포트: 5000)│ │(포트: 5002)│ │(포트: 5003)│ │  (포트: 50XX)  │
+│               │ │           │ │         │ │           │ │               │
+│ 정형 데이터 분석 │ │관계형 데이터│ │시계열 데이터│ │텍스트 감정 │ │ 외부 시장 분석 │
+│ XGBoost + xAI │ │Neo4j+Graph│ │GRU+CNN+ │ │NLP+키워드│ │   (향후 구현)   │
+│ SHAP + LIME   │ │ Analytics │ │Attention│ │분석+생성 │ │               │
+└───────────────┘ └───────────┘ └─────────┘ └───────────┘ └───────────────┘
+        │               │           │           │               │
+        ▼               ▼           ▼           ▼               ▼
+┌───────────────┐ ┌─────────────┐ ┌─────────┐ ┌───────────┐ ┌───────────────┐
+│ 📊 IBM HR CSV │ │🗄️ Neo4j    │ │📈 시계열│ │📝 HR      │ │ 🌐 외부 API   │
+│   데이터셋     │ │Graph DB    │ │CSV 데이터│ │텍스트     │ │   데이터      │
+└───────────────┘ └─────────────┘ └─────────┘ └───────────┘ └───────────────┘
 ```
 
 ---
@@ -58,10 +60,11 @@ cd Agentic_AI_system
 cd app
 pip install -r requirements_agentic.txt
 
-# 3. Neo4j 연결 설정
-export NEO4J_URI="bolt://34.227.31.16:7687"
+# 3. 환경 변수 설정
+export NEO4J_URI="bolt://54.162.43.24:7687"
 export NEO4J_USERNAME="neo4j"
-export NEO4J_PASSWORD="cover-site-establishment"
+export NEO4J_PASSWORD="resident-success-moss"
+export OPENAI_API_KEY="your-openai-api-key"  # Sentio용
 
 # 4. 통합 마스터 서버 실행 🚀
 python run_agentic_system.py
@@ -153,21 +156,48 @@ python test_agentic_system.py
 
 ---
 
+### 📝 Sentio - 텍스트 감정 분석 에이전트
+
+**포트**: `5003` | **기술**: NLP + 키워드 분석 + GPT-4 텍스트 생성
+
+#### 🎯 주요 기능
+- **텍스트 감정 분석**: HR 텍스트의 감정 점수 및 퇴직 위험 탐지
+- **키워드 분석**: 명사 중심 정확한 키워드 추출 (노이즈 제거)
+- **퇴직 위험 신호 탐지**: 5가지 퇴직 원인별 위험 신호 분석
+- **페르소나 기반 텍스트 생성**: 10가지 직원 유형별 맞춤 텍스트 생성
+
+#### 📊 성능 지표
+- **키워드 추출**: 명사 중심, 500+ 불용어 필터링
+- **감정 분석**: 0.0~1.0 점수 체계
+- **퇴직 위험 분석**: 5가지 원인 그룹별 세부 분석
+- **텍스트 생성**: OpenAI GPT-4 기반 고품질 생성
+
+#### 🔗 주요 API
+- `POST /analyze/text` - 텍스트 분석 (키워드 + 감정 + 위험도)
+- `POST /analyze/keywords` - 퇴직자 vs 재직자 차별적 키워드 분석
+- `POST /analyze/risk` - 배치 퇴직 위험 분석
+- `POST /generate/text` - 페르소나 기반 텍스트 생성
+- `GET /data/personas` - 페르소나 정보 조회
+
+---
+
 ## 🌐 React 연동 가이드
 
 ### 통합 API 사용 예시
 
 ```javascript
-// 🤖 개별 직원 통합 분석 (Structura + Cognita + Chronos 동시 실행)
-const analyzeEmployeeIntegrated = async (employeeData) => {
+// 🤖 개별 직원 통합 분석 (4개 워커 에이전트 동시 실행)
+const analyzeEmployeeIntegrated = async (employeeData, textData) => {
   const response = await fetch('http://localhost:8000/api/analyze/individual', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...employeeData,
-      use_structura: true,  // 정형 데이터 분석 사용
-      use_cognita: true,    // 관계형 데이터 분석 사용
-      use_chronos: true     // 시계열 데이터 분석 사용
+      text_data: textData,
+      use_structura: true,  // 정형 데이터 분석
+      use_cognita: true,    // 관계형 데이터 분석
+      use_sentio: true,     // 텍스트 감정 분석
+      use_chronos: true     // 시계열 데이터 분석
     })
   });
   
@@ -176,37 +206,38 @@ const analyzeEmployeeIntegrated = async (employeeData) => {
   // 🔍 통합 결과 활용
   console.log('Structura 결과:', result.structura_result);
   console.log('Cognita 결과:', result.cognita_result);
+  console.log('Sentio 결과:', result.sentio_result);
   console.log('Chronos 결과:', result.chronos_result);
   console.log('통합 분석:', result.combined_analysis);
   
   return result;
 };
 
-// 🏢 부서별 통합 분석
-const analyzeDepartmentIntegrated = async (departmentName) => {
-  const response = await fetch('http://localhost:8000/api/analyze/department', {
+// 📝 텍스트 분석 전용
+const analyzeText = async (text, employeeId) => {
+  const response = await fetch('http://localhost:5003/analyze/text', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      department_name: departmentName,
-      sample_size: 20,
-      use_structura: true,
-      use_cognita: true,
-      use_chronos: true
+      text: text,
+      employee_id: employeeId,
+      text_type: "SELF_REVIEW"
     })
   });
   return response.json();
 };
 
-// 🔍 시스템 상태 확인
-const checkSystemHealth = async () => {
-  const response = await fetch('http://localhost:8000/api/health');
-  const health = await response.json();
-  
-  console.log('시스템 상태:', health.status);
-  console.log('워커 에이전트:', health.workers);
-  
-  return health;
+// 🎭 페르소나 기반 텍스트 생성
+const generatePersonaText = async (employeeData, textType) => {
+  const response = await fetch('http://localhost:5003/generate/text', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      employee_data: employeeData,
+      text_type: textType
+    })
+  });
+  return response.json();
 };
 ```
 
@@ -222,8 +253,8 @@ const useAgenticAI = () => {
   
   const baseURL = 'http://localhost:8000/api';
   
-  // 🤖 통합 직원 분석
-  const analyzeEmployee = async (employeeData) => {
+  // 🤖 통합 직원 분석 (4개 워커 에이전트)
+  const analyzeEmployee = async (employeeData, textData) => {
     try {
       setLoading(true);
       const response = await fetch(`${baseURL}/analyze/individual`, {
@@ -231,9 +262,34 @@ const useAgenticAI = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...employeeData,
+          text_data: textData,
           use_structura: true,
           use_cognita: true,
+          use_sentio: true,
           use_chronos: true
+        })
+      });
+      const result = await response.json();
+      setError(null);
+      return result;
+    } catch (err) {
+      setError(err.message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // 📝 텍스트 전용 분석
+  const analyzeTextOnly = async (text, employeeId) => {
+    try {
+      setLoading(true);
+      const response = await fetch('http://localhost:5003/analyze/text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          employee_id: employeeId
         })
       });
       const result = await response.json();
@@ -268,6 +324,7 @@ const useAgenticAI = () => {
     loading,
     error,
     analyzeEmployee,
+    analyzeTextOnly,
     checkHealth
   };
 };
@@ -277,17 +334,17 @@ const useAgenticAI = () => {
 
 ## 📊 시스템 비교
 
-| 특징 | 🏢 Structura | 🕸️ Cognita | ⏰ Chronos |
-|------|-------------|------------|-----------|
-| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 | 시계열 패턴 |
-| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB | 시계열 CSV |
-| **주요 기술** | XGBoost + xAI | Graph Analytics | GRU+CNN+Attention |
-| **포트** | 5001 | 5000 | 5002 |
-| **예측 대상** | 이직 확률 | 관계형 위험도 | 시계열 기반 예측 |
-| **설명 가능성** | SHAP, LIME | 네트워크 분석 | Attention 메커니즘 |
-| **분석 범위** | 개별 중심 | 조직/팀 중심 | 시간적 패턴 중심 |
-| **실시간성** | 즉시 예측 | 실시간 관계 분석 | 딥러닝 예측 |
-| **성능** | 0.1초/명 | 0.82초/명 | 딥러닝 기반 |
+| 특징 | 🏢 Structura | 🕸️ Cognita | ⏰ Chronos | 📝 Sentio |
+|------|-------------|------------|-----------|-----------|
+| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 | 시계열 패턴 | 텍스트 감정 분석 |
+| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB | 시계열 CSV | HR 텍스트 데이터 |
+| **주요 기술** | XGBoost + xAI | Graph Analytics | GRU+CNN+Attention | NLP + GPT-4 |
+| **포트** | 5001 | 5000 | 5002 | 5003 |
+| **예측 대상** | 이직 확률 | 관계형 위험도 | 시계열 기반 예측 | 퇴직 위험 신호 |
+| **설명 가능성** | SHAP, LIME | 네트워크 분석 | Attention 메커니즘 | 키워드 분석 |
+| **분석 범위** | 개별 중심 | 조직/팀 중심 | 시간적 패턴 중심 | 텍스트 중심 |
+| **실시간성** | 즉시 예측 | 실시간 관계 분석 | 딥러닝 예측 | 실시간 텍스트 분석 |
+| **성능** | 0.1초/명 | 0.82초/명 | 딥러닝 기반 | 키워드 기반 |
 
 ---
 
@@ -299,8 +356,8 @@ const useAgenticAI = () => {
 |--------|------------|------|
 | `GET` | `/api/health` | 시스템 전체 상태 확인 |
 | `GET` | `/api/workers/status` | 워커 에이전트 상태 조회 |
-| `POST` | `/api/analyze/individual` | **개별 직원 통합 분석** (Structura + Cognita) |
-| `POST` | `/api/analyze/department` | **부서별 통합 분석** (Structura + Cognita) |
+| `POST` | `/api/analyze/individual` | **개별 직원 통합 분석** (4개 워커 동시) |
+| `POST` | `/api/analyze/department` | **부서별 통합 분석** (4개 워커 동시) |
 | `GET` | `/api/task/{task_id}/result` | 작업 결과 조회 |
 
 ### 🏢 Structura 워커 (포트 5001)
@@ -334,6 +391,17 @@ const useAgenticAI = () => {
 | `GET` | `/api/visualize/attention` | Attention 시각화 |
 | `GET` | `/api/visualize/features` | 피처 중요도 시각화 |
 
+### 📝 Sentio 워커 (포트 5003)
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|------------|------|
+| `GET` | `/health` | 서버 상태 확인 |
+| `POST` | `/analyze/text` | 텍스트 분석 |
+| `POST` | `/analyze/keywords` | 키워드 분석 |
+| `POST` | `/analyze/risk` | 퇴직 위험 분석 |
+| `POST` | `/generate/text` | 텍스트 생성 |
+| `GET` | `/data/personas` | 페르소나 정보 |
+
 ---
 
 ## 🧪 테스트 실행
@@ -355,6 +423,9 @@ cd app/Structura && python test_structura_api.py
 # 🕸️ Cognita 워커 테스트  
 cd app/Cognita && python test_cognita_api.py
 
+# 📝 Sentio 워커 테스트
+cd app/Sentio && python test_sentio_api.py
+
 # ⏰ Chronos 워커 테스트
 cd app/Chronos && python test_chronos_api.py
 ```
@@ -366,12 +437,18 @@ cd app/Chronos && python test_chronos_api.py
 curl http://localhost:8000/api/health    # 통합 시스템
 curl http://localhost:5001/api/health    # Structura
 curl http://localhost:5000/api/health    # Cognita
+curl http://localhost:5003/health        # Sentio
 curl http://localhost:5002/api/health    # Chronos
 
 # 간단한 예측 테스트 (Structura)
 curl -X POST http://localhost:5001/api/predict \
   -H "Content-Type: application/json" \
   -d '{"Age": 35, "JobSatisfaction": 3, "OverTime": "Yes"}'
+
+# 텍스트 분석 테스트 (Sentio)
+curl -X POST http://localhost:5003/analyze/text \
+  -H "Content-Type: application/json" \
+  -d '{"text": "업무량이 너무 많아서 번아웃이 올 것 같습니다.", "employee_id": "test_001"}'
 
 # 직원 분석 테스트 (Cognita)
 curl http://localhost:5000/api/analyze/employee/1
@@ -409,6 +486,16 @@ Agentic_AI_system/
 │   │   ├── 📋 requirements.txt
 │   │   └── 📖 README.md
 │   │
+│   ├── 📁 Sentio/                   # 텍스트 감정 분석 워커
+│   │   ├── 📝 sentio_flask_backend.py
+│   │   ├── 🧠 sentio_processor.py
+│   │   ├── 📊 sentio_analyzer.py
+│   │   ├── ✍️ sentio_generator.py
+│   │   ├── 🚀 run_sentio_server.py
+│   │   ├── 🧪 test_sentio_api.py
+│   │   ├── 📋 requirements.txt
+│   │   └── 📖 README.md
+│   │
 │   └── 📁 Chronos/                  # 시계열 데이터 분석 워커
 │       ├── ⏰ chronos_flask_backend.py
 │       ├── 🧠 chronos_models.py
@@ -421,17 +508,20 @@ Agentic_AI_system/
 ├── 📁 data/                         # 데이터셋
 │   ├── 📊 IBM_HR.csv                # IBM HR 데이터셋
 │   ├── 📊 IBM_HR_timeseries.csv     # 시계열 데이터
+│   ├── 📝 IBM_HR_text.csv           # HR 텍스트 데이터
 │   ├── 🕸️ employee_relationships.json # 관계형 데이터
 │   └── 🕸️ employee_relationships.xml
 │
 ├── 📁 Data analysis/               # 분석 노트북
 │   ├── 🏢 IBM_HR_XGB.ipynb         # Structura 분석
 │   ├── 🕸️ Cognita.ipynb            # Cognita 분석
+│   ├── 📝 Sentio.ipynb             # 텍스트 분석
 │   ├── ⏰ Chronos.ipynb            # 시계열 분석
 │   └── 📊 example_usage.py         # 사용 예시
 │
 ├── 📁 Data generation/             # 데이터 생성
 │   ├── 🏭 Chronos_data_generation.py
+│   ├── 📝 Sentio_data_generation.py
 │   ├── 🕸️ Cognita_graph_development.ipynb
 │   └── 📊 Structura_data_assignment.ipynb
 │
@@ -460,6 +550,13 @@ Agentic_AI_system/
 - **메모리 사용**: 300MB-1GB (40% 감소)
 - **자동 인덱스**: 성능 최적화 자동 설정
 
+### 📝 Sentio 성능
+- **키워드 추출**: 명사 중심, 500+ 불용어 필터링
+- **텍스트 분석**: 실시간 감정 및 위험도 분석
+- **페르소나 분석**: 10가지 직원 유형별 특성 분석
+- **텍스트 생성**: OpenAI GPT-4 기반 고품질 생성
+- **퇴직 원인 분석**: 5가지 주요 원인 그룹별 세부 분석
+
 ### ⏰ Chronos 성능
 - **모델 아키텍처**: GRU + CNN + Dual Attention
 - **시퀀스 길이**: 6주 단위 시계열 분석
@@ -484,11 +581,15 @@ Agentic_AI_system/
 netstat -an | grep :8000  # 마스터 서버
 netstat -an | grep :5000  # Cognita
 netstat -an | grep :5001  # Structura
+netstat -an | grep :5002  # Chronos
+netstat -an | grep :5003  # Sentio
 
 # 프로세스 종료
 kill -9 $(lsof -ti:8000)
 kill -9 $(lsof -ti:5000)
 kill -9 $(lsof -ti:5001)
+kill -9 $(lsof -ti:5002)
+kill -9 $(lsof -ti:5003)
 ```
 
 #### 2. 의존성 설치 오류
@@ -507,34 +608,21 @@ pip install flask-cors
 # React 개발 서버 주소 확인 (localhost:3000)
 ```
 
-### Structura 특정 문제
+### Sentio 특정 문제
 
-#### 1. xAI 라이브러리 오류
+#### 1. OpenAI API 오류
 ```bash
-pip install shap lime
-# 또는
-conda install -c conda-forge shap lime
+# API 키 설정 확인
+export OPENAI_API_KEY="your-openai-api-key"
+echo $OPENAI_API_KEY
+
+# API 키 유효성 확인
 ```
 
-#### 2. 데이터 파일 없음
+#### 2. 텍스트 데이터 없음
 ```bash
-# IBM HR 데이터셋을 data/IBM_HR.csv에 배치
-# 또는 코드에서 경로 수정
-```
-
-### Cognita 특정 문제
-
-#### 1. Neo4j 연결 실패
-```bash
-# Neo4j 서버 실행 확인
-# 연결 정보 확인 (URI, 사용자명, 비밀번호)
-# 방화벽 설정 확인
-```
-
-#### 2. 그래프 데이터 없음
-```bash
-# Neo4j에 Employee, Department, Project 노드 확인
-# COLLABORATES_WITH, REPORTS_TO 관계 확인
+# HR 텍스트 데이터를 data/ 폴더에 배치
+# sample_hr_texts.csv 또는 IBM_HR_text.csv 확인
 ```
 
 ---
@@ -545,14 +633,8 @@ conda install -c conda-forge shap lime
 - [ ] **React 프론트엔드 개발**: 통합 대시보드 구현
 - [ ] **실시간 모니터링**: 시스템 성능 및 분석 결과 추적
 - [ ] **배치 처리 시스템**: 대용량 데이터 처리 최적화
-<<<<<<< HEAD
-- [x] **모델 성능 개선**: 예측 정확도 향상
-- [x] **워커 에이전트 3**: 시계열 데이터 분석 (Chronos) - 완료
-=======
-- [ ] **모델 성능 개선**: 예측 정확도 향상
-- [ ] **워커 에이전트 3**: 시계열 데이터 분석 (Chronos)
->>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
-- [ ] **워커 에이전트 4**: 자연어 데이터 분석 (NLP)
+- [x] **워커 에이전트 3**: 텍스트 감정 분석 (Sentio) - 완료
+- [x] **워커 에이전트 4**: 시계열 데이터 분석 (Chronos) - 완료
 - [ ] **워커 에이전트 5**: 외부 시장 분석
 
 ### 중기 (3-4주)
@@ -569,9 +651,10 @@ conda install -c conda-forge shap lime
 ## 🏆 주요 성과
 
 ### 기술적 성과
-- ✅ **다중 에이전트 아키텍처** 구현
+- ✅ **4개 워커 에이전트 아키텍처** 구현
 - ✅ **설명 가능한 AI** (SHAP, LIME, Attention) 적용
 - ✅ **관계형 네트워크 분석** 시스템 구축
+- ✅ **텍스트 감정 분석** 시스템 구축 (Sentio)
 - ✅ **시계열 딥러닝 분석** 시스템 구축 (Chronos)
 - ✅ **실시간 통합 분석** 플랫폼 완성
 - ✅ **React 연동** 최적화
@@ -579,19 +662,16 @@ conda install -c conda-forge shap lime
 ### 성능 성과
 - ✅ **Structura**: 0.1초/명 예측 속도 달성
 - ✅ **Cognita**: 30% 성능 향상 (v1.1.0)
+- ✅ **Sentio**: 명사 중심 키워드 추출로 정확도 향상
 - ✅ **Chronos**: GRU+CNN+Attention 하이브리드 모델 구현
-- ✅ **통합 시스템**: 3개 워커 에이전트 동시 실행
+- ✅ **통합 시스템**: 4개 워커 에이전트 동시 실행
 - ✅ **확장성**: 대규모 조직 지원 가능
 
 ---
 
 ## 👥 기여자
 
-<<<<<<< HEAD
 **개발팀**
-=======
-**오종환**
->>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
 - 시스템 아키텍처 설계
 - AI 모델 개발 및 최적화
 - 웹 서비스 구현
@@ -599,35 +679,23 @@ conda install -c conda-forge shap lime
 
 ---
 
-<<<<<<< HEAD
 ## 📄 라이선스
 
 이 프로젝트는 오픈소스 연구 프로젝트입니다.
 
 ---
 
-=======
->>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
 ## 📞 지원 및 문의
 
 프로젝트 관련 문의사항이나 기술 지원이 필요한 경우:
 
 1. **GitHub Issues**: 버그 리포트 및 기능 요청
 2. **기술 문서**: `README/` 폴더 참조
-<<<<<<< HEAD
 3. **개별 워커 문서**: 각 워커 디렉토리의 README 참조
 
 ---
 
-**버전**: 1.2.0 (Chronos Integration)  
+**버전**: 1.3.0 (Sentio Integration)  
 **최종 업데이트**: 2025년  
-**기술 스택**: Python, Flask, XGBoost, Neo4j, PyTorch, React  
-=======
-
----
-
-**버전**: 1.1.0 (Performance Optimized)  
-**최종 업데이트**: 2025년   
-**기술 스택**: Python, Flask, XGBoost, Neo4j, React  
->>>>>>> 7bc3736acc29f9852bdaf6ce12da169698ead406
-**아키텍처**: Multi-Agent AI System  
+**기술 스택**: Python, Flask, XGBoost, Neo4j, PyTorch, OpenAI GPT-4, React  
+**아키텍처**: Multi-Agent AI System (4 Workers)  

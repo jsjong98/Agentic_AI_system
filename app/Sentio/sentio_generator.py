@@ -1,13 +1,22 @@
+# -*- coding: utf-8 -*-
+"""
+Sentio 텍스트 생성기
+퇴직원인 키워드를 반영한 페르소나 기반 HR 텍스트 생성
+"""
+
 import pandas as pd
 import openai
 import json
 import time
 from typing import Dict, List
 import random
-from dotenv import load_dotenv
-import os
+import logging
 
-class HRTextGenerator:
+logger = logging.getLogger(__name__)
+
+class SentioTextGenerator:
+    """Sentio HR 텍스트 생성기"""
+    
     def __init__(self, api_key: str, csv_file_path: str):
         """
         HR 텍스트 데이터 생성기 초기화
@@ -314,19 +323,22 @@ class HRTextGenerator:
 """
         
         try:
-            # 새로운 responses.create API 사용
-            response = self.client.responses.create(
-                model="gpt-5-nano-2025-08-07",
-                input=full_prompt,
-                reasoning={"effort": "medium"},
-                text={"verbosity": "medium"}
+            # ChatGPT API 호출 (gpt-4 사용)
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "당신은 HR 텍스트 생성 전문가입니다. 주어진 지시사항을 정확히 따라 자연스러운 한국어 텍스트를 생성해주세요."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                max_tokens=500,
+                temperature=0.7
             )
             
-            generated_text = response.output_text.strip()
+            generated_text = response.choices[0].message.content.strip()
             return generated_text
             
         except Exception as e:
-            print(f"API 호출 오류 (직원 {employee_data['EmployeeNumber']}): {str(e)}")
+            logger.error(f"API 호출 오류 (직원 {employee_data['EmployeeNumber']}): {str(e)}")
             return "텍스트 생성 중 오류가 발생했습니다."
 
     def generate_all_texts(self, text_types: List[str] = None, sample_size: int = None):
@@ -352,12 +364,12 @@ class HRTextGenerator:
             
             for text_type in text_types:
                 current_request += 1
-                print(f"처리 중... ({current_request}/{total_requests}) 직원 {employee_data['EmployeeNumber']} - {text_type}")
+                logger.info(f"처리 중... ({current_request}/{total_requests}) 직원 {employee_data['EmployeeNumber']} - {text_type}")
                 
                 generated_text = self.generate_text_for_employee(employee_data, text_type)
                 employee_texts[f"{text_type}_text"] = generated_text
                 
-                # API 호출 제한을 위한 대기 (안정적인 처리를 위해 조금 더 대기)
+                # API 호출 제한을 위한 대기
                 time.sleep(0.5)
             
             self.generated_texts.append(employee_texts)
@@ -365,79 +377,19 @@ class HRTextGenerator:
     def save_to_csv(self, filename: str = "generated_hr_texts.csv"):
         """결과를 CSV 파일로 저장"""
         if not self.generated_texts:
-            print("생성된 텍스트가 없습니다. generate_all_texts()를 먼저 실행해주세요.")
+            logger.warning("생성된 텍스트가 없습니다. generate_all_texts()를 먼저 실행해주세요.")
             return
             
         result_df = pd.DataFrame(self.generated_texts)
         result_df.to_csv(filename, index=False, encoding='utf-8-sig')
-        print(f"결과가 {filename}에 저장되었습니다.")
+        logger.info(f"결과가 {filename}에 저장되었습니다.")
         
     def save_to_json(self, filename: str = "generated_hr_texts.json"):
         """결과를 JSON 파일로 저장"""
         if not self.generated_texts:
-            print("생성된 텍스트가 없습니다. generate_all_texts()를 먼저 실행해주세요.")
+            logger.warning("생성된 텍스트가 없습니다. generate_all_texts()를 먼저 실행해주세요.")
             return
             
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(self.generated_texts, f, ensure_ascii=False, indent=2)
-        print(f"결과가 {filename}에 저장되었습니다.")
-
-# 테스트 함수 추가
-def test_keyword_integration():
-    """퇴직원인 키워드 통합 테스트"""
-    print("=== 퇴직원인 키워드 통합 테스트 ===")
-    
-    # 더미 API 키로 테스트 (실제 API 호출 없이 키워드 매핑만 확인)
-    generator = HRTextGenerator("test-key", "data/IBM_HR_personas_assigned.csv")
-    
-    # 각 페르소나별 키워드 확인
-    test_personas = ["P01", "P02", "P03", "P04", "S01", "N01"]
-    
-    for persona in test_personas:
-        keywords = generator.get_attrition_keywords_for_persona(persona)
-        print(f"\n{persona} 페르소나 퇴직 위험 키워드 ({len(keywords)}개):")
-        if keywords:
-            print(f"  - {', '.join(keywords[:10])}...")  # 처음 10개만 표시
-        else:
-            print("  - 퇴직 위험 키워드 없음 (안정형 페르소나)")
-    
-    print("\n키워드 매핑 테스트 완료!")
-
-# 사용 예시
-if __name__ == "__main__":
-    # 설정
-    load_dotenv()
-
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    CSV_FILE_PATH = "data/IBM_HR_personas_assigned.csv"  # CSV 파일 경로
-
-    # API 키가 제대로 로드되었는지 확인합니다.
-    if not OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되지 않았습니다.")
-    
-    if OPENAI_API_KEY != "your-api-key-here":
-        # 텍스트 생성기 초기화
-        generator = HRTextGenerator(OPENAI_API_KEY, CSV_FILE_PATH)
-        
-        print("\n=== 실제 텍스트 생성 시작 ===")
-        print("실제 테스트: 1470명에 대해서 생성합니다...")
-        
-        # 전체 데ㅐ 테스트로 실행
-        generator.generate_all_texts(sample_size=1470)
-        
-        # 결과 저장
-        generator.save_to_csv("data/IBM_HR_text_rev.csv")
-        generator.save_to_json("data/IBM_HR_text_rev.json")
-        
-        print("텍스트 생성 완료!")
-        print(f"총 {len(generator.generated_texts)}명의 텍스트가 생성되었습니다.")
-        
-        # 결과 확인
-        if generator.generated_texts:
-            for i, result in enumerate(generator.generated_texts):
-                print(f"\n=== 샘플 {i+1} (직원 {result['EmployeeNumber']}) ===")
-                print(f"페르소나: {result['Persona_Name']} ({result['Persona_Code']})")
-                print(f"퇴사여부: {result['Attrition']}")
-                print(f"자기평가: {result['SELF_REVIEW_text'][:150]}...")
-    else:
-        print("\n실제 텍스트 생성을 위해서는 OPENAI_API_KEY를 설정해주세요.")
+        logger.info(f"결과가 {filename}에 저장되었습니다.")

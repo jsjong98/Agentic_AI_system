@@ -4,15 +4,15 @@ Agentic AI Master Server
 워커 에이전트들을 통합 관리하는 마스터 서버
 
 현재 구현된 워커 에이전트:
-- 워커 에이전트 1: 정형 데이터 분석 (Structura)
-- 워커 에이전트 2: 관계형 데이터 분석 (Cognita)
+- 워커 에이전트 1: 정형 데이터 분석 (Structura) - XGBoost 기반 이직 예측
+- 워커 에이전트 2: 관계형 데이터 분석 (Cognita) - Neo4j 기반 관계 분석
+- 워커 에이전트 3: 시계열 데이터 분석 (Chronos) - GRU+CNN+Attention 기반 시간 패턴 분석
+- 워커 에이전트 4: 텍스트 감정 분석 (Sentio) - NLP 기반 퇴직 위험 신호 탐지
 
 향후 확장 예정:
-- 워커 에이전트 3: 시계열 데이터 분석
-- 워커 에이전트 4: 자연어 데이터 분석  
 - 워커 에이전트 5: 외부 시장 분석
-- Supervisor 에이전트: 전체 조정
-- 최종 종합 에이전트: 결과 통합
+- Supervisor 에이전트: 전체 조정 및 의사결정
+- 최종 종합 에이전트: 결과 통합 및 리포트 생성
 """
 
 from flask import Flask, request, jsonify
@@ -35,6 +35,8 @@ from pathlib import Path
 # 워커 에이전트 import
 sys.path.append(str(Path(__file__).parent / "Structura"))
 sys.path.append(str(Path(__file__).parent / "Cognita"))
+sys.path.append(str(Path(__file__).parent / "Sentio"))
+sys.path.append(str(Path(__file__).parent / "Chronos"))
 
 try:
     from Structura.structura_flask_backend import StructuraHRPredictor
@@ -49,6 +51,23 @@ try:
 except ImportError as e:
     print(f"Warning: Cognita 워커 에이전트 import 실패: {e}")
     COGNITA_AVAILABLE = False
+
+try:
+    from Sentio.sentio_processor import SentioTextProcessor
+    from Sentio.sentio_analyzer import SentioKeywordAnalyzer
+    from Sentio.sentio_generator import SentioTextGenerator
+    SENTIO_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Sentio 워커 에이전트 import 실패: {e}")
+    SENTIO_AVAILABLE = False
+
+try:
+    from Chronos.chronos_processor import ChronosDataProcessor
+    from Chronos.chronos_models import ChronosModelTrainer
+    CHRONOS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Chronos 워커 에이전트 import 실패: {e}")
+    CHRONOS_AVAILABLE = False
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -73,12 +92,16 @@ class WorkerStatus:
 class AgenticTask:
     """에이전틱 작업"""
     task_id: str
-    task_type: str  # 'individual_analysis', 'department_analysis', 'combined_analysis'
+    task_type: str  # 'individual_analysis', 'department_analysis', 'combined_analysis', 'text_analysis', 'timeseries_analysis'
     employee_data: Optional[Dict] = None
     department_name: Optional[str] = None
     sample_size: Optional[int] = None
+    text_data: Optional[str] = None  # Sentio용 텍스트 데이터
+    timeseries_data: Optional[Dict] = None  # Chronos용 시계열 데이터
     use_structura: bool = True
     use_cognita: bool = True
+    use_sentio: bool = False
+    use_chronos: bool = False
     priority: int = 1  # 1=높음, 2=보통, 3=낮음
     created_at: str = None
     
@@ -93,6 +116,8 @@ class AgenticResult:
     task_type: str
     structura_result: Optional[Dict] = None
     cognita_result: Optional[Dict] = None
+    sentio_result: Optional[Dict] = None
+    chronos_result: Optional[Dict] = None
     combined_analysis: Optional[Dict] = None
     execution_time: float = 0.0
     status: str = "completed"  # 'completed', 'partial', 'failed'
@@ -201,6 +226,106 @@ class WorkerAgentManager:
                         error_message=str(e)
                     ),
                     'type': 'relational_data'
+                }
+        
+        # 워커 에이전트 3: Chronos (시계열 데이터 분석)
+        if CHRONOS_AVAILABLE:
+            try:
+                chronos_processor = ChronosDataProcessor(sequence_length=6, aggregation_unit='week')
+                chronos_trainer = ChronosModelTrainer()
+                
+                # 데이터 로드 시도
+                try:
+                    chronos_processor.load_data('data/IBM_HR_timeseries.csv', 'data/IBM_HR_personas_assigned.csv')
+                    chronos_processor.preprocess_data()
+                except Exception as data_e:
+                    logger.warning(f"Chronos 데이터 로드 실패: {data_e}")
+                
+                self.workers['chronos'] = {
+                    'agent': {
+                        'processor': chronos_processor,
+                        'trainer': chronos_trainer
+                    },
+                    'status': WorkerStatus(
+                        agent_id='chronos',
+                        agent_name='시계열 데이터 분석 에이전트',
+                        status='running',
+                        last_heartbeat=datetime.now().isoformat(),
+                        tasks_completed=0,
+                        current_task=None
+                    ),
+                    'type': 'timeseries_analysis'
+                }
+                logger.info("✅ Chronos 워커 에이전트 초기화 완료")
+            except Exception as e:
+                logger.error(f"❌ Chronos 워커 에이전트 초기화 실패: {e}")
+                self.workers['chronos'] = {
+                    'agent': None,
+                    'status': WorkerStatus(
+                        agent_id='chronos',
+                        agent_name='시계열 데이터 분석 에이전트',
+                        status='error',
+                        last_heartbeat=datetime.now().isoformat(),
+                        tasks_completed=0,
+                        current_task=None,
+                        error_message=str(e)
+                    ),
+                    'type': 'timeseries_analysis'
+                }
+        
+        # 워커 에이전트 4: Sentio (텍스트 감정 분석)
+        if SENTIO_AVAILABLE:
+            try:
+                sentio_processor = SentioTextProcessor()
+                
+                # OpenAI API 키가 있으면 텍스트 생성기도 초기화
+                api_key = os.environ.get('OPENAI_API_KEY')
+                sentio_generator = None
+                if api_key:
+                    try:
+                        sentio_generator = SentioTextGenerator(api_key, "data/IBM_HR_personas_assigned.csv")
+                    except Exception as gen_e:
+                        logger.warning(f"Sentio 텍스트 생성기 초기화 실패: {gen_e}")
+                
+                # 키워드 분석기 초기화
+                sentio_analyzer = None
+                try:
+                    sentio_analyzer = SentioKeywordAnalyzer("sample_hr_texts.csv")
+                    sentio_analyzer.load_data()
+                except Exception as ana_e:
+                    logger.warning(f"Sentio 키워드 분석기 초기화 실패: {ana_e}")
+                
+                self.workers['sentio'] = {
+                    'agent': {
+                        'processor': sentio_processor,
+                        'analyzer': sentio_analyzer,
+                        'generator': sentio_generator
+                    },
+                    'status': WorkerStatus(
+                        agent_id='sentio',
+                        agent_name='텍스트 감정 분석 에이전트',
+                        status='running',
+                        last_heartbeat=datetime.now().isoformat(),
+                        tasks_completed=0,
+                        current_task=None
+                    ),
+                    'type': 'text_analysis'
+                }
+                logger.info("✅ Sentio 워커 에이전트 초기화 완료")
+            except Exception as e:
+                logger.error(f"❌ Sentio 워커 에이전트 초기화 실패: {e}")
+                self.workers['sentio'] = {
+                    'agent': None,
+                    'status': WorkerStatus(
+                        agent_id='sentio',
+                        agent_name='텍스트 감정 분석 에이전트',
+                        status='error',
+                        last_heartbeat=datetime.now().isoformat(),
+                        tasks_completed=0,
+                        current_task=None,
+                        error_message=str(e)
+                    ),
+                    'type': 'text_analysis'
                 }
         
         logger.info(f"워커 에이전트 초기화 완료: {len(self.workers)}개 에이전트")
