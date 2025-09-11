@@ -195,7 +195,7 @@ GET /data/personas
 - **API**: RESTful API, JSON
 
 ### 데이터 요구사항
-- **HR 데이터**: `IBM_HR_personas_assigned.csv`
+- **HR 데이터**: `IBM_HR.csv` (페르소나 정보 제거됨)
 - **텍스트 데이터**: `IBM_HR_text.csv` 또는 `sample_hr_texts.csv`
 
 ### 환경 변수

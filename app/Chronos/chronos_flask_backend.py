@@ -35,7 +35,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # 데이터 경로 설정
 DATA_PATH = {
     'timeseries': 'data/IBM_HR_timeseries.csv',
-    'personas': 'data/IBM_HR_personas_assigned.csv'
+    'hr_data': 'data/IBM_HR.csv'  # 기본 HR 데이터 (페르소나 정보 없이)
 }
 
 MODEL_PATH = 'app/Chronos/models'
@@ -55,8 +55,8 @@ def initialize_system():
         visualizer = ChronosVisualizer()
         
         # 데이터 로드 및 전처리
-        if os.path.exists(DATA_PATH['timeseries']) and os.path.exists(DATA_PATH['personas']):
-            processor.load_data(DATA_PATH['timeseries'], DATA_PATH['personas'])
+        if os.path.exists(DATA_PATH['timeseries']) and os.path.exists(DATA_PATH['hr_data']):
+            processor.load_data(DATA_PATH['timeseries'], DATA_PATH['hr_data'])
             processor.preprocess_data()
             print("✅ 데이터 로드 및 전처리 완료")
         else:

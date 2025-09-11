@@ -31,10 +31,10 @@ class ChronosDataProcessor:
         self.scaler = StandardScaler()
         self.feature_columns = []
         self.ts_data = None
-        self.personas_data = None
+        self.hr_data = None
         self.processed_data = None
         
-    def load_data(self, timeseries_path: str, personas_path: str):
+    def load_data(self, timeseries_path: str, hr_data_path: str):
         """
         데이터 로딩
         """
@@ -44,11 +44,11 @@ class ChronosDataProcessor:
         self.ts_data = pd.read_csv(timeseries_path)
         print(f"✅ 시계열 데이터 로드 완료: {self.ts_data.shape}")
         
-        # 직원 속성 데이터 로드
-        self.personas_data = pd.read_csv(personas_path)
-        print(f"✅ 직원 속성 데이터 로드 완료: {self.personas_data.shape}")
+        # 기본 HR 데이터 로드 (페르소나 정보 없이)
+        self.hr_data = pd.read_csv(hr_data_path)
+        print(f"✅ HR 데이터 로드 완룼: {self.hr_data.shape}")
         
-        return self.ts_data.head(), self.personas_data.head()
+        return self.ts_data.head(), self.hr_data.head()
     
     def preprocess_data(self):
         """
@@ -64,8 +64,8 @@ class ChronosDataProcessor:
         self.ts_data = self.ts_data[mask]
         
         # Attrition 정보 매핑
-        attrition_map = dict(zip(self.personas_data['EmployeeNumber'], 
-                               self.personas_data['Attrition'].map({'Yes': 1, 'No': 0})))
+        attrition_map = dict(zip(self.hr_data['EmployeeNumber'], 
+                               self.hr_data['Attrition'].map({'Yes': 1, 'No': 0})))
         self.ts_data['attrition'] = self.ts_data['employee_id'].map(attrition_map)
         
         # 피처 선택
