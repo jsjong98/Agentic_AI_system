@@ -708,7 +708,9 @@ def create_app():
                 "predict": "/api/predict",
                 "explain": "/api/explain",
                 "feature_importance": "/api/feature-importance",
-                "model_info": "/api/model/info"
+                "model_info": "/api/model/info",
+                "predict_batch": "/api/predict/batch",
+                "employee_analysis": "/api/employee/analysis"
             }
         })
     
@@ -738,7 +740,7 @@ def create_app():
     
     @app.route('/api/train', methods=['POST'])
     def train_model():
-        """모델 훈련 엔드포인트"""
+        """모델 훈련 엔드포인트 (노트북 기반 최신 버전)"""
         
         predictor = get_predictor()
         if not predictor:
@@ -748,54 +750,39 @@ def create_app():
             # 요청 데이터 파싱
             data = request.get_json() or {}
             optimize_hp = data.get('optimize_hyperparameters', False)
-            n_trials = data.get('n_trials', 30)
+            use_sampling = data.get('use_sampling', True)
             
-            logger.info(f"모델 훈련 시작 - 하이퍼파라미터 최적화: {optimize_hp}")
+            logger.info(f"모델 훈련 시작 - 하이퍼파라미터 최적화: {optimize_hp}, 샘플링: {use_sampling}")
             
-            # 데이터 로딩 및 전처리
-            df = predictor.load_data()
-            X, y = predictor.preprocess_data(df)
-            
-            # 데이터 분할
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.3, stratify=y, random_state=predictor.random_state
+            # 전체 파이프라인 실행
+            metrics = predictor.run_full_pipeline(
+                optimize_hp=optimize_hp,
+                use_sampling=use_sampling
             )
             
-            # 하이퍼파라미터 최적화 (선택적)
-            if optimize_hp and OPTUNA_AVAILABLE:
-                # 간단한 최적화 (시간 단축)
-                best_params = {"learning_rate": 0.1, "max_depth": 6}  # 실제로는 Optuna 사용
-            else:
-                best_params = predictor._get_default_params()
-            
-            # 모델 훈련
-            predictor.train_model(X_train, y_train, best_params)
-            
-            # 모델 평가
-            y_pred_proba = predictor.predict(X_test, return_proba=True)
-            y_pred = predictor.predict(X_test)
-            
-            metrics = {
-                'roc_auc': float(roc_auc_score(y_test, y_pred_proba)),
-                'f1_score': float(f1_score(y_test, y_pred)),
-                'precision': float(precision_score(y_test, y_pred)),
-                'recall': float(recall_score(y_test, y_pred)),
-                'accuracy': float(accuracy_score(y_test, y_pred))
-            }
-            
             # 모델 저장
-            predictor.save_model("hr_attrition_model.pkl")
+            predictor.save_model("hr_attrition_model_xai.pkl")
+            
+            # 피처 중요도 가져오기
+            importance_df = predictor.get_feature_importance(10)
+            feature_importance = [
+                {"feature": row['feature'], "importance": float(row['importance'])}
+                for _, row in importance_df.iterrows()
+            ]
             
             return jsonify({
                 "status": "success",
-                "message": "모델 훈련 완료",
-                "metrics": metrics,
-                "hyperparameters": best_params,
-                "training_data_size": len(X_train),
-                "test_data_size": len(X_test),
+                "message": "모델 훈련 완료 (XAI 포함)",
+                "metrics": {k: float(v) if isinstance(v, (int, float)) else v for k, v in metrics.items()},
+                "feature_importance": feature_importance,
                 "xai_enabled": {
                     "shap": predictor.shap_explainer is not None,
-                    "lime": predictor.lime_explainer is not None
+                    "feature_importance": True
+                },
+                "model_config": {
+                    "optimal_threshold": predictor.optimal_threshold,
+                    "features_count": len(predictor.feature_columns) if predictor.feature_columns else 0,
+                    "sampling_used": use_sampling
                 },
                 "timestamp": datetime.now().isoformat()
             })
@@ -806,7 +793,7 @@ def create_app():
     
     @app.route('/api/predict', methods=['POST'])
     def predict_attrition():
-        """이직 예측 엔드포인트"""
+        """이직 예측 엔드포인트 (Probability 중심 + XAI)"""
         
         predictor = get_predictor()
         if not predictor or not predictor.model:
@@ -822,9 +809,10 @@ def create_app():
             if isinstance(data, list):
                 # 배치 예측
                 results = []
-                for employee_data in data:
-                    result = predictor.predict_single(employee_data)
-                    results.append(result.to_dict())
+                for i, employee_data in enumerate(data):
+                    employee_number = employee_data.get('EmployeeNumber', f'BATCH_{i+1:03d}')
+                    result = predictor.predict_single_employee(employee_data, employee_number)
+                    results.append(result)
                 
                 return jsonify({
                     "predictions": results,
@@ -833,8 +821,9 @@ def create_app():
                 })
             else:
                 # 단일 예측
-                result = predictor.predict_single(data)
-                return jsonify(result.to_dict())
+                employee_number = data.get('EmployeeNumber', 'SINGLE_001')
+                result = predictor.predict_single_employee(data, employee_number)
+                return jsonify(result)
                 
         except Exception as e:
             logger.error(f"예측 실패: {str(e)}")
@@ -842,7 +831,7 @@ def create_app():
     
     @app.route('/api/explain', methods=['POST'])
     def explain_prediction():
-        """예측 설명 엔드포인트 (xAI)"""
+        """예측 설명 엔드포인트 (SHAP 기반 XAI)"""
         
         predictor = get_predictor()
         if not predictor or not predictor.model:
@@ -854,10 +843,16 @@ def create_app():
             if not data:
                 return jsonify({"error": "설명할 직원 데이터가 필요합니다"}), 400
             
-            # 예측 설명 생성
-            explanation = predictor.explain_prediction(data)
+            # EmployeeNumber 추출
+            employee_number = data.get('EmployeeNumber', 'EXPLAIN_001')
             
-            return jsonify(explanation.to_dict())
+            # DataFrame으로 변환
+            df = pd.DataFrame([data])
+            
+            # 예측 설명 생성
+            explanation = predictor.explain_prediction(df, employee_number)
+            
+            return jsonify(explanation)
             
         except Exception as e:
             logger.error(f"예측 설명 실패: {str(e)}")
@@ -925,6 +920,175 @@ def create_app():
         
         return jsonify(model_info)
     
+    @app.route('/api/predict/batch', methods=['POST'])
+    def predict_batch():
+        """배치 예측 엔드포인트 (여러 직원 동시 처리)"""
+        
+        predictor = get_predictor()
+        if not predictor or not predictor.model:
+            return jsonify({"error": "모델이 로딩되지 않았습니다"}), 503
+        
+        try:
+            # 요청 데이터 파싱
+            data = request.get_json()
+            if not data or not isinstance(data, list):
+                return jsonify({"error": "배치 예측을 위한 직원 데이터 리스트가 필요합니다"}), 400
+            
+            results = []
+            for i, employee_data in enumerate(data):
+                try:
+                    employee_number = employee_data.get('EmployeeNumber', f'BATCH_{i+1:03d}')
+                    result = predictor.predict_single_employee(employee_data, employee_number)
+                    results.append(result)
+                except Exception as e:
+                    # 개별 예측 실패 시 오류 정보 포함
+                    results.append({
+                        'employee_number': employee_data.get('EmployeeNumber', f'BATCH_{i+1:03d}'),
+                        'error': str(e),
+                        'attrition_probability': None,
+                        'risk_category': 'ERROR'
+                    })
+            
+            # 통계 정보 계산
+            successful_predictions = [r for r in results if 'error' not in r]
+            if successful_predictions:
+                probabilities = [r['attrition_probability'] for r in successful_predictions]
+                risk_distribution = {}
+                for r in successful_predictions:
+                    risk_cat = r['risk_category']
+                    risk_distribution[risk_cat] = risk_distribution.get(risk_cat, 0) + 1
+                
+                stats = {
+                    'total_employees': len(data),
+                    'successful_predictions': len(successful_predictions),
+                    'failed_predictions': len(data) - len(successful_predictions),
+                    'average_probability': sum(probabilities) / len(probabilities),
+                    'risk_distribution': risk_distribution,
+                    'high_risk_count': risk_distribution.get('HIGH', 0)
+                }
+            else:
+                stats = {
+                    'total_employees': len(data),
+                    'successful_predictions': 0,
+                    'failed_predictions': len(data),
+                    'average_probability': None,
+                    'risk_distribution': {},
+                    'high_risk_count': 0
+                }
+            
+            return jsonify({
+                "predictions": results,
+                "statistics": stats,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"배치 예측 실패: {str(e)}")
+            return jsonify({"error": f"배치 예측 실패: {str(e)}"}), 500
+    
+    @app.route('/api/employee/analysis/<employee_number>', methods=['POST'])
+    def employee_analysis(employee_number):
+        """개별 직원 심층 분석 엔드포인트"""
+        
+        predictor = get_predictor()
+        if not predictor or not predictor.model:
+            return jsonify({"error": "모델이 로딩되지 않았습니다"}), 503
+        
+        try:
+            # 요청 데이터 파싱
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "직원 데이터가 필요합니다"}), 400
+            
+            # 예측 및 설명
+            result = predictor.predict_single_employee(data, employee_number)
+            
+            # 추가 분석 정보
+            df = pd.DataFrame([data])
+            probability = predictor.predict(df, return_proba=True)[0]
+            
+            # 위험도 레벨별 임계값 정보
+            risk_thresholds = {
+                'LOW': 0.4,
+                'MEDIUM': 0.7,
+                'HIGH': 1.0
+            }
+            
+            # 현재 위험도와 다음 단계까지의 거리
+            current_risk = result['risk_category']
+            if current_risk == 'LOW':
+                next_threshold = risk_thresholds['LOW']
+                distance_to_next = next_threshold - probability
+            elif current_risk == 'MEDIUM':
+                next_threshold = risk_thresholds['MEDIUM']
+                distance_to_next = next_threshold - probability
+            else:
+                next_threshold = None
+                distance_to_next = None
+            
+            # 심층 분석 결과
+            analysis = {
+                **result,
+                'detailed_analysis': {
+                    'probability_score': float(probability),
+                    'risk_thresholds': risk_thresholds,
+                    'current_risk_level': current_risk,
+                    'distance_to_next_level': float(distance_to_next) if distance_to_next else None,
+                    'percentile_rank': None  # 전체 직원 대비 순위 (추후 구현)
+                },
+                'recommendations': self._generate_recommendations(result),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return jsonify(analysis)
+            
+        except Exception as e:
+            logger.error(f"직원 분석 실패: {str(e)}")
+            return jsonify({"error": f"직원 분석 실패: {str(e)}"}), 500
+    
+    def _generate_recommendations(self, prediction_result):
+        """예측 결과 기반 권장사항 생성"""
+        recommendations = []
+        
+        risk_category = prediction_result['risk_category']
+        probability = prediction_result['attrition_probability']
+        
+        if risk_category == 'HIGH':
+            recommendations.extend([
+                "즉시 면담을 통한 이직 의도 파악 필요",
+                "업무 환경 및 만족도 개선 방안 논의",
+                "경력 개발 및 승진 기회 제공 검토",
+                "보상 체계 재검토 및 조정 고려"
+            ])
+        elif risk_category == 'MEDIUM':
+            recommendations.extend([
+                "정기적인 1:1 면담을 통한 상태 모니터링",
+                "업무 만족도 향상을 위한 개선 방안 모색",
+                "교육 및 개발 기회 제공",
+                "팀 내 역할 및 책임 재조정 검토"
+            ])
+        else:  # LOW
+            recommendations.extend([
+                "현재 상태 유지를 위한 지속적 관리",
+                "성과 인정 및 피드백 제공",
+                "장기 경력 개발 계획 수립 지원"
+            ])
+        
+        # XAI 설명 기반 추가 권장사항
+        if 'explanation' in prediction_result and 'individual_explanation' in prediction_result['explanation']:
+            exp = prediction_result['explanation']['individual_explanation']
+            if 'top_risk_factors' in exp:
+                for factor in exp['top_risk_factors'][:2]:  # 상위 2개 위험 요인
+                    feature = factor['feature']
+                    if 'Satisfaction' in feature:
+                        recommendations.append(f"{feature} 개선을 위한 구체적 액션 플랜 수립")
+                    elif 'WorkLifeBalance' in feature:
+                        recommendations.append("워라밸 개선을 위한 유연근무제 도입 검토")
+                    elif 'OverTime' in feature:
+                        recommendations.append("업무량 조정 및 초과근무 최소화 방안 마련")
+        
+        return recommendations
+    
     return app
 
 # ------------------------------------------------------
@@ -932,32 +1096,40 @@ def create_app():
 # ------------------------------------------------------
 
 def run_server(host='0.0.0.0', port=5003, debug=True):
-    """Flask 서버 실행"""
+    """Flask 서버 실행 (XAI 포함 최신 버전)"""
     app = create_app()
     
-    print("=" * 60)
-    print("🚀 Structura HR 예측 Flask 백엔드 서버 시작")
-    print("=" * 60)
+    print("=" * 70)
+    print("🚀 Structura HR 예측 Flask 백엔드 서버 시작 (XAI 포함)")
+    print("=" * 70)
     print(f"📡 서버 주소: http://{host}:{port}")
     print(f"🔗 React 연동: http://localhost:3000에서 접근 가능")
-    print(f"🤖 xAI 기능: SHAP, LIME, Feature Importance")
+    print(f"🤖 XAI 기능: SHAP 기반 설명 가능한 AI")
     print(f"🔄 디버그 모드: {'활성화' if debug else '비활성화'}")
     print()
     print("주요 엔드포인트:")
     print(f"  • 헬스체크: http://{host}:{port}/api/health")
     print(f"  • 모델 훈련: http://{host}:{port}/api/train")
     print(f"  • 이직 예측: http://{host}:{port}/api/predict")
+    print(f"  • 배치 예측: http://{host}:{port}/api/predict/batch")
     print(f"  • 예측 설명: http://{host}:{port}/api/explain")
+    print(f"  • 직원 분석: http://{host}:{port}/api/employee/analysis/<employee_number>")
     print(f"  • 피처 중요도: http://{host}:{port}/api/feature-importance")
     print(f"  • 모델 정보: http://{host}:{port}/api/model/info")
     print()
-    print("xAI 기능:")
+    print("XAI 기능:")
     print(f"  • SHAP: {'✅' if SHAP_AVAILABLE else '❌'}")
-    print(f"  • LIME: {'✅' if LIME_AVAILABLE else '❌'}")
+    print(f"  • Feature Importance: ✅")
     print(f"  • Optuna: {'✅' if OPTUNA_AVAILABLE else '❌'}")
     print()
+    print("새로운 기능:")
+    print("  • EmployeeNumber별 개별 XAI 설명")
+    print("  • Probability 중심 예측 결과")
+    print("  • 배치 처리 및 통계 분석")
+    print("  • 위험도 기반 권장사항 제공")
+    print()
     print("서버를 중지하려면 Ctrl+C를 누르세요.")
-    print("=" * 60)
+    print("=" * 70)
     
     app.run(host=host, port=port, debug=debug)
 
