@@ -16,10 +16,11 @@ logger = logging.getLogger(__name__)
 class SentioTextProcessor:
     """Sentio 텍스트 처리 및 분석 클래스"""
     
-    def __init__(self):
+    def __init__(self, analyzer=None):
         """텍스트 프로세서 초기화"""
         self.attrition_keywords = self._initialize_attrition_keywords()
         self.stopwords = self._initialize_stopwords()
+        self.analyzer = analyzer  # JD-R 기반 분석기
         
     def _initialize_attrition_keywords(self) -> Dict[str, Dict[str, List[str]]]:
         """퇴직원인별 키워드 매핑 초기화"""
@@ -248,32 +249,55 @@ class SentioTextProcessor:
         return normalized_score, list(set(risk_factors))  # 중복 제거
     
     def analyze_text(self, text: str, employee_id: str = "unknown", text_type: str = "general") -> Dict[str, Any]:
-        """종합 텍스트 분석"""
+        """종합 텍스트 분석 (개선된 JD-R 모델 기반)"""
         try:
-            # 키워드 추출
-            keywords = self.extract_keywords(text)
+            # JD-R 기반 분석 사용 (analyzer가 있는 경우)
+            if hasattr(self, 'analyzer') and self.analyzer:
+                jdr_result = self.analyzer.analyze_employee_text(
+                    employee_id=employee_id,
+                    self_review=text,
+                    peer_feedback="",
+                    weekly_survey=""
+                )
+                
+                return {
+                    "keywords": jdr_result.get('detected_keywords', []),
+                    "sentiment_score": jdr_result.get('sentiment_score', 0.5),
+                    "attrition_risk_score": jdr_result.get('psychological_risk_score', 0.5),
+                    "risk_factors": jdr_result.get('job_demands_matches', []) + jdr_result.get('job_resources_deficiency_matches', []),
+                    "keyword_count": len(jdr_result.get('detected_keywords', [])),
+                    "text_length": len(text),
+                    "jd_r_indicators": jdr_result.get('jd_r_indicators', {}),
+                    "risk_level": jdr_result.get('risk_level', 'MEDIUM'),
+                    "attrition_prediction": jdr_result.get('attrition_prediction', 0)
+                }
             
-            # 감정 점수 계산
-            sentiment_score = self.calculate_sentiment_score(text, keywords)
-            
-            # 퇴직 위험 점수 계산
-            attrition_risk_score, risk_factors = self.calculate_attrition_risk_score(text, keywords)
-            
-            return {
-                "keywords": keywords,
-                "sentiment_score": sentiment_score,
-                "attrition_risk_score": attrition_risk_score,
-                "risk_factors": risk_factors,
-                "keyword_count": len(keywords),
-                "text_length": len(text)
-            }
+            # 기존 방식 (fallback)
+            else:
+                # 키워드 추출
+                keywords = self.extract_keywords(text)
+                
+                # 감정 점수 계산
+                sentiment_score = self.calculate_sentiment_score(text, keywords)
+                
+                # 퇴직 위험 점수 계산
+                attrition_risk_score, risk_factors = self.calculate_attrition_risk_score(text, keywords)
+                
+                return {
+                    "keywords": keywords,
+                    "sentiment_score": sentiment_score,
+                    "attrition_risk_score": attrition_risk_score,
+                    "risk_factors": risk_factors,
+                    "keyword_count": len(keywords),
+                    "text_length": len(text)
+                }
             
         except Exception as e:
             logger.error(f"텍스트 분석 오류: {str(e)}")
             return {
                 "keywords": [],
                 "sentiment_score": 0.5,
-                "attrition_risk_score": 0.0,
+                "attrition_risk_score": 0.5,
                 "risk_factors": [],
                 "keyword_count": 0,
                 "text_length": len(text) if text else 0
