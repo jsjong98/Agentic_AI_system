@@ -25,7 +25,7 @@ def main():
     
     # 서버 설정
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", 5003))  # Structura 전용 포트
+    port = int(os.getenv("PORT", 5001))  # Structura 전용 포트
     debug = os.getenv("DEBUG", "true").lower() == "true"
     
     print(f"📡 서버 주소: http://{host}:{port}")

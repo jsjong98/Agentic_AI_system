@@ -99,12 +99,12 @@ def run_server():
         from app.Chronos.chronos_flask_backend import app
         
         print("\n🌐 서버 정보:")
-        print("   - URL: http://localhost:5002")
-        print("   - API 문서: http://localhost:5002")
+        print("   - URL: http://localhost:5003")
+        print("   - API 문서: http://localhost:5003")
         print("   - 종료: Ctrl+C")
         print("=" * 50)
         
-        app.run(host='0.0.0.0', port=5002, debug=True)
+        app.run(host='0.0.0.0', port=5003, debug=True)
         
     except KeyboardInterrupt:
         print("\n👋 서버가 종료되었습니다.")

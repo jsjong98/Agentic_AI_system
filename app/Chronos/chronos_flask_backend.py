@@ -581,8 +581,8 @@ if __name__ == '__main__':
     # 시스템 초기화
     if initialize_system():
         print("✅ 시스템 초기화 완료")
-        print("🌐 서버 주소: http://localhost:5002")
-        print("📋 API 문서: http://localhost:5002")
-        app.run(host='0.0.0.0', port=5002, debug=True)
+        print("🌐 서버 주소: http://localhost:5003")
+        print("📋 API 문서: http://localhost:5003")
+        app.run(host='0.0.0.0', port=5003, debug=True)
     else:
         print("❌ 시스템 초기화 실패")

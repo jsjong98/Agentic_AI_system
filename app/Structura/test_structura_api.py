@@ -13,7 +13,7 @@ from typing import Dict, List
 class StructuraAPITester:
     """Structura API 테스트 클래스"""
     
-    def __init__(self, base_url: str = "http://localhost:5003"):
+    def __init__(self, base_url: str = "http://localhost:5001"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         self.session.headers.update({
@@ -535,7 +535,7 @@ def main():
     """메인 함수"""
     
     # 서버 URL 설정
-    base_url = "http://localhost:5003"
+    base_url = "http://localhost:5001"
     
     print("Structura HR 예측 API 테스트를 시작합니다...")
     print(f"서버 URL: {base_url}")

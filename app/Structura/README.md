@@ -58,7 +58,7 @@ python structura_flask_backend.py
 ## 📡 API 엔드포인트
 
 ### 기본 정보
-- **서버 주소**: `http://localhost:5003`
+- **서버 주소**: `http://localhost:5001`
 - **Content-Type**: `application/json`
 - **CORS**: React 개발 서버 지원
 

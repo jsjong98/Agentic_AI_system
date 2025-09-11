@@ -34,7 +34,7 @@ def main():
         # 서버 실행
         app.run(
             host='0.0.0.0',
-            port=5003,
+            port=5004,
             debug=True,
             threaded=True
         )
