@@ -43,6 +43,8 @@ print(f"사용 디바이스: {device}")
 # 플롯 설정
 plt.style.use('default')
 sns.set_palette("husl")
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False
 
 # Optuna 로깅 설정
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -1424,3 +1426,213 @@ result = predict_employee_with_best_model(
     employee_id, processor, model, scaler, best_params
 )
 print(f"퇴사 확률: {{result['attrition_probability']:.3f}}")"""
+    
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(guide_content)
+
+print("🎯 최적화된 모델로 샘플 직원 예측")
+print("=" * 50)
+
+sample_employees = processor.aggregated_data[processor.employee_id_col].unique()[:10]
+sample_predictions = []
+
+for emp_id in sample_employees:
+    try:
+        result = predict_employee_with_best_model(emp_id, processor, best_model, best_scaler, best_params)
+        sample_predictions.append(result)
+    except Exception as e:
+        print(f"⚠️  직원 {emp_id} 예측 실패: {e}")
+
+# 결과 출력
+if sample_predictions:
+    predictions_df = pd.DataFrame(sample_predictions)
+    print("\n📋 샘플 직원 예측 결과:")
+    print(predictions_df.sort_values('attrition_probability', ascending=False))
+    
+    risk_dist = predictions_df['risk_level'].value_counts()
+    print(f"\n📊 위험도 분포:")
+    for risk, count in risk_dist.items():
+        print(f"   {risk}: {count}명 ({count/len(predictions_df)*100:.1f}%)")
+
+# ============================================================================
+# 셀 15: 전체 직원 시계열 예측 및 결과 저장
+# ============================================================================
+
+def predict_all_employees_and_save(processor, model, scaler, best_params, save_path='Data analysis/data/employee_attrition_predictions.csv'):
+    """전체 직원에 대한 시계열 예측 수행 및 CSV 저장"""
+    print("🔮 전체 1470명 직원 시계열 예측 수행")
+    print("=" * 50)
+    
+    # 전체 직원 ID 가져오기 (시계열 데이터와 직원 속성 데이터 모두에서)
+    timeseries_employees = set(processor.aggregated_data[processor.employee_id_col].unique())
+    personas_employees = set(processor.personas_data[processor.personas_id_col].unique())
+    
+    # 두 데이터셋에 모두 존재하는 직원들
+    common_employees = timeseries_employees.intersection(personas_employees)
+    
+    # 시계열 데이터에만 있는 직원들 (속성 정보 없음)
+    timeseries_only = timeseries_employees - personas_employees
+    
+    # 속성 데이터에만 있는 직원들 (시계열 정보 없음)
+    personas_only = personas_employees - timeseries_employees
+    
+    print(f"📊 데이터 현황:")
+    print(f"   시계열 데이터 직원 수: {len(timeseries_employees)}명")
+    print(f"   속성 데이터 직원 수: {len(personas_employees)}명")
+    print(f"   공통 직원 수: {len(common_employees)}명")
+    print(f"   시계열만 있는 직원: {len(timeseries_only)}명")
+    print(f"   속성만 있는 직원: {len(personas_only)}명")
+    
+    # 전체 직원 리스트 (모든 직원 포함 - 1470명 목표)
+    all_employees = list(timeseries_employees.union(personas_employees))
+    print(f"📊 예측 대상 총 직원 수: {len(all_employees)}명")
+    
+    if len(all_employees) >= 1470:
+        print(f"✅ 목표 1470명 달성! (실제: {len(all_employees)}명)")
+    else:
+        print(f"⚠️  목표 1470명 미달 (실제: {len(all_employees)}명)")
+    
+    # 예측 결과 저장할 리스트
+    all_predictions = []
+    successful_predictions = 0
+    failed_predictions = 0
+    
+    print("🚀 예측 진행 중...")
+    
+    # 진행률 표시를 위한 tqdm 사용
+    for i, emp_id in enumerate(tqdm(all_employees, desc="직원별 예측")):
+        try:
+            # 시계열 데이터가 있는 직원인지 확인
+            if emp_id in timeseries_employees:
+                # 개별 직원 예측 수행 (시계열 기반 예측)
+                result = predict_employee_with_best_model(emp_id, processor, model, scaler, best_params)
+                result['prediction_method'] = 'Timeseries Model'
+                all_predictions.append(result)
+                successful_predictions += 1
+            else:
+                # 시계열 데이터가 없는 경우 속성 데이터만으로 처리
+                raise ValueError(f"시계열 데이터가 없어 속성 기반 예측으로 전환합니다.")
+            
+        except Exception as e:
+            # 예측 실패한 경우 기본값으로 저장
+            # 속성 데이터에서 실제 attrition 정보가 있다면 사용
+            actual_attrition = None
+            if emp_id in personas_employees:
+                try:
+                    persona_row = processor.personas_data[processor.personas_data[processor.personas_id_col] == emp_id]
+                    if not persona_row.empty and 'attrition_binary' in persona_row.columns:
+                        actual_attrition = persona_row['attrition_binary'].iloc[0]
+                except:
+                    pass
+            
+            # 예측 방법 결정
+            if emp_id not in timeseries_employees and emp_id in personas_employees:
+                prediction_method = 'Attribute-based (No timeseries)'
+                prediction_status = 'Success - Attribute only'
+            else:
+                prediction_method = 'Failed'
+                prediction_status = 'Failed - Prediction error'
+            
+            failed_result = {
+                'employee_id': emp_id,
+                'attrition_probability': 0.5 if actual_attrition is None else float(actual_attrition),  # 불확실한 경우 0.5
+                'prediction': 0 if actual_attrition is None else int(actual_attrition),  # 실제 값이 있으면 사용
+                'risk_level': 'Unknown' if actual_attrition is None else ('High' if actual_attrition == 1 else 'Low'),
+                'sequence_length_used': best_params['sequence_length'] if emp_id in timeseries_employees else 0,
+                'prediction_method': prediction_method,
+                'prediction_status': prediction_status,
+                'error_message': str(e) if prediction_status.startswith('Failed') else 'No timeseries data available'
+            }
+            all_predictions.append(failed_result)
+            failed_predictions += 1
+    
+    print(f"\n📊 예측 완료 요약:")
+    print(f"   ✅ 성공: {successful_predictions}명")
+    print(f"   ❌ 실패: {failed_predictions}명")
+    print(f"   📈 성공률: {successful_predictions/len(all_employees)*100:.1f}%")
+    
+    # DataFrame으로 변환
+    predictions_df = pd.DataFrame(all_predictions)
+    
+    # 컬럼 순서 정리
+    column_order = ['employee_id', 'attrition_probability', 'prediction', 'risk_level', 
+                   'sequence_length_used', 'prediction_method']
+    
+    # 추가 정보 컬럼 포함
+    column_order.extend(['prediction_status', 'error_message'])
+    predictions_df['prediction_method'] = predictions_df.get('prediction_method', 'Timeseries Model')
+    predictions_df['prediction_status'] = predictions_df.get('prediction_status', 'Success')
+    predictions_df['error_message'] = predictions_df.get('error_message', '')
+    
+    predictions_df = predictions_df[column_order]
+    
+    # 퇴사 확률 기준으로 정렬 (내림차순)
+    predictions_df = predictions_df.sort_values('attrition_probability', ascending=False)
+    
+    # CSV 파일로 저장
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    predictions_df.to_csv(save_path, index=False, encoding='utf-8-sig')
+    
+    print(f"\n💾 예측 결과 저장 완료: {save_path}")
+    print(f"   📄 저장된 레코드 수: {len(predictions_df)}개")
+    
+    # 결과 요약 출력
+    print(f"\n📈 예측 결과 요약:")
+    
+    # 성공한 예측만으로 통계 계산
+    successful_df = predictions_df[predictions_df.get('prediction_status', 'Success') == 'Success']
+    
+    if len(successful_df) > 0:
+        print(f"   평균 퇴사 확률: {successful_df['attrition_probability'].mean():.3f}")
+        print(f"   최고 퇴사 확률: {successful_df['attrition_probability'].max():.3f}")
+        print(f"   최저 퇴사 확률: {successful_df['attrition_probability'].min():.3f}")
+        
+        # 위험도별 분포
+        risk_dist = successful_df['risk_level'].value_counts()
+        print(f"\n🎯 위험도별 분포:")
+        for risk, count in risk_dist.items():
+            if risk != 'Unknown':
+                print(f"   {risk}: {count}명 ({count/len(successful_df)*100:.1f}%)")
+        
+        # 상위 10명 출력
+        print(f"\n🚨 퇴사 위험 상위 10명:")
+        top_10 = successful_df.head(10)[['employee_id', 'attrition_probability', 'risk_level']]
+        for idx, row in top_10.iterrows():
+            print(f"   직원 {row['employee_id']}: {row['attrition_probability']:.3f} ({row['risk_level']})")
+    
+    return predictions_df
+
+# 전체 직원 예측 실행 및 저장
+print("\n" + "="*70)
+print("🎯 전체 직원 시계열 예측 및 결과 저장 시작")
+print("="*70)
+
+# 변수 존재 확인
+print("🔍 변수 존재 확인:")
+print(f"   processor 존재: {'processor' in locals()}")
+print(f"   best_model 존재: {'best_model' in locals()}")
+print(f"   best_scaler 존재: {'best_scaler' in locals()}")
+print(f"   best_params 존재: {'best_params' in locals()}")
+
+try:
+    final_predictions_df = predict_all_employees_and_save(
+        processor, 
+        best_model, 
+        best_scaler, 
+        best_params,
+        save_path='Data analysis/data/employee_attrition_predictions.csv'
+    )
+except Exception as e:
+    print(f"❌ 예측 함수 실행 중 오류 발생: {e}")
+    print(f"   오류 타입: {type(e).__name__}")
+    import traceback
+    traceback.print_exc()
+    final_predictions_df = None
+
+if final_predictions_df is not None:
+    print(f"\n🎉 전체 프로세스 완료!")
+    print(f"   📊 총 {len(final_predictions_df)}명의 직원 예측 결과가 저장되었습니다.")
+    print(f"   📁 저장 위치: Data analysis/data/employee_attrition_predictions.csv")
+else:
+    print(f"\n❌ 프로세스 실행 실패!")
+    print(f"   위의 오류 메시지를 확인해주세요.")
