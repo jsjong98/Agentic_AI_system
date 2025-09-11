@@ -68,6 +68,7 @@ class AgoraAnalysisResult:
     compensation_gap: float
     job_postings_count: int
     market_competitiveness: str
+    agora_score: float  # 0~1 범위의 종합 위험도 점수
     risk_level: str
     llm_interpretation: Optional[str]
     analysis_timestamp: str
@@ -201,6 +202,7 @@ def analyze_individual_market():
             compensation_gap=analysis_result.get('compensation_gap', 0.0),
             job_postings_count=analysis_result.get('job_postings_count', 0),
             market_competitiveness=analysis_result.get('market_competitiveness', 'MEDIUM'),
+            agora_score=analysis_result.get('agora_score', 0.0),  # 0~1 범위 점수
             risk_level=analysis_result.get('risk_level', 'MEDIUM'),
             llm_interpretation=analysis_result.get('llm_interpretation'),
             analysis_timestamp=datetime.now().isoformat()
