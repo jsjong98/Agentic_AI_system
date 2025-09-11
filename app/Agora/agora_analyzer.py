@@ -75,8 +75,8 @@ class AgoraMarketAnalyzer:
                 market_pressure_index, compensation_gap, job_postings_count
             )
             
-            # 위험 수준 결정
-            risk_level = self._determine_risk_level(
+            # 위험 수준 및 점수 계산
+            risk_result = self._determine_risk_level(
                 market_pressure_index, compensation_gap, job_satisfaction, years_at_company
             )
             
@@ -89,7 +89,8 @@ class AgoraMarketAnalyzer:
                 'compensation_gap': round(compensation_gap, 3),
                 'job_postings_count': job_postings_count,
                 'market_competitiveness': market_competitiveness,
-                'risk_level': risk_level,
+                'agora_score': round(risk_result['risk_score'], 3),  # 0~1 범위 점수
+                'risk_level': risk_result['risk_level'],
                 'market_data': {
                     'avg_salary': market_data.get('avg_salary', 0),
                     'salary_range': market_data.get('salary_range', {}),
@@ -135,10 +136,10 @@ class AgoraMarketAnalyzer:
             return "VERY_LOW"
     
     def _determine_risk_level(self, market_pressure: float, compensation_gap: float, 
-                            job_satisfaction: int, years_at_company: int) -> str:
-        """위험 수준 결정"""
+                            job_satisfaction: int, years_at_company: int) -> Dict:
+        """위험 수준 및 점수 계산"""
         
-        # 위험 점수 계산
+        # 위험 점수 계산 (0~1 범위)
         risk_score = 0.0
         
         # 시장 압력 (0-0.4)
@@ -162,13 +163,21 @@ class AgoraMarketAnalyzer:
         
         risk_score += tenure_risk
         
+        # 0~1 범위로 정규화
+        risk_score = max(0.0, min(1.0, risk_score))
+        
         # 위험 수준 분류
         if risk_score >= 0.7:
-            return "HIGH"
+            risk_level = "HIGH"
         elif risk_score >= 0.4:
-            return "MEDIUM"
+            risk_level = "MEDIUM"
         else:
-            return "LOW"
+            risk_level = "LOW"
+            
+        return {
+            'risk_score': risk_score,  # 0~1 범위의 agora_score
+            'risk_level': risk_level   # 문자열 레벨
+        }
     
     def _generate_rule_based_interpretation(self, analysis_result: Dict) -> str:
         """규칙 기반 해석 생성"""
