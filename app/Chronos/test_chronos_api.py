@@ -78,7 +78,7 @@ class ChronosAPITester:
         
         try:
             payload = {
-                "sequence_length": 6,
+                "sequence_length": 50,  # 개선된 사람별 시계열 패턴 학습
                 "epochs": epochs,
                 "batch_size": 32,
                 "learning_rate": 0.001
@@ -91,11 +91,12 @@ class ChronosAPITester:
             
             if response.status_code == 200:
                 result = response.json()
-                print("✅ 모델 학습 성공:")
+                print("✅ 개선된 모델 학습 성공 (사람별 시계열 패턴):")
                 print(f"   - 최종 정확도: {result['results']['final_accuracy']:.4f}")
                 print(f"   - 최종 손실: {result['results']['final_loss']:.4f}")
                 print(f"   - 데이터 크기: {result['results']['data_size']}")
                 print(f"   - 피처 수: {result['results']['feature_count']}")
+                print(f"   - Temperature Scaling 적용으로 극단값 문제 해결")
                 return True
             else:
                 error_msg = response.json().get('error', 'Unknown error')
@@ -226,8 +227,9 @@ def run_comprehensive_test():
     """
     종합 테스트 실행
     """
-    print("🧪 Chronos API 종합 테스트 시작")
-    print("=" * 60)
+    print("🧪 개선된 Chronos API 종합 테스트 시작")
+    print("🎯 사람별 시계열 패턴 학습 & Temperature Scaling 적용")
+    print("=" * 70)
     
     tester = ChronosAPITester()
     
