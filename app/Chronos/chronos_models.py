@@ -1,5 +1,5 @@
 # ============================================================================
-# Chronos 모델 정의 - Attention 메커니즘 포함
+# Chronos 모델 정의 - 개선된 GRU+CNN 하이브리드 모델 (Chronos_analysis_fixed.py 반영)
 # ============================================================================
 
 import torch
@@ -53,74 +53,92 @@ class FeatureAttentionLayer(nn.Module):
         
         return attended_features, avg_feature_importance
 
-class GRU_CNN_AttentionModel(nn.Module):
+class GRU_CNN_HybridModel(nn.Module):
     """
-    GRU + CNN + Attention 하이브리드 모델
-    Feature importance와 시계열 attention을 모두 제공합니다.
+    개선된 GRU + CNN 하이브리드 모델 (Chronos_analysis_fixed.py 기반)
+    사람별 시계열 패턴 학습에 최적화됨
     """
-    def __init__(self, input_size: int, gru_hidden: int = 64, cnn_filters: int = 32, 
-                 dropout: float = 0.3, num_classes: int = 2):
-        super(GRU_CNN_AttentionModel, self).__init__()
+    def __init__(self, input_size: int, gru_hidden: int = 32, cnn_filters: int = 16, 
+                 kernel_sizes: list = [2, 3], dropout: float = 0.2, num_classes: int = 2):
+        super(GRU_CNN_HybridModel, self).__init__()
         
         self.input_size = input_size
         self.gru_hidden = gru_hidden
         self.cnn_filters = cnn_filters
         
-        # Feature-level attention
-        self.feature_attention = FeatureAttentionLayer(input_size)
+        # GRU 브랜치
+        self.gru = nn.GRU(
+            input_size=input_size,
+            hidden_size=gru_hidden,
+            num_layers=1,
+            dropout=dropout,
+            batch_first=True
+        )
+        self.gru_dropout = nn.Dropout(dropout)
         
-        # GRU layers
-        self.gru1 = nn.GRU(input_size, gru_hidden, batch_first=True, dropout=dropout)
-        self.gru2 = nn.GRU(gru_hidden, gru_hidden, batch_first=True, dropout=dropout)
+        # CNN 브랜치
+        self.conv_layers = nn.ModuleList()
+        for kernel_size in kernel_sizes:
+            conv_layer = nn.Sequential(
+                nn.Conv1d(input_size, cnn_filters, kernel_size, padding=kernel_size//2),
+                nn.ReLU(),
+                nn.BatchNorm1d(cnn_filters),
+                nn.AdaptiveMaxPool1d(1)
+            )
+            self.conv_layers.append(conv_layer)
         
-        # Temporal attention
-        self.temporal_attention = AttentionLayer(gru_hidden)
+        # 분류기
+        combined_features = gru_hidden + len(kernel_sizes) * cnn_filters
+        self.classifier = nn.Sequential(
+            nn.Linear(combined_features, 64),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(32, num_classes)
+        )
         
-        # CNN layers for pattern detection
-        self.conv1d = nn.Conv1d(in_channels=gru_hidden, out_channels=cnn_filters, 
-                               kernel_size=3, padding=1)
-        self.pool = nn.AdaptiveAvgPool1d(1)
+        # 어텐션
+        self.attention = nn.Sequential(
+            nn.Linear(gru_hidden, 1),
+            nn.Softmax(dim=1)
+        )
         
-        # Classification layers
-        self.dropout = nn.Dropout(dropout)
-        self.fc1 = nn.Linear(gru_hidden + cnn_filters, gru_hidden)
-        self.fc2 = nn.Linear(gru_hidden, num_classes)
+        # Temperature Scaling 파라미터 (극단값 문제 해결)
+        self.temperature = nn.Parameter(torch.ones(1) * 1.5)
         
         # Store attention weights for interpretation
         self.last_temporal_attention = None
         self.last_feature_importance = None
         
     def forward(self, x):
-        # x: (batch_size, seq_len, input_size)
-        batch_size, seq_len, input_size = x.size()
+        # GRU + 어텐션
+        gru_out, _ = self.gru(x)
+        attention_weights = self.attention(gru_out)
+        gru_features = torch.sum(gru_out * attention_weights, dim=1)
+        gru_features = self.gru_dropout(gru_features)
         
-        # Feature-level attention
-        x_attended, feature_importance = self.feature_attention(x)
-        self.last_feature_importance = feature_importance
+        # Store attention for interpretation
+        self.last_temporal_attention = attention_weights.squeeze(-1)
         
-        # GRU processing
-        gru_out1, _ = self.gru1(x_attended)
-        gru_out2, _ = self.gru2(gru_out1)
+        # CNN
+        x_cnn = x.transpose(1, 2)
+        cnn_outputs = []
+        for conv_layer in self.conv_layers:
+            conv_out = conv_layer(x_cnn).squeeze(-1)
+            cnn_outputs.append(conv_out)
         
-        # Temporal attention
-        attended_output, temporal_weights = self.temporal_attention(gru_out2)
-        self.last_temporal_attention = temporal_weights
+        cnn_features = torch.cat(cnn_outputs, dim=1)
         
-        # CNN processing
-        cnn_input = gru_out2.transpose(1, 2)  # (batch_size, hidden_size, seq_len)
-        cnn_out = F.relu(self.conv1d(cnn_input))
-        cnn_pooled = self.pool(cnn_out).squeeze(-1)  # (batch_size, cnn_filters)
+        # 결합 및 분류
+        combined_features = torch.cat([gru_features, cnn_features], dim=1)
+        logits = self.classifier(combined_features)
         
-        # Combine GRU attention output and CNN output
-        combined = torch.cat([attended_output, cnn_pooled], dim=1)
+        # Temperature Scaling 적용 (극단값 문제 해결)
+        scaled_logits = logits / self.temperature
         
-        # Classification
-        x = self.dropout(combined)
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        output = self.fc2(x)
-        
-        return output
+        return scaled_logits
     
     def get_attention_weights(self):
         """
@@ -140,14 +158,15 @@ class GRU_CNN_AttentionModel(nn.Module):
             output = self.forward(x)
             probabilities = F.softmax(output, dim=1)
             
-            attention_info = self.get_attention_weights()
+            # Temporal attention 가져오기
+            temporal_attention = self.last_temporal_attention.cpu().numpy() if self.last_temporal_attention is not None else None
             
-            # Feature importance 정규화
-            feature_importance = attention_info['feature_importance'].cpu().numpy()
+            # 간단한 feature importance (gradient 기반)
+            x.requires_grad_(True)
+            output_for_grad = self.forward(x)
+            grad = torch.autograd.grad(output_for_grad[:, 1].sum(), x, create_graph=False)[0]
+            feature_importance = torch.mean(torch.abs(grad), dim=(0, 1)).cpu().numpy()
             feature_importance = feature_importance / np.sum(feature_importance)
-            
-            # Temporal attention 정규화
-            temporal_attention = attention_info['temporal_attention'].cpu().numpy()
             
             interpretation = {
                 'predictions': output.cpu().numpy(),
@@ -226,14 +245,22 @@ class ChronosModelTrainer:
             'labels': all_labels
         }
 
-def create_attention_model(input_size: int, **kwargs) -> GRU_CNN_AttentionModel:
+def create_hybrid_model(input_size: int, **kwargs) -> GRU_CNN_HybridModel:
     """
-    Attention 모델 생성 헬퍼 함수
+    개선된 하이브리드 모델 생성 헬퍼 함수
     """
-    return GRU_CNN_AttentionModel(
+    return GRU_CNN_HybridModel(
         input_size=input_size,
-        gru_hidden=kwargs.get('gru_hidden', 64),
-        cnn_filters=kwargs.get('cnn_filters', 32),
-        dropout=kwargs.get('dropout', 0.3),
+        gru_hidden=kwargs.get('gru_hidden', 32),
+        cnn_filters=kwargs.get('cnn_filters', 16),
+        kernel_sizes=kwargs.get('kernel_sizes', [2, 3]),
+        dropout=kwargs.get('dropout', 0.2),
         num_classes=kwargs.get('num_classes', 2)
     )
+
+# 하위 호환성을 위한 별칭
+def create_attention_model(input_size: int, **kwargs) -> GRU_CNN_HybridModel:
+    """
+    하위 호환성을 위한 별칭
+    """
+    return create_hybrid_model(input_size, **kwargs)

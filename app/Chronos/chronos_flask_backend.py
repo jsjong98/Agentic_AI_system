@@ -20,8 +20,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 로컬 모듈 import
-from chronos_models import GRU_CNN_AttentionModel, ChronosModelTrainer, create_attention_model
-from chronos_processor import ChronosDataProcessor, ChronosVisualizer
+from chronos_models import GRU_CNN_HybridModel, ChronosModelTrainer, create_hybrid_model, create_attention_model
+from chronos_processor_fixed import ProperTimeSeriesProcessor, ChronosVisualizer, employee_based_train_test_split
 
 app = Flask(__name__)
 CORS(app)
@@ -35,7 +35,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # 데이터 경로 설정
 DATA_PATH = {
     'timeseries': 'data/IBM_HR_timeseries.csv',
-    'hr_data': 'data/IBM_HR.csv'  # 기본 HR 데이터 (페르소나 정보 없이)
+    'personas': 'data/IBM_HR_personas_assigned.csv'  # 페르소나 정보 포함
 }
 
 MODEL_PATH = 'app/Chronos/models'
@@ -50,14 +50,16 @@ def initialize_system():
     try:
         print("🚀 Chronos 시스템 초기화 중...")
         
-        # 프로세서 및 시각화 도구 초기화
-        processor = ChronosDataProcessor(sequence_length=6, aggregation_unit='week')
+        # 개선된 프로세서 및 시각화 도구 초기화
+        processor = ProperTimeSeriesProcessor(sequence_length=50, aggregation_unit='week')
         visualizer = ChronosVisualizer()
         
         # 데이터 로드 및 전처리
-        if os.path.exists(DATA_PATH['timeseries']) and os.path.exists(DATA_PATH['hr_data']):
-            processor.load_data(DATA_PATH['timeseries'], DATA_PATH['hr_data'])
+        if os.path.exists(DATA_PATH['timeseries']) and os.path.exists(DATA_PATH['personas']):
+            processor.load_data(DATA_PATH['timeseries'], DATA_PATH['personas'])
+            processor.detect_columns()
             processor.preprocess_data()
+            processor.identify_features()
             print("✅ 데이터 로드 및 전처리 완료")
         else:
             print("⚠️ 데이터 파일을 찾을 수 없습니다. 학습된 모델만 사용 가능합니다.")
@@ -91,11 +93,12 @@ def load_model():
         if os.path.exists(model_file) and os.path.exists(scaler_file):
             # 모델 로드
             checkpoint = torch.load(model_file, map_location=device)
-            model = create_attention_model(
+            model = create_hybrid_model(
                 input_size=checkpoint['input_size'],
-                gru_hidden=checkpoint.get('gru_hidden', 64),
-                cnn_filters=checkpoint.get('cnn_filters', 32),
-                dropout=checkpoint.get('dropout', 0.3)
+                gru_hidden=checkpoint.get('gru_hidden', 32),
+                cnn_filters=checkpoint.get('cnn_filters', 16),
+                kernel_sizes=checkpoint.get('kernel_sizes', [2, 3]),
+                dropout=checkpoint.get('dropout', 0.2)
             )
             model.load_state_dict(checkpoint['model_state_dict'])
             model.to(device)
@@ -294,28 +297,35 @@ def train_model():
         # 시퀀스 길이 업데이트
         processor.sequence_length = sequence_length
         
-        # 시퀀스 생성
-        X, y, employee_ids = processor.create_sequences()
+        # 개선된 시퀀스 생성
+        X, y, employee_ids = processor.create_proper_sequences()
         
-        # 텐서 변환
-        X_tensor = torch.FloatTensor(X)
-        y_tensor = torch.LongTensor(y)
-        
-        # 데이터셋 분할
-        from sklearn.model_selection import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_tensor, y_tensor, test_size=0.2, random_state=42, stratify=y_tensor
+        # 직원 기반 분할 (데이터 누수 방지)
+        X_train, X_test, y_train, y_test = employee_based_train_test_split(
+            X, y, employee_ids, test_ratio=0.2
         )
         
+        # 텐서 변환
+        X_train_tensor = torch.FloatTensor(X_train)
+        X_test_tensor = torch.FloatTensor(X_test)
+        y_train_tensor = torch.LongTensor(y_train)
+        y_test_tensor = torch.LongTensor(y_test)
+        
         # 데이터로더 생성
-        train_dataset = TensorDataset(X_train, y_train)
-        test_dataset = TensorDataset(X_test, y_test)
+        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
-        # 모델 생성
+        # 개선된 모델 생성
         input_size = len(processor.feature_columns)
-        model = create_attention_model(input_size=input_size)
+        model = create_hybrid_model(
+            input_size=input_size,
+            gru_hidden=32,
+            cnn_filters=16,
+            kernel_sizes=[2, 3],
+            dropout=0.2
+        )
         model.to(device)
         
         # 트레이너 설정
@@ -419,7 +429,7 @@ def predict():
                     interpretation = model.interpret_prediction(X_tensor, processor.feature_columns)
                     
                     pred_class = np.argmax(interpretation['predictions'][0])
-                    pred_prob = interpretation['probabilities'][0][1]  # 퇴사 확률
+                    pred_prob = interpretation['probabilities'][0][1]  # 퇴사 확률 (Temperature Scaling 적용됨)
                     
                     predictions.append({
                         'employee_id': int(emp_id),
@@ -556,15 +566,28 @@ def get_employee_timeline(employee_id):
         
         # 모델이 있으면 attention weights 계산
         if model is not None and len(emp_data) >= processor.sequence_length:
-            feature_data = emp_data[processor.feature_columns].values
-            feature_data_scaled = processor.scaler.transform(feature_data)
-            sequence = feature_data_scaled[-processor.sequence_length:]
-            X_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(device)
+            # 시간별 집계 처리
+            emp_data['year'] = emp_data[processor.date_column].dt.year
+            emp_data['week'] = emp_data[processor.date_column].dt.isocalendar().week
+            emp_data['time_period'] = emp_data['year'].astype(str) + '-W' + emp_data['week'].astype(str).str.zfill(2)
             
-            model.eval()
-            with torch.no_grad():
-                interpretation = model.interpret_prediction(X_tensor, processor.feature_columns)
-                attention_weights = interpretation['temporal_attention'][0] if interpretation['temporal_attention'].ndim > 1 else interpretation['temporal_attention']
+            agg_data = emp_data.groupby('time_period')[processor.feature_columns].mean().reset_index()
+            agg_data = agg_data.sort_values('time_period')
+            
+            # 최근 시퀀스 생성
+            if len(agg_data) >= processor.sequence_length:
+                sequence_data = agg_data[processor.feature_columns].values[-processor.sequence_length:]
+                
+                # 정규화
+                sequence_scaled = processor.scaler.transform(sequence_data.reshape(-1, len(processor.feature_columns)))
+                sequence_scaled = sequence_scaled.reshape(1, processor.sequence_length, -1)
+                
+                X_tensor = torch.FloatTensor(sequence_scaled).to(device)
+                
+                model.eval()
+                with torch.no_grad():
+                    interpretation = model.interpret_prediction(X_tensor, processor.feature_columns)
+                    attention_weights = interpretation['temporal_attention'][0] if interpretation['temporal_attention'].ndim > 1 else interpretation['temporal_attention']
         
         # 시각화 생성
         html_plot = visualizer.create_employee_timeline(emp_data, attention_weights)
