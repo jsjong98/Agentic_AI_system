@@ -43,7 +43,7 @@ text_generator = None
 
 # 데이터 경로 설정
 DATA_PATH = {
-    'hr_data': '../../data/IBM_HR_personas_assigned.csv',
+    'hr_data': '../../data/IBM_HR.csv',
     'text_data': '../../data/IBM_HR_text.csv',
     'sample_texts': '../../sample_hr_texts.csv'
 }
@@ -67,8 +67,6 @@ class SentioAnalysisResult:
 class SentioGenerationResult:
     """Sentio 텍스트 생성 결과 데이터 클래스"""
     employee_id: str
-    persona_code: str
-    persona_name: str
     text_type: str
     generated_text: str
     keywords_used: List[str]
@@ -96,13 +94,14 @@ def initialize_system():
         text_processor = SentioTextProcessor(analyzer=keyword_analyzer)
         logger.info("✅ 텍스트 프로세서 초기화 완료 (JD-R 모델 연결)")
         
-        # 텍스트 생성기 초기화 (API 키는 환경변수에서 가져오기)
+        # 텍스트 생성기는 페르소나 정보 없이 키워드 기반으로만 동작
         api_key = os.environ.get('OPENAI_API_KEY')
-        if api_key and os.path.exists(DATA_PATH['hr_data']):
-            text_generator = SentioTextGenerator(api_key, DATA_PATH['hr_data'])
-            logger.info("✅ 텍스트 생성기 초기화 완료")
+        if api_key:
+            # 페르소나 파일 없이 키워드 기반 텍스트 생성기 초기화
+            text_generator = SentioTextGenerator(api_key, None)
+            logger.info("✅ 텍스트 생성기 초기화 완료 (키워드 기반)")
         else:
-            logger.warning("⚠️ OpenAI API 키 또는 HR 데이터 파일을 찾을 수 없습니다.")
+            logger.warning("⚠️ OpenAI API 키를 찾을 수 없습니다.")
         
         logger.info("🎉 Sentio 시스템 초기화 완료!")
         return True
@@ -128,7 +127,7 @@ def home():
             "/analyze/text": "텍스트 분석 (키워드 추출 + 감정 분석)",
             "/analyze/keywords": "키워드 분석 (퇴직자 vs 재직자)",
             "/analyze/risk": "퇴직 위험 신호 분석",
-            "/generate/text": "페르소나 기반 텍스트 생성",
+            "/generate/text": "키워드 기반 텍스트 생성",
             "/health": "서비스 상태 확인"
         }
     })
@@ -312,8 +311,8 @@ def analyze_attrition_risk():
 @app.route('/generate/text', methods=['POST'])
 def generate_text():
     """
-    페르소나 기반 텍스트 생성 API
-    입력: 직원 정보, 텍스트 타입
+    키워드 기반 텍스트 생성 API
+    입력: 텍스트 타입, 키워드 목록
     출력: 생성된 텍스트
     """
     try:
@@ -325,79 +324,51 @@ def generate_text():
         if not text_generator:
             return jsonify({"error": "텍스트 생성기가 초기화되지 않았습니다. OpenAI API 키를 확인해주세요."}), 500
         
-        # 단일 직원 텍스트 생성
-        if 'employee_data' in data:
-            employee_data = data['employee_data']
+        # 키워드 기반 텍스트 생성
+        if 'keywords' in data:
+            keywords = data['keywords']
             text_type = data.get('text_type', 'SELF_REVIEW')
+            employee_id = data.get('employee_id', 'unknown')
             
-            generated_text = text_generator.generate_text_for_employee(
-                employee_data=employee_data,
+            generated_text = text_generator.generate_text_from_keywords(
+                keywords=keywords,
                 text_type=text_type
             )
             
             result = SentioGenerationResult(
-                employee_id=employee_data.get('EmployeeNumber', 'unknown'),
-                persona_code=employee_data.get('softmax_Persona_Code', 'unknown'),
-                persona_name=employee_data.get('softmax_Persona', 'unknown'),
+                employee_id=employee_id,
                 text_type=text_type,
                 generated_text=generated_text,
-                keywords_used=text_generator.get_attrition_keywords_for_persona(
-                    employee_data.get('softmax_Persona_Code', 'N01')
-                )[:5],  # 상위 5개 키워드만
+                keywords_used=keywords[:5],  # 상위 5개 키워드만
                 generation_timestamp=datetime.now().isoformat()
             )
             
             return jsonify(asdict(result))
         
-        # 배치 텍스트 생성
-        elif 'batch_size' in data:
-            batch_size = data['batch_size']
-            text_types = data.get('text_types', ['SELF_REVIEW'])
-            
-            text_generator.generate_all_texts(
-                text_types=text_types,
-                sample_size=batch_size
-            )
-            
-            return jsonify({
-                "message": f"{batch_size}명에 대한 텍스트 생성이 완료되었습니다.",
-                "generated_count": len(text_generator.generated_texts),
-                "text_types": text_types,
-                "generation_timestamp": datetime.now().isoformat()
-            })
-        
         else:
-            return jsonify({"error": "employee_data 또는 batch_size가 필요합니다."}), 400
+            return jsonify({"error": "keywords가 필요합니다."}), 400
         
     except Exception as e:
         logger.error(f"텍스트 생성 오류: {str(e)}")
         return jsonify({"error": f"생성 중 오류가 발생했습니다: {str(e)}"}), 500
 
-@app.route('/data/personas', methods=['GET'])
-def get_personas():
-    """페르소나 정보 조회 API"""
+@app.route('/data/keywords', methods=['GET'])
+def get_available_keywords():
+    """사용 가능한 키워드 목록 조회 API"""
     try:
         if not text_generator:
             return jsonify({"error": "텍스트 생성기가 초기화되지 않았습니다."}), 500
         
-        # 페르소나별 통계 정보
-        df = text_generator.df
-        persona_stats = df.groupby(['softmax_Persona_Code', 'softmax_Persona']).agg({
-            'EmployeeNumber': 'count',
-            'Attrition': lambda x: (x == 'Yes').sum()
-        }).reset_index()
-        
-        persona_stats.columns = ['persona_code', 'persona_name', 'total_count', 'attrition_count']
-        persona_stats['attrition_rate'] = persona_stats['attrition_count'] / persona_stats['total_count']
+        # 사용 가능한 키워드 카테고리 반환
+        available_keywords = text_generator.get_all_available_keywords()
         
         return jsonify({
-            "personas": persona_stats.to_dict('records'),
-            "total_employees": len(df),
-            "total_attrition": (df['Attrition'] == 'Yes').sum()
+            "keyword_categories": available_keywords,
+            "total_categories": len(available_keywords)
         })
         
     except Exception as e:
-        logger.error(f"페르소나 조회 오류: {str(e)}")
+        logger.error(f"키워드 조회 오류: {str(e)}")
         return jsonify({"error": f"조회 중 오류가 발생했습니다: {str(e)}"}), 500
 
 @app.route('/analyze/comprehensive_report', methods=['POST'])

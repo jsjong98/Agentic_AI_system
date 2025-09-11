@@ -43,7 +43,7 @@ def check_data_files():
     """
     data_files = [
         'data/IBM_HR_timeseries.csv',
-        'data/IBM_HR_personas_assigned.csv'
+        'data/IBM_HR.csv'
     ]
     
     missing_files = []

@@ -252,7 +252,7 @@ class WorkerAgentManager:
                 
                 # 데이터 로드 시도
                 try:
-                    chronos_processor.load_data('data/IBM_HR_timeseries.csv', 'data/IBM_HR_personas_assigned.csv')
+                    chronos_processor.load_data('data/IBM_HR_timeseries.csv', 'data/IBM_HR.csv')
                     chronos_processor.preprocess_data()
                 except Exception as data_e:
                     logger.warning(f"Chronos 데이터 로드 실패: {data_e}")
@@ -309,7 +309,7 @@ class WorkerAgentManager:
                 sentio_generator = None
                 if api_key:
                     try:
-                        sentio_generator = SentioTextGenerator(api_key, "data/IBM_HR_personas_assigned.csv")
+                        sentio_generator = SentioTextGenerator(api_key, None)  # 페르소나 정보 없이 동작
                     except Exception as gen_e:
                         logger.warning(f"Sentio 텍스트 생성기 초기화 실패: {gen_e}")
                 
