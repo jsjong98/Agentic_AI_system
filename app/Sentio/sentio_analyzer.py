@@ -9,6 +9,7 @@ import re
 from collections import Counter
 from typing import Dict, List, Optional, Tuple, Any
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -299,6 +300,357 @@ class SentioKeywordAnalyzer:
         }
         
         return word in meaningless_nouns
+    
+    def calculate_jdr_scores(self, text: str) -> Dict[str, Any]:
+        """JD-R (Job Demands-Resources) 모델 기반 점수 계산"""
+        
+        # 직무 요구 관련 키워드 (부정적 요인)
+        job_demands_keywords = {
+            '업무량', '야근', '스트레스', '압박', '마감', '과로', '번아웃', '피로',
+            '바쁘다', '힘들다', '어렵다', '복잡하다', '많다', '부족하다', '급하다',
+            '걱정', '불안', '긴장', '부담', '책임', '문제', '어려움', '곤란',
+            '시간부족', '인력부족', '자원부족', '예산부족', '지원부족'
+        }
+        
+        # 직무 자원 결핍 관련 키워드 (자원 부족)
+        job_resources_deficiency_keywords = {
+            '지원부족', '도움없음', '혼자', '외롭다', '소통부족', '피드백부족',
+            '교육부족', '훈련부족', '정보부족', '자료부족', '장비부족', '시설부족',
+            '인정받지못함', '성장기회없음', '발전없음', '승진어려움', '보상부족',
+            '불공정', '차별', '무시', '배제', '소외', '관심없음', '방치',
+            '자율성부족', '권한없음', '결정권없음', '참여기회없음'
+        }
+        
+        # 텍스트에서 키워드 추출
+        detected_keywords = self.extract_nouns_only(text)
+        
+        # 각 카테고리별 매칭 키워드 찾기
+        job_demands_matches = []
+        job_resources_deficiency_matches = []
+        
+        for keyword in detected_keywords:
+            if keyword in job_demands_keywords:
+                job_demands_matches.append(keyword)
+            if keyword in job_resources_deficiency_keywords:
+                job_resources_deficiency_matches.append(keyword)
+        
+        # 점수 계산 (키워드 빈도 기반, 0-1 정규화)
+        total_keywords = len(detected_keywords) if detected_keywords else 1
+        
+        job_demands_score = min(len(job_demands_matches) / total_keywords * 2.0, 1.0)
+        job_resources_deficiency_score = min(len(job_resources_deficiency_matches) / total_keywords * 2.0, 1.0)
+        
+        return {
+            'job_demands_score': job_demands_score,
+            'job_resources_deficiency_score': job_resources_deficiency_score,
+            'detected_keywords': detected_keywords,
+            'job_demands_matches': job_demands_matches,
+            'job_resources_deficiency_matches': job_resources_deficiency_matches
+        }
+    
+    def analyze_employee_text(self, employee_id, self_review, peer_feedback, weekly_survey):
+        """직원 텍스트 종합 분석 (개선된 JD-R 모델 기반)"""
+        
+        # 텍스트 결합
+        texts = [self_review, peer_feedback, weekly_survey]
+        combined_text = ' '.join([str(text) for text in texts if pd.notna(text)])
+        
+        if not combined_text.strip():
+            return {
+                'employee_id': employee_id,
+                'psychological_risk_score': 0.5,
+                'jd_r_indicators': {
+                    'job_demands_score': 0.0,
+                    'job_resources_deficiency_score': 0.5
+                },
+                'detected_keywords': [],
+                'sentiment_score': 0.5,  # 하위 호환성
+                'risk_keywords': [],     # 하위 호환성
+                'risk_level': 'MEDIUM',
+                'analysis_details': "텍스트 데이터가 부족하여 정확한 분석이 어렵습니다. 추가적인 피드백 수집을 권장합니다.",
+                'attrition_prediction': 0
+            }
+        
+        # JD-R 지표 계산
+        jdr_result = self.calculate_jdr_scores(combined_text)
+        
+        # 심리적 위험 점수 계산 (개선된 가중치)
+        psychological_risk_score = (
+            jdr_result['job_demands_score'] * 0.75 +
+            jdr_result['job_resources_deficiency_score'] * 0.25
+        )
+        psychological_risk_score = min(max(psychological_risk_score, 0.0), 1.0)
+        
+        # 최적 임계값 (기본값, 실제로는 학습을 통해 결정)
+        optimal_threshold = getattr(self, 'optimal_threshold', 0.45)
+        
+        # 이진 예측 (최적 임계값 사용)
+        attrition_prediction = 1 if psychological_risk_score > optimal_threshold else 0
+        
+        # 위험 수준 결정 (개선된 기준)
+        if psychological_risk_score >= 0.7:
+            risk_level = 'HIGH'
+        elif psychological_risk_score >= 0.3:
+            risk_level = 'MEDIUM'
+        else:
+            risk_level = 'LOW'
+        
+        # 하위 호환성을 위한 기존 필드들
+        sentiment_score = 1.0 - psychological_risk_score  # 감정 점수는 위험 점수의 역
+        risk_keywords = jdr_result['detected_keywords'][:10]  # 상위 10개만
+        
+        # CSV 저장용 핵심 결과 (LLM 없이, 빠른 처리)
+        return {
+            'employee_id': employee_id,
+            'psychological_risk_score': psychological_risk_score,
+            'jd_r_indicators': {
+                'job_demands_score': jdr_result['job_demands_score'],
+                'job_resources_deficiency_score': jdr_result['job_resources_deficiency_score']
+            },
+            'detected_keywords': jdr_result['detected_keywords'],
+            'job_demands_matches': jdr_result['job_demands_matches'],
+            'job_resources_deficiency_matches': jdr_result['job_resources_deficiency_matches'],
+            'sentiment_score': sentiment_score,  # 하위 호환성
+            'risk_keywords': risk_keywords,     # 하위 호환성
+            'risk_level': risk_level,
+            'attrition_prediction': attrition_prediction,
+            'analysis_timestamp': datetime.now().isoformat(),
+            # CSV 저장을 위한 간단한 요약 (LLM 없이)
+            'analysis_summary': f"위험도: {risk_level}, 직무요구: {jdr_result['job_demands_score']:.3f}, 자원결핍: {jdr_result['job_resources_deficiency_score']:.3f}"
+        }
+    
+    def generate_csv_batch_analysis(self, text_data_list: List[Dict]) -> pd.DataFrame:
+        """대량 텍스트 데이터를 CSV 저장용으로 빠르게 분석 (LLM 없이)"""
+        
+        results = []
+        
+        for i, text_data in enumerate(text_data_list):
+            employee_id = text_data.get('employee_id', f'emp_{i+1:04d}')
+            self_review = text_data.get('self_review', '')
+            peer_feedback = text_data.get('peer_feedback', '')
+            weekly_survey = text_data.get('weekly_survey', '')
+            
+            # JD-R 기반 빠른 분석 (LLM 없이)
+            analysis_result = self.analyze_employee_text(
+                employee_id=employee_id,
+                self_review=self_review,
+                peer_feedback=peer_feedback,
+                weekly_survey=weekly_survey
+            )
+            
+            # CSV용 플랫 구조로 변환
+            csv_row = {
+                'employee_id': employee_id,
+                'psychological_risk_score': analysis_result['psychological_risk_score'],
+                'job_demands_score': analysis_result['jd_r_indicators']['job_demands_score'],
+                'job_resources_deficiency_score': analysis_result['jd_r_indicators']['job_resources_deficiency_score'],
+                'risk_level': analysis_result['risk_level'],
+                'attrition_prediction': analysis_result['attrition_prediction'],
+                'sentiment_score': analysis_result['sentiment_score'],
+                'detected_keywords_count': len(analysis_result['detected_keywords']),
+                'job_demands_keywords': ', '.join(analysis_result['job_demands_matches'][:5]),  # 상위 5개
+                'job_resources_deficiency_keywords': ', '.join(analysis_result['job_resources_deficiency_matches'][:5]),  # 상위 5개
+                'top_risk_keywords': ', '.join(analysis_result['risk_keywords'][:5]),  # 상위 5개
+                'analysis_timestamp': analysis_result['analysis_timestamp'],
+                'analysis_summary': analysis_result['analysis_summary']
+            }
+            
+            results.append(csv_row)
+            
+            # 진행 상황 출력 (100개마다)
+            if (i + 1) % 100 == 0:
+                logger.info(f"CSV 분석 진행: {i + 1}/{len(text_data_list)} 완료")
+        
+        # DataFrame으로 변환
+        df = pd.DataFrame(results)
+        logger.info(f"CSV 분석 완료: 총 {len(results)}명 처리")
+        
+        return df
+    
+    def save_analysis_to_csv(self, df: pd.DataFrame, output_path: str = "sentio_analysis_results.csv") -> str:
+        """분석 결과를 CSV 파일로 저장"""
+        
+        try:
+            df.to_csv(output_path, index=False, encoding='utf-8-sig')
+            logger.info(f"CSV 저장 완료: {output_path} ({len(df)}행)")
+            return output_path
+        except Exception as e:
+            logger.error(f"CSV 저장 실패: {e}")
+            raise
+    
+    def generate_individual_comprehensive_report(self, employee_id: str, all_worker_results: Dict, use_llm: bool = False) -> Dict:
+        """개별 직원의 모든 워커 에이전트 결과를 종합한 최종 요약 레포트 생성"""
+        
+        if not all_worker_results:
+            return {"error": f"직원 {employee_id}의 분석 결과가 없습니다."}
+        
+        # 각 워커별 결과 추출
+        structura_result = all_worker_results.get('structura', {})
+        cognita_result = all_worker_results.get('cognita', {})
+        chronos_result = all_worker_results.get('chronos', {})
+        sentio_result = all_worker_results.get('sentio', {})
+        
+        # 종합 위험도 계산 (각 워커의 점수를 가중평균)
+        risk_scores = []
+        
+        # Structura: 퇴직 확률
+        if structura_result.get('attrition_probability'):
+            risk_scores.append(('structura', structura_result['attrition_probability'], 0.3))
+        
+        # Cognita: 전체 위험도
+        if cognita_result.get('overall_risk_score'):
+            risk_scores.append(('cognita', cognita_result['overall_risk_score'], 0.25))
+        
+        # Chronos: 예측 확률
+        if chronos_result.get('probability'):
+            risk_scores.append(('chronos', chronos_result['probability'], 0.2))
+        
+        # Sentio: 심리적 위험 점수
+        if sentio_result.get('psychological_risk_score'):
+            risk_scores.append(('sentio', sentio_result['psychological_risk_score'], 0.25))
+        
+        # 가중평균 계산
+        if risk_scores:
+            weighted_sum = sum(score * weight for _, score, weight in risk_scores)
+            total_weight = sum(weight for _, _, weight in risk_scores)
+            comprehensive_risk_score = weighted_sum / total_weight
+        else:
+            comprehensive_risk_score = 0.5
+        
+        # 종합 위험 수준 결정
+        if comprehensive_risk_score >= 0.7:
+            overall_risk_level = "HIGH"
+            risk_color = "🔴"
+        elif comprehensive_risk_score >= 0.4:
+            overall_risk_level = "MEDIUM" 
+            risk_color = "🟡"
+        else:
+            overall_risk_level = "LOW"
+            risk_color = "🟢"
+        
+        # 주요 위험 요인 집계
+        primary_concerns = []
+        
+        if structura_result.get('top_risk_factors'):
+            primary_concerns.extend([f"구조적: {factor}" for factor in structura_result['top_risk_factors'][:2]])
+        
+        if cognita_result.get('risk_factors'):
+            primary_concerns.extend([f"관계적: {factor}" for factor in cognita_result['risk_factors'][:2]])
+        
+        if chronos_result.get('risk_indicators'):
+            primary_concerns.extend([f"시계열: {factor}" for factor in chronos_result['risk_indicators'][:2]])
+        
+        if sentio_result.get('job_demands_matches'):
+            primary_concerns.extend([f"심리적: {factor}" for factor in sentio_result['job_demands_matches'][:2]])
+        
+        # 기본 레포트 구조 (LLM 없이)
+        comprehensive_report = {
+            'employee_id': employee_id,
+            'analysis_timestamp': datetime.now().isoformat(),
+            'comprehensive_assessment': {
+                'overall_risk_score': round(comprehensive_risk_score, 3),
+                'overall_risk_level': overall_risk_level,
+                'risk_indicator': risk_color,
+                'confidence_level': 'HIGH' if len(risk_scores) >= 3 else 'MEDIUM'
+            },
+            'worker_scores': {
+                'structura': {
+                    'attrition_probability': structura_result.get('attrition_probability', 0),
+                    'prediction': structura_result.get('prediction', 'Unknown'),
+                    'confidence': structura_result.get('confidence', 0)
+                },
+                'cognita': {
+                    'overall_risk_score': cognita_result.get('overall_risk_score', 0),
+                    'risk_category': cognita_result.get('risk_category', 'Unknown'),
+                    'network_centrality': cognita_result.get('network_centrality', 0)
+                },
+                'chronos': {
+                    'prediction': chronos_result.get('prediction', 'Unknown'),
+                    'probability': chronos_result.get('probability', 0),
+                    'trend': chronos_result.get('trend', 'Stable')
+                },
+                'sentio': {
+                    'psychological_risk_score': sentio_result.get('psychological_risk_score', 0),
+                    'risk_level': sentio_result.get('risk_level', 'MEDIUM'),
+                    'job_demands_score': sentio_result.get('jd_r_indicators', {}).get('job_demands_score', 0),
+                    'resources_deficiency_score': sentio_result.get('jd_r_indicators', {}).get('job_resources_deficiency_score', 0)
+                }
+            },
+            'primary_concerns': primary_concerns[:6],  # 상위 6개
+            'llm_interpretation': None  # LLM 해석은 선택적으로 추가
+        }
+        
+        return comprehensive_report
+    
+    def generate_comprehensive_llm_interpretation(self, comprehensive_report: Dict, use_llm: bool = False) -> str:
+        """개별 직원의 종합 레포트에 대한 LLM 해석 생성 (선택적)"""
+        
+        if not use_llm:
+            # 규칙 기반 해석 (LLM 없이)
+            employee_id = comprehensive_report['employee_id']
+            assessment = comprehensive_report['comprehensive_assessment']
+            worker_scores = comprehensive_report['worker_scores']
+            concerns = comprehensive_report['primary_concerns']
+            
+            interpretation = f"""
+=== 직원 {employee_id} 종합 분석 결과 ===
+
+{assessment['risk_indicator']} 전체 위험도: {assessment['overall_risk_level']} ({assessment['overall_risk_score']:.3f}/1.0)
+📊 신뢰도: {assessment['confidence_level']}
+
+🔍 워커별 상세 분석:
+"""
+            
+            # Structura 분석
+            structura = worker_scores['structura']
+            if structura['attrition_probability'] > 0:
+                interpretation += f"📈 구조적 분석 (Structura): 퇴직 확률 {structura['attrition_probability']:.1%}, 예측 '{structura['prediction']}'\n"
+            
+            # Cognita 분석
+            cognita = worker_scores['cognita']
+            if cognita['overall_risk_score'] > 0:
+                interpretation += f"🌐 관계적 분석 (Cognita): 위험도 {cognita['overall_risk_score']:.3f}, 카테고리 '{cognita['risk_category']}'\n"
+            
+            # Chronos 분석
+            chronos = worker_scores['chronos']
+            if chronos['probability'] > 0:
+                interpretation += f"⏰ 시계열 분석 (Chronos): 확률 {chronos['probability']:.1%}, 트렌드 '{chronos['trend']}'\n"
+            
+            # Sentio 분석
+            sentio = worker_scores['sentio']
+            if sentio['psychological_risk_score'] > 0:
+                interpretation += f"🧠 심리적 분석 (Sentio): 위험도 {sentio['psychological_risk_score']:.3f}, 수준 '{sentio['risk_level']}'\n"
+                interpretation += f"   - 직무 요구: {sentio['job_demands_score']:.3f}, 자원 결핍: {sentio['resources_deficiency_score']:.3f}\n"
+            
+            interpretation += f"\n⚠️ 주요 우려사항:\n"
+            for i, concern in enumerate(concerns[:5], 1):
+                interpretation += f"{i}. {concern}\n"
+            
+            interpretation += f"\n💡 권장 조치:\n"
+            
+            # 위험 수준별 권장사항
+            if assessment['overall_risk_level'] == 'HIGH':
+                interpretation += "🚨 즉시 개입 필요:\n"
+                interpretation += "- 상급자와의 긴급 면담 실시\n"
+                interpretation += "- 업무 조정 및 지원 방안 검토\n"
+                interpretation += "- 정기적 모니터링 체계 구축\n"
+            elif assessment['overall_risk_level'] == 'MEDIUM':
+                interpretation += "⚠️ 예방적 관리 필요:\n"
+                interpretation += "- 정기적 상담 및 피드백 제공\n"
+                interpretation += "- 업무 환경 개선 검토\n"
+                interpretation += "- 스트레스 관리 프로그램 참여 권장\n"
+            else:
+                interpretation += "✅ 현재 상태 유지:\n"
+                interpretation += "- 정기적 모니터링 지속\n"
+                interpretation += "- 긍정적 요소 강화\n"
+                interpretation += "- 성장 기회 제공 검토\n"
+            
+            return interpretation.strip()
+        
+        else:
+            # LLM 기반 해석 (선택적 사용)
+            # TODO: OpenAI API 호출로 더 상세한 해석 생성
+            return "LLM 기반 개별 직원 상세 해석 (구현 예정)"
     
     def analyze_text_columns(self, text_columns: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """텍스트 컬럼 분석"""

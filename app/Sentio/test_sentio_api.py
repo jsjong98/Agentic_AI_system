@@ -61,10 +61,19 @@ class SentioAPITester:
             
             if response.status_code == 200:
                 result = response.json()
-                print("✅ 텍스트 분석 성공")
+                print("✅ 텍스트 분석 성공 (JD-R 모델 적용)")
                 print(f"   키워드: {result['keywords'][:5]}...")  # 처음 5개만
                 print(f"   감정 점수: {result['sentiment_score']:.2f}")
-                print(f"   퇴직 위험 점수: {result['attrition_risk_score']:.2f}")
+                print(f"   심리적 위험 점수: {result['attrition_risk_score']:.2f}")
+                print(f"   위험 수준: {result.get('risk_level', 'N/A')}")
+                print(f"   이직 예측: {'예' if result.get('attrition_prediction', 0) else '아니오'}")
+                
+                # JD-R 지표 출력
+                if 'jd_r_indicators' in result:
+                    jdr = result['jd_r_indicators']
+                    print(f"   직무 요구 점수: {jdr.get('job_demands_score', 0):.3f}")
+                    print(f"   자원 결핍 점수: {jdr.get('job_resources_deficiency_score', 0):.3f}")
+                
                 print(f"   위험 요소: {result['risk_factors'][:3]}...")  # 처음 3개만
                 return True
             else:
@@ -230,6 +239,153 @@ class SentioAPITester:
             print(f"❌ 페르소나 조회 오류: {e}")
             return False
     
+    def test_comprehensive_report(self) -> bool:
+        """개별 직원 종합 레포트 생성 테스트 (LLM 선택적 사용)"""
+        print("\n📋 개별 직원 종합 레포트 생성 테스트...")
+        
+        # 가상의 한 직원의 모든 워커 분석 결과 데이터
+        test_data = {
+            "employee_id": "1001",
+            "worker_results": {
+                "structura": {
+                    "attrition_probability": 0.75,
+                    "prediction": "High Risk",
+                    "confidence": 0.85,
+                    "top_risk_factors": ["낮은 급여", "과도한 업무량", "승진 기회 부족"]
+                },
+                "cognita": {
+                    "overall_risk_score": 0.68,
+                    "risk_category": "Medium-High",
+                    "network_centrality": 0.3,
+                    "risk_factors": ["팀 내 갈등", "소통 부족"]
+                },
+                "chronos": {
+                    "prediction": "Likely to Leave",
+                    "probability": 0.72,
+                    "trend": "Declining",
+                    "risk_indicators": ["성과 하락", "참여도 감소"]
+                },
+                "sentio": {
+                    "psychological_risk_score": 0.8,
+                    "risk_level": "HIGH",
+                    "jd_r_indicators": {
+                        "job_demands_score": 0.9,
+                        "job_resources_deficiency_score": 0.4
+                    },
+                    "job_demands_matches": ["업무량", "스트레스", "야근", "압박"],
+                    "job_resources_deficiency_matches": ["지원부족", "피드백부족"]
+                }
+            },
+            "use_llm": False  # LLM 사용 안함 (비용 절약)
+        }
+        
+        try:
+            response = self.session.post(
+                f"{self.base_url}/analyze/comprehensive_report",
+                json=test_data,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print("✅ 개별 직원 종합 레포트 생성 성공 (LLM 미사용)")
+                
+                # 결과 출력
+                assessment = result['comprehensive_assessment']
+                print(f"   직원 ID: {result['employee_id']}")
+                print(f"   {assessment['risk_indicator']} 종합 위험도: {assessment['overall_risk_level']} ({assessment['overall_risk_score']:.3f})")
+                print(f"   신뢰도: {assessment['confidence_level']}")
+                
+                # 워커별 점수 출력
+                worker_scores = result['worker_scores']
+                print(f"   Structura: 퇴직확률 {worker_scores['structura']['attrition_probability']:.1%}")
+                print(f"   Cognita: 위험도 {worker_scores['cognita']['overall_risk_score']:.3f}")
+                print(f"   Chronos: 확률 {worker_scores['chronos']['probability']:.1%}")
+                print(f"   Sentio: 심리적위험 {worker_scores['sentio']['psychological_risk_score']:.3f}")
+                
+                # 주요 우려사항
+                concerns = result['primary_concerns'][:3]
+                print(f"   주요 우려: {', '.join(concerns)}")
+                
+                # 규칙 기반 해석 확인
+                if 'rule_based_interpretation' in result:
+                    print("   📝 규칙 기반 종합 해석 생성됨")
+                
+                return True
+            else:
+                print(f"❌ 종합 레포트 생성 실패: {response.status_code}")
+                print(f"   오류: {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 종합 레포트 테스트 오류: {e}")
+            return False
+    
+    def test_batch_csv_analysis(self) -> bool:
+        """CSV 배치 분석 테스트 (LLM 없이, 빠른 처리)"""
+        print("\n📊 CSV 배치 분석 테스트...")
+        
+        # 가상의 대량 텍스트 데이터
+        test_data = {
+            "text_data_list": [
+                {
+                    "employee_id": "emp_001",
+                    "self_review": "이번 분기 업무량이 너무 많아서 힘들었습니다. 야근도 자주 하게 되고 스트레스가 심합니다.",
+                    "peer_feedback": "동료와의 협업은 좋았지만 업무 분담에 문제가 있었습니다.",
+                    "weekly_survey": "번아웃이 올 것 같아 걱정됩니다. 지원이 부족합니다."
+                },
+                {
+                    "employee_id": "emp_002",
+                    "self_review": "팀원들과 잘 협력하고 있고 프로젝트도 성공적으로 완료했습니다.",
+                    "peer_feedback": "항상 긍정적이고 도움이 많이 됩니다.",
+                    "weekly_survey": "전반적으로 만족스럽고 성장하고 있다고 느낍니다."
+                },
+                {
+                    "employee_id": "emp_003",
+                    "self_review": "업무는 적당하지만 승진 기회가 부족한 것 같습니다.",
+                    "peer_feedback": "성실하게 일하지만 소극적인 면이 있습니다.",
+                    "weekly_survey": "현재 상태에서 큰 변화는 없을 것 같습니다."
+                }
+            ],
+            "output_filename": "test_sentio_batch_analysis.csv"
+        }
+        
+        try:
+            response = self.session.post(
+                f"{self.base_url}/analyze/batch_csv",
+                json=test_data,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print("✅ CSV 배치 분석 성공 (LLM 미사용)")
+                
+                # 처리 통계 출력
+                stats = result['processing_stats']
+                print(f"   처리된 직원: {stats['total_processed']}명")
+                print(f"   처리 시간: {stats['processing_time_seconds']}초")
+                print(f"   처리 속도: {stats['records_per_second']:.1f}명/초")
+                print(f"   출력 파일: {result['output_file']}")
+                
+                # 분석 요약 출력
+                summary = result['analysis_summary']
+                print(f"   위험도 분포: {summary['risk_distribution']}")
+                print(f"   평균 심리적 위험: {summary['average_scores']['psychological_risk_score']:.3f}")
+                print(f"   이직 예측: 예상 {summary['prediction_distribution']['will_leave']}명, 잔류 {summary['prediction_distribution']['will_stay']}명")
+                
+                print(f"   💡 {result['message']}")
+                
+                return True
+            else:
+                print(f"❌ CSV 배치 분석 실패: {response.status_code}")
+                print(f"   오류: {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ CSV 배치 분석 테스트 오류: {e}")
+            return False
+    
     def run_all_tests(self) -> Dict[str, bool]:
         """모든 테스트 실행"""
         print("🧪 Sentio API 전체 테스트 시작")
@@ -240,6 +396,8 @@ class SentioAPITester:
             "text_analysis": self.test_text_analysis,
             "keyword_analysis": self.test_keyword_analysis,
             "risk_analysis": self.test_risk_analysis,
+            "comprehensive_report": self.test_comprehensive_report,  # 개별 직원 종합 레포트
+            "batch_csv_analysis": self.test_batch_csv_analysis,  # CSV 배치 분석 (LLM 없이)
             "text_generation": self.test_text_generation,
             "personas_info": self.test_personas_info
         }

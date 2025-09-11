@@ -83,17 +83,18 @@ def initialize_system():
     try:
         logger.info("Sentio 시스템 초기화 시작...")
         
-        # 텍스트 프로세서 초기화
-        text_processor = SentioTextProcessor()
-        logger.info("✅ 텍스트 프로세서 초기화 완료")
-        
-        # 키워드 분석기 초기화
+        # 키워드 분석기 초기화 (JD-R 모델 포함)
         if os.path.exists(DATA_PATH['sample_texts']):
             keyword_analyzer = SentioKeywordAnalyzer(DATA_PATH['sample_texts'])
             keyword_analyzer.load_data()
             logger.info("✅ 키워드 분석기 초기화 완료")
         else:
             logger.warning("⚠️ 텍스트 데이터 파일을 찾을 수 없습니다.")
+            keyword_analyzer = None
+        
+        # 텍스트 프로세서 초기화 (analyzer 연결)
+        text_processor = SentioTextProcessor(analyzer=keyword_analyzer)
+        logger.info("✅ 텍스트 프로세서 초기화 완료 (JD-R 모델 연결)")
         
         # 텍스트 생성기 초기화 (API 키는 환경변수에서 가져오기)
         api_key = os.environ.get('OPENAI_API_KEY')
@@ -398,6 +399,126 @@ def get_personas():
     except Exception as e:
         logger.error(f"페르소나 조회 오류: {str(e)}")
         return jsonify({"error": f"조회 중 오류가 발생했습니다: {str(e)}"}), 500
+
+@app.route('/analyze/comprehensive_report', methods=['POST'])
+def generate_comprehensive_report():
+    """
+    개별 직원의 모든 워커 에이전트 결과를 종합한 최종 레포트 생성 API (LLM 선택적 사용)
+    입력: 한 직원의 모든 워커 분석 결과
+    출력: 개별 직원 종합 분석 레포트
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'employee_id' not in data or 'worker_results' not in data:
+            return jsonify({"error": "직원 ID와 모든 워커 분석 결과가 필요합니다."}), 400
+        
+        employee_id = data['employee_id']
+        worker_results = data['worker_results']  # {structura: {...}, cognita: {...}, chronos: {...}, sentio: {...}}
+        use_llm = data.get('use_llm', False)  # LLM 사용 여부 (기본값: False)
+        
+        if not keyword_analyzer:
+            return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다."}), 500
+        
+        # 종합 레포트 생성
+        comprehensive_report = keyword_analyzer.generate_individual_comprehensive_report(
+            employee_id=employee_id,
+            all_worker_results=worker_results,
+            use_llm=use_llm
+        )
+        
+        # LLM 해석 추가 (선택적)
+        if use_llm:
+            llm_interpretation = keyword_analyzer.generate_comprehensive_llm_interpretation(
+                comprehensive_report=comprehensive_report,
+                use_llm=True
+            )
+            comprehensive_report['llm_interpretation'] = llm_interpretation
+        else:
+            # 규칙 기반 해석
+            rule_based_interpretation = keyword_analyzer.generate_comprehensive_llm_interpretation(
+                comprehensive_report=comprehensive_report,
+                use_llm=False
+            )
+            comprehensive_report['rule_based_interpretation'] = rule_based_interpretation
+        
+        return jsonify(comprehensive_report)
+        
+    except Exception as e:
+        logger.error(f"종합 레포트 생성 오류: {str(e)}")
+        return jsonify({"error": f"레포트 생성 중 오류가 발생했습니다: {str(e)}"}), 500
+
+@app.route('/analyze/batch_csv', methods=['POST'])
+def generate_batch_csv():
+    """
+    대량 텍스트 데이터를 CSV로 빠르게 분석 (LLM 없이)
+    입력: 텍스트 데이터 목록
+    출력: CSV 파일 경로 및 분석 통계
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'text_data_list' not in data:
+            return jsonify({"error": "텍스트 데이터 목록이 필요합니다."}), 400
+        
+        text_data_list = data['text_data_list']
+        output_filename = data.get('output_filename', 'sentio_batch_analysis.csv')
+        
+        if not keyword_analyzer:
+            return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다."}), 500
+        
+        logger.info(f"배치 CSV 분석 시작: {len(text_data_list)}개 데이터")
+        
+        # 대량 분석 수행 (LLM 없이)
+        start_time = datetime.now()
+        df = keyword_analyzer.generate_csv_batch_analysis(text_data_list)
+        
+        # CSV 저장
+        output_path = keyword_analyzer.save_analysis_to_csv(df, output_filename)
+        end_time = datetime.now()
+        
+        # 통계 계산
+        processing_time = (end_time - start_time).total_seconds()
+        
+        # 위험도별 분포
+        risk_distribution = df['risk_level'].value_counts().to_dict()
+        
+        # 평균 점수
+        avg_scores = {
+            'psychological_risk_score': float(df['psychological_risk_score'].mean()),
+            'job_demands_score': float(df['job_demands_score'].mean()),
+            'job_resources_deficiency_score': float(df['job_resources_deficiency_score'].mean()),
+            'sentiment_score': float(df['sentiment_score'].mean())
+        }
+        
+        # 예측 분포
+        prediction_distribution = df['attrition_prediction'].value_counts().to_dict()
+        
+        result = {
+            "status": "success",
+            "output_file": output_path,
+            "processing_stats": {
+                "total_processed": len(df),
+                "processing_time_seconds": round(processing_time, 2),
+                "records_per_second": round(len(df) / processing_time, 2),
+                "analysis_timestamp": end_time.isoformat()
+            },
+            "analysis_summary": {
+                "risk_distribution": risk_distribution,
+                "average_scores": avg_scores,
+                "prediction_distribution": {
+                    "will_leave": prediction_distribution.get(1, 0),
+                    "will_stay": prediction_distribution.get(0, 0)
+                }
+            },
+            "message": f"✅ {len(df)}명의 텍스트 분석이 완료되었습니다. (LLM 미사용으로 빠른 처리)"
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"배치 CSV 분석 오류: {str(e)}")
+        return jsonify({"error": f"분석 중 오류가 발생했습니다: {str(e)}"}), 500
 
 # ============================================================================
 # 오류 처리
