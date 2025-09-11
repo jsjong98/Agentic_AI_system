@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any
 
 # 서버 설정
-BASE_URL = "http://localhost:5002"
+BASE_URL = "http://localhost:5003"
 HEADERS = {"Content-Type": "application/json"}
 
 class ChronosAPITester:

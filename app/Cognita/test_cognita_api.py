@@ -13,7 +13,7 @@ from typing import Dict, List
 class CognitaAPITester:
     """Cognita API 테스트 클래스"""
     
-    def __init__(self, base_url: str = "http://localhost:5000"):
+    def __init__(self, base_url: str = "http://localhost:5002"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         self.session.headers.update({

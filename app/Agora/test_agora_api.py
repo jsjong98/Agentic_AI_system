@@ -13,7 +13,7 @@ from typing import Dict, Any
 class AgoraAPITester:
     """Agora API 테스트 클래스"""
     
-    def __init__(self, base_url: str = "http://localhost:5004"):
+    def __init__(self, base_url: str = "http://localhost:5005"):
         self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update({'Content-Type': 'application/json'})

@@ -401,13 +401,13 @@ if __name__ == '__main__':
     # 시스템 초기화
     if initialize_system():
         print("✅ 시스템 초기화 완료")
-        print("🌐 서버 주소: http://localhost:5004")
-        print("📚 API 문서: http://localhost:5004/")
+        print("🌐 서버 주소: http://localhost:5005")
+        print("📚 API 문서: http://localhost:5005/")
         print("=" * 60)
         
         app.run(
             host='0.0.0.0',
-            port=5004,
+            port=5005,
             debug=True,
             threaded=True
         )

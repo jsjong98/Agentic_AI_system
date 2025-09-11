@@ -12,7 +12,7 @@ import time
 class SentioAPITester:
     """Sentio API 테스트 클래스"""
     
-    def __init__(self, base_url: str = "http://localhost:5003"):
+    def __init__(self, base_url: str = "http://localhost:5004"):
         """
         테스터 초기화
         
