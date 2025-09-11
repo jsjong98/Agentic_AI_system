@@ -13,7 +13,7 @@ from typing import Dict, List
 class StructuraAPITester:
     """Structura API 테스트 클래스"""
     
-    def __init__(self, base_url: str = "http://localhost:5001"):
+    def __init__(self, base_url: str = "http://localhost:5003"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         self.session.headers.update({
@@ -55,7 +55,7 @@ class StructuraAPITester:
         try:
             payload = {
                 "optimize_hyperparameters": False,  # 빠른 테스트를 위해 False
-                "n_trials": 10
+                "use_sampling": True  # 클래스 불균형 해결 사용
             }
             
             print("모델 훈련 시작... (시간이 걸릴 수 있습니다)")
@@ -87,12 +87,13 @@ class StructuraAPITester:
             return False
     
     def test_prediction(self) -> Dict:
-        """이직 예측 테스트"""
+        """이직 예측 테스트 (새로운 API 형식)"""
         print("\n3. 이직 예측 테스트")
         print("-" * 30)
         
-        # 테스트용 직원 데이터
+        # 테스트용 직원 데이터 (노트북 기반 변수 포함)
         test_employee = {
+            "EmployeeNumber": "TEST_001",
             "Age": 35,
             "BusinessTravel": "Travel_Rarely",
             "Department": "Sales",
@@ -116,7 +117,13 @@ class StructuraAPITester:
             "YearsAtCompany": 5,
             "YearsInCurrentRole": 3,
             "YearsSinceLastPromotion": 1,
-            "YearsWithCurrManager": 2
+            "YearsWithCurrManager": 2,
+            "DailyRate": 1000,
+            "HourlyRate": 50,
+            "MonthlyRate": 15000,
+            "NumCompaniesWorked": 2,
+            "PercentSalaryHike": 15,
+            "TotalWorkingYears": 10
         }
         
         try:
@@ -127,11 +134,18 @@ class StructuraAPITester:
             if response.status_code == 200:
                 data = response.json()
                 print(f"✅ 예측 완료 (소요시간: {end_time - start_time:.3f}초)")
-                print(f"  직원 ID: {data.get('employee_id', 'N/A')}")
+                print(f"  직원 번호: {data.get('employee_number', 'N/A')}")
                 print(f"  이직 확률: {data['attrition_probability']:.3f}")
-                print(f"  이직 예측: {'예' if data['attrition_prediction'] == 1 else '아니오'}")
                 print(f"  위험 범주: {data['risk_category']}")
-                print(f"  신뢰도: {data['confidence_score']:.3f}")
+                
+                # XAI 설명 요약 출력
+                if 'explanation' in data and 'individual_explanation' in data['explanation']:
+                    exp = data['explanation']['individual_explanation']
+                    if 'top_risk_factors' in exp and len(exp['top_risk_factors']) > 0:
+                        print(f"  주요 위험 요인:")
+                        for factor in exp['top_risk_factors'][:3]:
+                            print(f"    - {factor['feature']}: {factor['impact']:.3f}")
+                
                 return data
             else:
                 print(f"❌ 예측 실패: {response.status_code}")
@@ -259,6 +273,122 @@ class StructuraAPITester:
             print(f"❌ 모델 정보 조회 오류: {e}")
             return False
     
+    def test_batch_prediction(self) -> bool:
+        """배치 예측 테스트"""
+        print("\n7. 배치 예측 테스트")
+        print("-" * 30)
+        
+        # 테스트용 배치 데이터
+        batch_data = [
+            {
+                "EmployeeNumber": "BATCH_001",
+                "Age": 25,
+                "Department": "Research & Development",
+                "JobSatisfaction": 1,
+                "OverTime": "Yes",
+                "MonthlyIncome": 3000,
+                "WorkLifeBalance": 1,
+                "StockOptionLevel": 0,
+                "YearsAtCompany": 1
+            },
+            {
+                "EmployeeNumber": "BATCH_002", 
+                "Age": 45,
+                "Department": "Sales",
+                "JobSatisfaction": 4,
+                "OverTime": "No",
+                "MonthlyIncome": 8000,
+                "WorkLifeBalance": 3,
+                "StockOptionLevel": 2,
+                "YearsAtCompany": 10
+            }
+        ]
+        
+        try:
+            start_time = time.time()
+            response = self.session.post(f"{self.base_url}/api/predict/batch", json=batch_data)
+            end_time = time.time()
+            
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✅ 배치 예측 완료 (소요시간: {end_time - start_time:.3f}초)")
+                print(f"  처리된 직원 수: {data['statistics']['total_employees']}")
+                print(f"  성공한 예측: {data['statistics']['successful_predictions']}")
+                print(f"  평균 이직 확률: {data['statistics']['average_probability']:.3f}")
+                print(f"  고위험군: {data['statistics']['high_risk_count']}명")
+                
+                print(f"  개별 결과:")
+                for pred in data['predictions']:
+                    if 'error' not in pred:
+                        print(f"    {pred['employee_number']}: {pred['attrition_probability']:.3f} ({pred['risk_category']})")
+                    else:
+                        print(f"    {pred['employee_number']}: 오류 - {pred['error']}")
+                
+                return True
+            else:
+                print(f"❌ 배치 예측 실패: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 배치 예측 오류: {e}")
+            return False
+    
+    def test_employee_analysis(self) -> bool:
+        """개별 직원 심층 분석 테스트"""
+        print("\n8. 개별 직원 심층 분석 테스트")
+        print("-" * 40)
+        
+        # 테스트용 직원 데이터
+        employee_data = {
+            "Age": 28,
+            "Department": "Research & Development",
+            "JobSatisfaction": 2,
+            "OverTime": "Yes",
+            "MonthlyIncome": 4000,
+            "WorkLifeBalance": 1,
+            "StockOptionLevel": 0,
+            "YearsAtCompany": 2,
+            "EnvironmentSatisfaction": 2,
+            "JobInvolvement": 2
+        }
+        
+        employee_number = "ANALYSIS_001"
+        
+        try:
+            start_time = time.time()
+            response = self.session.post(
+                f"{self.base_url}/api/employee/analysis/{employee_number}", 
+                json=employee_data
+            )
+            end_time = time.time()
+            
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✅ 심층 분석 완료 (소요시간: {end_time - start_time:.3f}초)")
+                print(f"  직원 번호: {data['employee_number']}")
+                print(f"  이직 확률: {data['attrition_probability']:.3f}")
+                print(f"  위험 범주: {data['risk_category']}")
+                
+                # 상세 분석 정보
+                if 'detailed_analysis' in data:
+                    detail = data['detailed_analysis']
+                    print(f"  다음 위험도까지 거리: {detail.get('distance_to_next_level', 'N/A')}")
+                
+                # 권장사항
+                if 'recommendations' in data:
+                    print(f"  권장사항:")
+                    for i, rec in enumerate(data['recommendations'][:3], 1):
+                        print(f"    {i}. {rec}")
+                
+                return True
+            else:
+                print(f"❌ 심층 분석 실패: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 심층 분석 오류: {e}")
+            return False
+    
     def test_react_integration_examples(self):
         """React 연동 예시 코드 출력"""
         print(f"\n7. React 연동 예시 코드")
@@ -382,7 +512,17 @@ class StructuraAPITester:
             print("\n❌ 피처 중요도 테스트 실패")
             return False
         
-        # 7. React 연동 예시
+        # 7. 배치 예측 테스트
+        if not self.test_batch_prediction():
+            print("\n❌ 배치 예측 테스트 실패")
+            return False
+        
+        # 8. 개별 직원 심층 분석 테스트
+        if not self.test_employee_analysis():
+            print("\n❌ 개별 직원 심층 분석 테스트 실패")
+            return False
+        
+        # 9. React 연동 예시
         self.test_react_integration_examples()
         
         print("\n" + "=" * 60)
@@ -395,7 +535,7 @@ def main():
     """메인 함수"""
     
     # 서버 URL 설정
-    base_url = "http://localhost:5001"
+    base_url = "http://localhost:5003"
     
     print("Structura HR 예측 API 테스트를 시작합니다...")
     print(f"서버 URL: {base_url}")

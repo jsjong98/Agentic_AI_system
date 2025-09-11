@@ -1,6 +1,7 @@
-# Structura - HR 이직 예측 시스템
+# Structura - HR 이직 예측 시스템 (XAI 포함)
 
-XGBoost + xAI (설명 가능한 AI) 기반 HR 이직 예측 Flask 백엔드 서비스입니다.
+XGBoost + SHAP 기반 설명 가능한 HR 이직 예측 Flask 백엔드 서비스입니다.  
+**노트북 기반 최신 모델 적용** | **EmployeeNumber별 개별 XAI 설명** | **Probability 중심 예측**
 
 ## 🚀 주요 특징
 
@@ -10,11 +11,12 @@ XGBoost + xAI (설명 가능한 AI) 기반 HR 이직 예측 Flask 백엔드 서�
 - **클래스 불균형 처리**: 자동 가중치 조정
 - **교차 검증**: 5-fold Stratified Cross Validation
 
-### 🔍 xAI (설명 가능한 AI) 기능
-- **SHAP (SHapley Additive exPlanations)**: 개별 예측에 대한 피처 기여도 분석
-- **LIME (Local Interpretable Model-agnostic Explanations)**: 지역적 설명 가능성
+### 🔍 XAI (설명 가능한 AI) 기능 - 업그레이드됨
+- **SHAP (SHapley Additive exPlanations)**: EmployeeNumber별 개별 예측 설명
+- **변수 중요도 분석**: 각 직원별 위험/보호 요인 식별
 - **Feature Importance**: 전역적 피처 중요도
-- **위험/보호 요인 분석**: 이직 위험을 높이거나 낮추는 요인 식별
+- **Probability 중심**: 이직 확률만 반환하는 간소화된 예측
+- **권장사항 생성**: XAI 분석 기반 개선 방안 제시
 
 ### 🌐 React 연동 최적화
 - **Flask + CORS**: React 개발 서버와 완벽 호환
@@ -56,11 +58,11 @@ python structura_flask_backend.py
 ## 📡 API 엔드포인트
 
 ### 기본 정보
-- **서버 주소**: `http://localhost:5001`
+- **서버 주소**: `http://localhost:5003`
 - **Content-Type**: `application/json`
 - **CORS**: React 개발 서버 지원
 
-### 주요 엔드포인트
+### 주요 엔드포인트 (업데이트됨)
 
 #### 1. 헬스체크
 ```http
@@ -114,12 +116,13 @@ Content-Type: application/json
 }
 ```
 
-#### 3. 이직 예측
+#### 3. 이직 예측 (XAI 포함)
 ```http
 POST /api/predict
 Content-Type: application/json
 
 {
+  "EmployeeNumber": "EMP_001",
   "Age": 35,
   "JobSatisfaction": 3,
   "WorkLifeBalance": 2,
@@ -132,12 +135,34 @@ Content-Type: application/json
 **응답 예시:**
 ```json
 {
-  "employee_id": null,
+  "employee_number": "EMP_001",
   "attrition_probability": 0.742,
-  "attrition_prediction": 1,
   "risk_category": "HIGH",
-  "confidence_score": 0.484,
-  "prediction_timestamp": "2024-01-01T12:00:00"
+  "explanation": {
+    "employee_number": "EMP_001",
+    "global_feature_importance": {
+      "StockOptionLevel": 0.100,
+      "JobSatisfaction": 0.083
+    },
+    "individual_explanation": {
+      "variable_importance": {
+        "OverTime": 0.245,
+        "JobSatisfaction": -0.123
+      },
+      "top_risk_factors": [
+        {
+          "feature": "OverTime",
+          "impact": 0.245
+        }
+      ],
+      "top_protective_factors": [
+        {
+          "feature": "JobSatisfaction", 
+          "impact": 0.123
+        }
+      ]
+    }
+  }
 }
 ```
 
@@ -217,6 +242,86 @@ GET /api/feature-importance?top_n=10
 #### 6. 모델 정보
 ```http
 GET /api/model/info
+```
+
+#### 7. 배치 예측 (신규)
+```http
+POST /api/predict/batch
+Content-Type: application/json
+
+[
+  {
+    "EmployeeNumber": "EMP_001",
+    "Age": 25,
+    "JobSatisfaction": 1,
+    "OverTime": "Yes"
+  },
+  {
+    "EmployeeNumber": "EMP_002", 
+    "Age": 45,
+    "JobSatisfaction": 4,
+    "OverTime": "No"
+  }
+]
+```
+
+**응답 예시:**
+```json
+{
+  "predictions": [
+    {
+      "employee_number": "EMP_001",
+      "attrition_probability": 0.85,
+      "risk_category": "HIGH"
+    },
+    {
+      "employee_number": "EMP_002",
+      "attrition_probability": 0.15,
+      "risk_category": "LOW"
+    }
+  ],
+  "statistics": {
+    "total_employees": 2,
+    "successful_predictions": 2,
+    "average_probability": 0.50,
+    "high_risk_count": 1
+  }
+}
+```
+
+#### 8. 개별 직원 심층 분석 (신규)
+```http
+POST /api/employee/analysis/{employee_number}
+Content-Type: application/json
+
+{
+  "Age": 28,
+  "JobSatisfaction": 2,
+  "OverTime": "Yes"
+}
+```
+
+**응답 예시:**
+```json
+{
+  "employee_number": "EMP_001",
+  "attrition_probability": 0.742,
+  "risk_category": "HIGH",
+  "detailed_analysis": {
+    "probability_score": 0.742,
+    "distance_to_next_level": null,
+    "risk_thresholds": {
+      "LOW": 0.4,
+      "MEDIUM": 0.7,
+      "HIGH": 1.0
+    }
+  },
+  "recommendations": [
+    "즉시 면담을 통한 이직 의도 파악 필요",
+    "업무 환경 및 만족도 개선 방안 논의",
+    "JobSatisfaction 개선을 위한 구체적 액션 플랜 수립"
+  ]
+}
 ```
 
 ## 🧪 테스트
