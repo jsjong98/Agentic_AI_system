@@ -5,6 +5,7 @@ Integration Flask 백엔드
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 import pandas as pd
 import numpy as np
 import os
@@ -749,6 +750,119 @@ def load_employee_data():
             'success': False,
             'error': f'직원 데이터 로드 중 오류 발생: {str(e)}',
             'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/upload/employee_data', methods=['POST'])
+def upload_employee_data():
+    """직원 데이터 CSV 파일 업로드"""
+    try:
+        # 파일 확인
+        if 'file' not in request.files:
+            return jsonify({
+                "success": False,
+                "error": "파일이 업로드되지 않았습니다."
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                "success": False,
+                "error": "파일이 선택되지 않았습니다."
+            }), 400
+        
+        # 파일 확장자 확인
+        if not file.filename.lower().endswith('.csv'):
+            return jsonify({
+                "success": False,
+                "error": "CSV 파일만 업로드 가능합니다."
+            }), 400
+        
+        # 파일 저장
+        filename = secure_filename(file.filename)
+        upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'Integration')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # 타임스탬프를 포함한 파일명으로 저장 (기존 파일 보존)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = os.path.splitext(filename)[0]
+        new_filename = f"{base_name}_{timestamp}.csv"
+        file_path = os.path.join(upload_dir, new_filename)
+        
+        # 최신 파일 링크도 생성
+        latest_link = os.path.join(upload_dir, 'latest_employee_data.csv')
+        file.save(file_path)
+        
+        # 최신 파일 링크 생성
+        try:
+            if os.path.exists(latest_link):
+                os.remove(latest_link)
+            import shutil
+            shutil.copy2(file_path, latest_link)
+        except Exception as e:
+            print(f"최신 파일 링크 생성 실패: {e}")
+        
+        # 데이터 검증 및 로드
+        try:
+            df = pd.read_csv(file_path)
+            
+            # 필수 컬럼 확인
+            required_columns = ['employee_id']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            
+            if missing_columns:
+                return jsonify({
+                    "success": False,
+                    "error": f"필수 컬럼이 누락되었습니다: {', '.join(missing_columns)}",
+                    "required_columns": required_columns,
+                    "found_columns": list(df.columns)
+                }), 400
+            
+            # ReportGenerator에 데이터 로드
+            success = report_generator.load_employee_data(file_path)
+            
+            if success:
+                # 데이터 통계
+                employee_stats = {
+                    "total_employees": len(df),
+                    "unique_employees": df['employee_id'].nunique(),
+                    "columns": len(df.columns),
+                    "column_names": list(df.columns)
+                }
+                
+                # 부서별 통계 (부서 컬럼이 있는 경우)
+                if 'Department' in df.columns:
+                    employee_stats["departments"] = df['Department'].value_counts().to_dict()
+                
+                return jsonify({
+                    "success": True,
+                    "message": "직원 데이터가 성공적으로 업로드되고 로드되었습니다.",
+                    "file_info": {
+                        "original_filename": filename,
+                        "saved_filename": new_filename,
+                        "upload_path": upload_dir,
+                        "file_path": file_path,
+                        "latest_link": latest_link
+                    },
+                    "employee_stats": employee_stats,
+                    "note": "이제 에이전트 점수를 설정하고 레포트를 생성할 수 있습니다."
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "데이터 업로드는 성공했지만 시스템 로드에 실패했습니다."
+                }), 500
+                
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": f"데이터 파일 처리 오류: {str(e)}"
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"파일 업로드 오류: {str(e)}"
         }), 500
 
 

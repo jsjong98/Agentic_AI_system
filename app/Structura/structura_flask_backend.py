@@ -8,6 +8,7 @@ React 연동에 최적화된 REST API 서버
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
+from werkzeug.utils import secure_filename
 import logging
 import os
 import json
@@ -738,6 +739,104 @@ def create_app():
             "timestamp": datetime.now().isoformat()
         })
     
+    @app.route('/api/upload/data', methods=['POST'])
+    def upload_data():
+        """HR 데이터 CSV 파일 업로드"""
+        try:
+            # 파일 확인
+            if 'file' not in request.files:
+                return jsonify({
+                    "success": False,
+                    "error": "파일이 업로드되지 않았습니다."
+                }), 400
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({
+                    "success": False,
+                    "error": "파일이 선택되지 않았습니다."
+                }), 400
+            
+            # 파일 확장자 확인
+            if not file.filename.lower().endswith('.csv'):
+                return jsonify({
+                    "success": False,
+                    "error": "CSV 파일만 업로드 가능합니다."
+                }), 400
+            
+            # 파일 저장
+            filename = secure_filename(file.filename)
+            upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'Structura')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # 타임스탬프를 포함한 파일명으로 저장
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base_name = os.path.splitext(filename)[0]
+            new_filename = f"{base_name}_{timestamp}.csv"
+            file_path = os.path.join(upload_dir, new_filename)
+            
+            # 최신 파일 링크도 생성 (기존 코드 호환성을 위해)
+            latest_link = os.path.join(upload_dir, 'latest_hr_data.csv')
+            file.save(file_path)
+            
+            # 최신 파일 링크 생성 (심볼릭 링크 또는 복사)
+            try:
+                if os.path.exists(latest_link):
+                    os.remove(latest_link)
+                # Windows에서는 심볼릭 링크 대신 복사 사용
+                import shutil
+                shutil.copy2(file_path, latest_link)
+            except Exception as e:
+                logger.warning(f"최신 파일 링크 생성 실패: {e}")
+            
+            # 데이터 검증
+            try:
+                df = pd.read_csv(file_path)
+                
+                # 필수 컬럼 확인
+                required_columns = ['Age', 'JobSatisfaction', 'OverTime', 'MonthlyIncome', 'WorkLifeBalance']
+                missing_columns = [col for col in required_columns if col not in df.columns]
+                
+                if missing_columns:
+                    return jsonify({
+                        "success": False,
+                        "error": f"필수 컬럼이 누락되었습니다: {', '.join(missing_columns)}",
+                        "required_columns": required_columns,
+                        "found_columns": list(df.columns)
+                    }), 400
+                
+                # 기존 predictor 초기화 (새 데이터로 재훈련 필요)
+                global predictor_instance
+                predictor_instance = None
+                
+                return jsonify({
+                    "success": True,
+                    "message": "데이터가 성공적으로 업로드되었습니다.",
+                    "file_info": {
+                        "original_filename": filename,
+                        "saved_filename": new_filename,
+                        "upload_path": upload_dir,
+                        "file_path": file_path,
+                        "latest_link": latest_link,
+                        "rows": len(df),
+                        "columns": len(df.columns),
+                        "column_names": list(df.columns)
+                    },
+                    "note": "새로운 데이터로 모델을 재훈련해주세요."
+                })
+                
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "error": f"데이터 파일 읽기 오류: {str(e)}"
+                }), 400
+                
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": f"파일 업로드 오류: {str(e)}"
+            }), 500
+    
     @app.route('/api/train', methods=['POST'])
     def train_model():
         """모델 훈련 엔드포인트 (노트북 기반 최신 버전)"""
@@ -1109,6 +1208,7 @@ def run_server(host='0.0.0.0', port=5001, debug=True):
     print()
     print("주요 엔드포인트:")
     print(f"  • 헬스체크: http://{host}:{port}/api/health")
+    print(f"  • 데이터 업로드: http://{host}:{port}/api/upload/data")
     print(f"  • 모델 훈련: http://{host}:{port}/api/train")
     print(f"  • 이직 예측: http://{host}:{port}/api/predict")
     print(f"  • 배치 예측: http://{host}:{port}/api/predict/batch")

@@ -27,23 +27,31 @@
                     │      통합 조정 및 결과 합성         │
                     └─────────────────────────────────────┘
                                     │
-        ┌───────────┬───────────┬───────────┬───────────┬───────────┐
-        │           │           │           │           │           │
-┌───────▼───────┐ ┌─▼─────┐ ┌──▼──┐ ┌─────▼─────┐ ┌───▼───┐
-│  🏢 Structura  │ │🕸️Cognita│ │⏰Chronos│ │📝 Sentio │ │🌍Agora│
-│   워커 에이전트  │ │워커 에이전트│ │워커 에이전트│ │ 워커 에이전트│ │워커 에이전트│
-│  (포트: 5001)  │ │(포트:5000)│ │(포트:5002)│ │(포트: 5003)│ │(포트:5004)│
-│               │ │         │ │         │ │           │ │         │
-│ 정형 데이터 분석 │ │관계형 데이터│ │시계열 데이터│ │텍스트 감정 │ │외부 시장 │
-│ XGBoost + xAI │ │Neo4j+   │ │GRU+CNN+ │ │NLP+키워드│ │분석+경쟁력│
-│ SHAP + LIME   │ │Graph    │ │Attention│ │분석+생성 │ │평가+LLM │
-└───────────────┘ └─────────┘ └─────────┘ └───────────┘ └─────────┘
-        │               │           │           │           │
-        ▼               ▼           ▼           ▼           ▼
-┌───────────────┐ ┌─────────────┐ ┌─────────┐ ┌───────────┐ ┌─────────┐
-│ 📊 IBM HR CSV │ │🗄️ Neo4j    │ │📈 시계열│ │📝 HR      │ │🌐 채용  │
-│   데이터셋     │ │Graph DB    │ │CSV 데이터│ │텍스트     │ │공고 API │
-└───────────────┘ └─────────────┘ └─────────┘ └───────────┘ └─────────┘
+        ┌───────────┬───────────┬───────────┬───────────┬───────────┬───────────┐
+        │           │           │           │           │           │           │
+┌───────▼───────┐ ┌─▼─────┐ ┌──▼──┐ ┌─────▼─────┐ ┌───▼───┐ ┌──▼──┐
+│  🏢 Structura  │ │🕸️Cognita│ │⏰Chronos│ │📝 Sentio │ │🌍Agora│ │🎯Supervisor│
+│   워커 에이전트  │ │워커 에이전트│ │워커 에이전트│ │ 워커 에이전트│ │워커 에이전트│ │워커 에이전트│
+│  (포트: 5001)  │ │(포트:5000)│ │(포트:5002)│ │(포트: 5003)│ │(포트:5004)│ │(포트:5005)│
+│               │ │         │ │         │ │           │ │         │ │         │
+│ 정형 데이터 분석 │ │관계형 데이터│ │시계열 데이터│ │텍스트 감정 │ │외부 시장 │ │워커 통합 │
+│ XGBoost + xAI │ │Neo4j+   │ │GRU+CNN+ │ │NLP+GPT-5│ │분석+GPT-5│ │LangGraph+│
+│ SHAP + LIME   │ │Graph    │ │Attention│ │키워드+생성│ │LLM 해석 │ │GPT-5 워크플로우│
+└───────────────┘ └─────────┘ └─────────┘ └───────────┘ └─────────┘ └─────────┘
+        │               │           │           │           │           │
+        ▼               ▼           ▼           ▼           ▼           ▼
+┌───────────────┐ ┌─────────────┐ ┌─────────┐ ┌───────────┐ ┌─────────┐ ┌─────────┐
+│ 📊 IBM HR CSV │ │🗄️ Neo4j    │ │📈 시계열│ │📝 HR      │ │🌐 채용  │ │🔧 최종  │
+│   데이터셋     │ │Graph DB    │ │CSV 데이터│ │텍스트     │ │공고 API │ │통합 분석│
+└───────────────┘ └─────────────┘ └─────────┘ └───────────┘ └─────────┘ └─────────┘
+                                                                            │
+                                                                            ▼
+                                                              ┌─────────────────────┐
+                                                              │  🎯 Integration     │
+                                                              │  (포트: 5007)      │
+                                                              │  최종 종합 레포트   │
+                                                              │  GPT-5 기반 분석   │
+                                                              └─────────────────────┘
 ```
 
 ---
@@ -65,7 +73,7 @@ pip install -r requirements_agentic.txt
 export NEO4J_URI="bolt://54.162.43.24:7687"
 export NEO4J_USERNAME="neo4j"
 export NEO4J_PASSWORD="resident-success-moss"
-export OPENAI_API_KEY="your-openai-api-key"  # Sentio용
+export OPENAI_API_KEY="your-gpt5nano-api-key"  # Sentio, Agora, Supervisor, Integration용
 
 # 4. 통합 마스터 서버 실행 🚀
 python run_agentic_system.py
@@ -80,6 +88,62 @@ python run_agentic_system.py
 cd app
 python test_agentic_system.py
 ```
+
+---
+
+## 📋 데이터 요구사항
+
+### 🏢 Structura - 정형 데이터 분석
+**필수 데이터**: `data/IBM_HR.csv`
+- **형식**: CSV 파일
+- **필수 컬럼**: Age, JobSatisfaction, OverTime, MonthlyIncome, WorkLifeBalance 등
+- **데이터 크기**: 1,470명 직원 데이터
+- **자동 로드**: 서버 시작 시 자동으로 데이터 로드 및 모델 훈련
+
+### 🕸️ Cognita - 관계형 데이터 분석
+**필수 설정**: Neo4j 데이터베이스 연결
+- **환경변수 필수**:
+  ```bash
+  export NEO4J_URI="bolt://your-neo4j-host:7687"
+  export NEO4J_USERNAME="neo4j"
+  export NEO4J_PASSWORD="your-password"
+  ```
+- **데이터 구조**: Employee, Department, Project 노드 및 COLLABORATES_WITH, REPORTS_TO 관계
+- **자동 연결**: 환경변수 설정 시 자동으로 Neo4j 연결
+
+### ⏰ Chronos - 시계열 데이터 분석
+**필수 데이터**: `data/IBM_HR_timeseries.csv`
+- **형식**: 시계열 CSV 파일
+- **필수 컬럼**: employee_id, week, 각종 시계열 피처들
+- **시퀀스 길이**: 6주 단위 시계열 데이터
+- **자동 로드**: 서버 시작 시 자동으로 데이터 로드 및 전처리
+
+### 📝 Sentio - 텍스트 감정 분석
+**필수 데이터**: `data/IBM_HR_text.csv` 또는 `sample_hr_texts.csv`
+- **형식**: CSV 파일 (텍스트 컬럼 포함)
+- **필수 컬럼**: employee_id, text, text_type
+- **API 키**: GPT-5-nano 사용을 위한 OpenAI API 키 (.env 파일 지원)
+- **자동 로드**: 서버 시작 시 자동으로 텍스트 데이터 로드
+
+### 🌍 Agora - 외부 시장 분석
+**데이터 소스**: Structura의 IBM_HR.csv 데이터 활용
+- **기본 데이터**: `data/IBM_HR.csv`에서 직무, 급여 정보 추출
+- **외부 API**: 채용 공고 및 시장 데이터 (시뮬레이션)
+- **API 키**: GPT-5-nano 사용을 위한 OpenAI API 키 (.env 파일 지원)
+- **자동 연동**: Structura 데이터를 기반으로 시장 분석 수행
+
+### 🎯 Supervisor - 워커 통합 관리
+**데이터 소스**: 워커 에이전트들의 분석 결과
+- **입력**: 6개 워커 에이전트의 API 응답 결과
+- **API 키**: GPT-5-nano 워크플로우를 위한 OpenAI API 키 (.env 파일 지원)
+- **자동 통합**: 워커 에이전트 결과를 자동으로 수집 및 합성
+
+### 🎯 Integration - 최종 종합 레포트
+**데이터 소스**: 모든 에이전트의 점수 및 직원 기본 정보
+- **입력**: 각 에이전트별 점수 (structura_score, cognita_score 등)
+- **기본 데이터**: 직원 기본 정보 (employee_id, 이름, 부서 등)
+- **API 키**: GPT-5-nano 레포트 생성을 위한 OpenAI API 키 (.env 파일 지원)
+- **자동 처리**: 점수 입력 시 자동으로 임계값 계산 및 레포트 생성
 
 ---
 
@@ -159,19 +223,21 @@ python test_agentic_system.py
 
 ### 📝 Sentio - 텍스트 감정 분석 에이전트
 
-**포트**: `5003` | **기술**: NLP + 키워드 분석 + GPT-4 텍스트 생성
+**포트**: `5003` | **기술**: NLP + 키워드 분석 + GPT-5-nano 텍스트 생성
 
 #### 🎯 주요 기능
 - **텍스트 감정 분석**: HR 텍스트의 감정 점수 및 퇴직 위험 탐지
 - **키워드 분석**: 명사 중심 정확한 키워드 추출 (노이즈 제거)
 - **퇴직 위험 신호 탐지**: 5가지 퇴직 원인별 위험 신호 분석
 - **페르소나 기반 텍스트 생성**: 10가지 직원 유형별 맞춤 텍스트 생성
+- **JD-R 모델 기반 분석**: Job Demands-Resources 모델 적용
 
 #### 📊 성능 지표
 - **키워드 추출**: 명사 중심, 500+ 불용어 필터링
 - **감정 분석**: 0.0~1.0 점수 체계
 - **퇴직 위험 분석**: 5가지 원인 그룹별 세부 분석
-- **텍스트 생성**: OpenAI GPT-4 기반 고품질 생성
+- **텍스트 생성**: GPT-5-nano 기반 고품질 생성 (.env 지원)
+- **API 호출**: client.responses.create() 방식 사용
 
 #### 🔗 주요 API
 - `POST /analyze/text` - 텍스트 분석 (키워드 + 감정 + 위험도)
@@ -184,7 +250,7 @@ python test_agentic_system.py
 
 ### 🌍 Agora - 외부 시장 분석 에이전트
 
-**포트**: `5004` | **기술**: 시장 데이터 분석 + 경쟁력 평가 + LLM 해석
+**포트**: `5004` | **기술**: 시장 데이터 분석 + 경쟁력 평가 + GPT-5-nano LLM 해석
 
 #### 🎯 주요 기능
 - **시장 압력 지수 계산**: 외부 시장의 채용 수요 및 경쟁 상황 분석
@@ -192,7 +258,8 @@ python test_agentic_system.py
 - **이직 위험도 평가**: 시장 상황을 고려한 직원별 이직 위험도 산출
 - **직무별 시장 분석**: 특정 직무의 채용 공고, 급여 수준, 트렌드 분석
 - **경쟁력 평가**: 개별 직원의 시장 대비 경쟁력 종합 평가
-- **LLM 기반 해석**: OpenAI GPT를 활용한 자연스러운 분석 결과 해석
+- **GPT-5-nano 기반 해석**: 최신 LLM을 활용한 자연스러운 분석 결과 해석
+- **환경변수 지원**: .env 파일을 통한 API 키 관리
 
 #### 📊 성능 지표
 - **응답 시간**: < 500ms (개별 분석)
@@ -210,25 +277,109 @@ python test_agentic_system.py
 
 ---
 
+### 🎯 Supervisor - 워커 통합 관리 에이전트
+
+**포트**: `5005` | **기술**: LangGraph + GPT-5-nano 워크플로우
+
+#### 🎯 주요 기능
+- **워커 에이전트 통합**: 5개 워커 에이전트의 결과를 종합 분석
+- **LangGraph 워크플로우**: 복잡한 분석 프로세스 자동화
+- **GPT-5-nano 기반 의사결정**: 지능형 워크플로우 관리
+- **결과 합성**: 다중 에이전트 결과의 통합 및 우선순위 결정
+- **품질 관리**: 분석 결과의 일관성 및 품질 보장
+
+#### 📊 성능 지표
+- **워크플로우 처리**: 복잡한 다단계 분석 자동화
+- **결과 합성**: 5개 에이전트 결과 통합 분석
+- **의사결정 지원**: LLM 기반 지능형 판단
+- **환경변수 지원**: .env 파일을 통한 API 키 관리
+
+#### 🔗 주요 API
+- `POST /api/analyze/comprehensive` - 종합 분석 워크플로우
+- `POST /api/synthesize/results` - 결과 합성 및 우선순위 결정
+- `GET /api/workflow/status` - 워크플로우 상태 조회
+- `POST /api/workflow/custom` - 맞춤형 워크플로우 실행
+
+---
+
+### 🎯 Integration - 최종 종합 레포트 생성 시스템
+
+**포트**: `5007` | **기술**: GPT-5-nano 기반 종합 분석 및 레포트 생성
+
+#### 🎯 주요 기능
+- **임계값 설정**: 각 Score별 최적 임계값 계산 및 F1-score 최적화
+- **가중치 최적화**: Grid Search, Bayesian Optimization, Scipy 최적화 지원
+- **위험도 분류**: 3단계 위험도 구간 분류 (안전군/주의군/고위험군)
+- **GPT-5-nano 레포트 생성**: 개별 직원별 맞춤형 퇴사 위험 분석 레포트
+- **일괄 레포트 생성**: 여러 직원의 레포트 동시 생성
+- **환경변수 지원**: .env 파일을 통한 API 키 관리
+
+#### 📊 성능 지표
+- **임계값 계산**: F1-score 기반 최적화
+- **가중치 최적화**: 다양한 알고리즘 지원
+- **레포트 생성**: GPT-5-nano 기반 고품질 분석
+- **API 호출**: client.responses.create() 방식 사용
+- **Fallback 시스템**: LLM 실패 시 규칙 기반 분석 제공
+
+#### 🔗 주요 API
+- `POST /set_api_key` - OpenAI API 키 설정
+- `POST /load_data` - 데이터 로드 및 전처리
+- `POST /calculate_thresholds` - 임계값 계산
+- `POST /optimize_weights` - 가중치 최적화
+- `POST /generate_report` - 개별 직원 레포트 생성 (LLM 지원)
+- `POST /generate_batch_reports` - 일괄 레포트 생성
+- `POST /load_employee_data` - 직원 기본 데이터 로드
+- `GET /get_employee_list` - 직원 목록 조회
+
+---
+
 ## 🌐 React 연동 가이드
 
 ### 통합 API 사용 예시
 
 ```javascript
-// 🤖 개별 직원 통합 분석 (5개 워커 에이전트 동시 실행)
+// 🤖 개별 직원 통합 분석 (6개 워커 에이전트 + Supervisor + Integration)
 const analyzeEmployeeIntegrated = async (employeeData, textData) => {
+  // 📋 데이터 형식 예시
+  const employeeData = {
+    // Structura용 정형 데이터
+    Age: 35,
+    JobSatisfaction: 3,
+    OverTime: "Yes",
+    MonthlyIncome: 5000,
+    WorkLifeBalance: 2,
+    
+    // Cognita용 관계형 데이터 (자동 조회)
+    employee_id: 1001,
+    
+    // Chronos용 시계열 데이터 (자동 조회)
+    // 6주간의 시계열 데이터가 자동으로 로드됨
+    
+    // Agora용 시장 데이터 (Structura 데이터 활용)
+    job_role: "Software Engineer",
+    current_salary: 75000
+  };
+  
+  const textData = {
+    // Sentio용 텍스트 데이터
+    text: "업무량이 너무 많아서 번아웃이 올 것 같습니다.",
+    text_type: "SELF_REVIEW"
+  };
+
   const response = await fetch('http://localhost:8000/api/analyze/individual', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...employeeData,
       text_data: textData,
-      market_data: { use_llm: false },  // 시장 분석 옵션
+      market_data: { use_llm: true },   // GPT-5-nano 시장 분석
       use_structura: true,  // 정형 데이터 분석
-      use_cognita: true,    // 관계형 데이터 분석
-      use_sentio: true,     // 텍스트 감정 분석
+      use_cognita: true,    // 관계형 데이터 분석 (Neo4j 연결 필요)
+      use_sentio: true,     // 텍스트 감정 분석 (GPT-5-nano)
       use_chronos: true,    // 시계열 데이터 분석
-      use_agora: true       // 외부 시장 분석
+      use_agora: true,      // 외부 시장 분석 (GPT-5-nano)
+      use_supervisor: true, // Supervisor 워크플로우
+      use_integration: true // Integration 최종 레포트
     })
   });
   
@@ -240,6 +391,8 @@ const analyzeEmployeeIntegrated = async (employeeData, textData) => {
   console.log('Sentio 결과:', result.sentio_result);
   console.log('Chronos 결과:', result.chronos_result);
   console.log('Agora 결과:', result.agora_result);
+  console.log('Supervisor 결과:', result.supervisor_result);
+  console.log('Integration 레포트:', result.integration_report);
   console.log('통합 분석:', result.combined_analysis);
   
   return result;
@@ -259,7 +412,7 @@ const analyzeText = async (text, employeeId) => {
   return response.json();
 };
 
-// 🎭 페르소나 기반 텍스트 생성
+// 🎭 페르소나 기반 텍스트 생성 (GPT-5-nano)
 const generatePersonaText = async (employeeData, textType) => {
   const response = await fetch('http://localhost:5003/generate/text', {
     method: 'POST',
@@ -267,6 +420,36 @@ const generatePersonaText = async (employeeData, textType) => {
     body: JSON.stringify({
       employee_data: employeeData,
       text_type: textType
+    })
+  });
+  return response.json();
+};
+
+// 🎯 Integration 레포트 생성 (GPT-5-nano)
+const generateIntegrationReport = async (employeeId, agentScores) => {
+  const response = await fetch('http://localhost:5007/generate_report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      employee_id: employeeId,
+      agent_scores: agentScores,
+      format: 'json',
+      save_file: true,
+      use_llm: true  // GPT-5-nano 사용
+    })
+  });
+  return response.json();
+};
+
+// 🎯 Supervisor 워크플로우 실행
+const runSupervisorWorkflow = async (workflowType, inputData) => {
+  const response = await fetch('http://localhost:5005/api/analyze/comprehensive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      workflow_type: workflowType,
+      input_data: inputData,
+      use_llm: true  // GPT-5-nano 워크플로우
     })
   });
   return response.json();
@@ -285,7 +468,7 @@ const useAgenticAI = () => {
   
   const baseURL = 'http://localhost:8000/api';
   
-  // 🤖 통합 직원 분석 (4개 워커 에이전트)
+  // 🤖 통합 직원 분석 (6개 워커 에이전트 + Supervisor + Integration)
   const analyzeEmployee = async (employeeData, textData) => {
     try {
       setLoading(true);
@@ -297,8 +480,11 @@ const useAgenticAI = () => {
           text_data: textData,
           use_structura: true,
           use_cognita: true,
-          use_sentio: true,
-          use_chronos: true
+          use_sentio: true,    // GPT-5-nano 텍스트 분석
+          use_chronos: true,
+          use_agora: true,     // GPT-5-nano 시장 분석
+          use_supervisor: true, // LangGraph 워크플로우
+          use_integration: true // GPT-5-nano 최종 레포트
         })
       });
       const result = await response.json();
@@ -366,17 +552,17 @@ const useAgenticAI = () => {
 
 ## 📊 시스템 비교
 
-| 특징 | 🏢 Structura | 🕸️ Cognita | ⏰ Chronos | 📝 Sentio | 🌍 Agora |
-|------|-------------|------------|-----------|-----------|-----------|
-| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 | 시계열 패턴 | 텍스트 감정 분석 | 외부 시장 분석 |
-| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB | 시계열 CSV | HR 텍스트 데이터 | 채용 공고 API |
-| **주요 기술** | XGBoost + xAI | Graph Analytics | GRU+CNN+Attention | NLP + GPT-4 | 시장 분석 + LLM |
-| **포트** | 5001 | 5000 | 5002 | 5003 | 5004 |
-| **예측 대상** | 이직 확률 | 관계형 위험도 | 시계열 기반 예측 | 퇴직 위험 신호 | 시장 압력 지수 |
-| **설명 가능성** | SHAP, LIME | 네트워크 분석 | Attention 메커니즘 | 키워드 분석 | 시장 해석 |
-| **분석 범위** | 개별 중심 | 조직/팀 중심 | 시간적 패턴 중심 | 텍스트 중심 | 시장 중심 |
-| **실시간성** | 즉시 예측 | 실시간 관계 분석 | 딥러닝 예측 | 실시간 텍스트 분석 | 실시간 시장 분석 |
-| **성능** | 0.1초/명 | 0.82초/명 | 딥러닝 기반 | 키워드 기반 | 0.5초/명 |
+| 특징 | 🏢 Structura | 🕸️ Cognita | ⏰ Chronos | 📝 Sentio | 🌍 Agora | 🎯 Supervisor | 🎯 Integration |
+|------|-------------|------------|-----------|-----------|-----------|--------------|---------------|
+| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 | 시계열 패턴 | 텍스트 감정 분석 | 외부 시장 분석 | 워커 통합 관리 | 최종 종합 레포트 |
+| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB | 시계열 CSV | HR 텍스트 데이터 | 채용 공고 API | 워커 결과 통합 | 에이전트 점수 |
+| **주요 기술** | XGBoost + xAI | Graph Analytics | GRU+CNN+Attention | NLP + GPT-5-nano | 시장 분석 + GPT-5-nano | LangGraph + GPT-5-nano | GPT-5-nano 레포트 |
+| **포트** | 5001 | 5000 | 5002 | 5003 | 5004 | 5005 | 5007 |
+| **예측 대상** | 이직 확률 | 관계형 위험도 | 시계열 기반 예측 | 퇴직 위험 신호 | 시장 압력 지수 | 워크플로우 관리 | 종합 위험도 분석 |
+| **설명 가능성** | SHAP, LIME | 네트워크 분석 | Attention 메커니즘 | 키워드 + LLM 분석 | 시장 + LLM 해석 | LLM 기반 합성 | LLM 기반 레포트 |
+| **분석 범위** | 개별 중심 | 조직/팀 중심 | 시간적 패턴 중심 | 텍스트 중심 | 시장 중심 | 통합 워크플로우 | 개별 맞춤 레포트 |
+| **실시간성** | 즉시 예측 | 실시간 관계 분석 | 딥러닝 예측 | 실시간 텍스트 분석 | 실시간 시장 분석 | 워크플로우 자동화 | 실시간 레포트 생성 |
+| **성능** | 0.1초/명 | 0.82초/명 | 딥러닝 기반 | GPT-5-nano 기반 | GPT-5-nano 기반 | LangGraph 기반 | GPT-5-nano 기반 |
 
 ---
 
@@ -442,12 +628,37 @@ const useAgenticAI = () => {
 | 메서드 | 엔드포인트 | 설명 |
 |--------|------------|------|
 | `GET` | `/health` | 서버 상태 확인 |
-| `POST` | `/analyze/market` | 개별 직원 시장 분석 |
+| `POST` | `/analyze/market` | 개별 직원 시장 분석 (GPT-5-nano) |
 | `POST` | `/analyze/job_market` | 직무별 시장 분석 |
 | `POST` | `/analyze/batch` | 배치 시장 분석 |
 | `GET` | `/market/report/<job_role>` | 직무별 시장 보고서 |
 | `GET` | `/market/trends` | 전체 시장 트렌드 |
 | `POST` | `/market/competitive_analysis` | 경쟁력 분석 |
+
+### 🎯 Supervisor 워커 (포트 5005)
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|------------|------|
+| `GET` | `/health` | 서버 상태 확인 |
+| `POST` | `/api/analyze/comprehensive` | 종합 분석 워크플로우 (LangGraph) |
+| `POST` | `/api/synthesize/results` | 결과 합성 및 우선순위 결정 |
+| `GET` | `/api/workflow/status` | 워크플로우 상태 조회 |
+| `POST` | `/api/workflow/custom` | 맞춤형 워크플로우 실행 |
+| `GET` | `/api/agents/status` | 워커 에이전트 상태 조회 |
+
+### 🎯 Integration 시스템 (포트 5007)
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|------------|------|
+| `GET` | `/health` | 서버 상태 확인 |
+| `POST` | `/set_api_key` | OpenAI API 키 설정 |
+| `POST` | `/load_data` | 데이터 로드 및 전처리 |
+| `POST` | `/calculate_thresholds` | 임계값 계산 |
+| `POST` | `/optimize_weights` | 가중치 최적화 |
+| `POST` | `/generate_report` | 개별 직원 레포트 생성 (GPT-5-nano) |
+| `POST` | `/generate_batch_reports` | 일괄 레포트 생성 |
+| `POST` | `/load_employee_data` | 직원 기본 데이터 로드 |
+| `GET` | `/get_employee_list` | 직원 목록 조회 |
 
 ---
 
@@ -571,6 +782,12 @@ cd app/Sentio && python test_sentio_api.py
 
 # 🌍 Agora 워커 테스트
 cd app/Agora && python test_agora_api.py
+
+# 🎯 Supervisor 워커 테스트
+cd app/Supervisor && python test_supervisor_api.py
+
+# 🎯 Integration 시스템 테스트
+cd app/Integration && python test_integration_api.py
 ```
 
 ### 간단한 API 테스트
@@ -583,6 +800,8 @@ curl http://localhost:5000/api/health    # Cognita
 curl http://localhost:5003/health        # Sentio
 curl http://localhost:5002/api/health    # Chronos
 curl http://localhost:5004/health        # Agora
+curl http://localhost:5005/health        # Supervisor
+curl http://localhost:5007/health        # Integration
 
 # 간단한 예측 테스트 (Structura)
 curl -X POST http://localhost:5001/api/predict \
@@ -606,6 +825,16 @@ curl -X POST http://localhost:5002/api/predict \
 curl -X POST http://localhost:5004/analyze/market \
   -H "Content-Type: application/json" \
   -d '{"employee_id": 1, "job_role": "Software Engineer", "current_salary": 75000}'
+
+# Supervisor 워크플로우 테스트
+curl -X POST http://localhost:5005/api/analyze/comprehensive \
+  -H "Content-Type: application/json" \
+  -d '{"workflow_type": "employee_analysis", "employee_id": 1, "use_llm": true}'
+
+# Integration 레포트 생성 테스트
+curl -X POST http://localhost:5007/generate_report \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id": 1, "agent_scores": {"structura": 0.7, "cognita": 0.5}, "use_llm": true}'
 ```
 
 ---
@@ -654,13 +883,32 @@ Agentic_AI_system/
 │   │   ├── 📋 requirements.txt
 │   │   └── 📖 README.md
 │   │
-│   └── 📁 Agora/                    # 외부 시장 분석 워커
-│       ├── 🌍 agora_flask_backend.py
-│       ├── 📊 agora_analyzer.py
-│       ├── 🧠 agora_processor.py
-│       ├── ✍️ agora_llm_generator.py
-│       ├── 🚀 run_agora_server.py
-│       ├── 🧪 test_agora_api.py
+│   ├── 📁 Agora/                    # 외부 시장 분석 워커
+│   │   ├── 🌍 agora_flask_backend.py
+│   │   ├── 📊 agora_analyzer.py
+│   │   ├── 🧠 agora_processor.py
+│   │   ├── ✍️ agora_llm_generator.py
+│   │   ├── 🚀 run_agora_server.py
+│   │   ├── 🧪 test_agora_api.py
+│   │   ├── 📋 requirements.txt
+│   │   └── 📖 README.md
+│   │
+│   ├── 📁 Supervisor/               # 워커 통합 관리 에이전트
+│   │   ├── 🎯 supervisor_flask_backend.py
+│   │   ├── 🧠 supervisor_processor.py
+│   │   ├── 🔗 langgraph_workflow.py
+│   │   ├── 🚀 run_supervisor_server.py
+│   │   ├── 🧪 test_supervisor_api.py
+│   │   ├── 📋 requirements.txt
+│   │   └── 📖 README.md
+│   │
+│   └── 📁 Integration/              # 최종 종합 레포트 생성 시스템
+│       ├── 🎯 integration_flask_backend.py
+│       ├── 📊 threshold_calculator.py
+│       ├── ⚖️ weight_optimizer.py
+│       ├── 📝 report_generator.py
+│       ├── 🚀 run_integration_server.py
+│       ├── 🧪 test_integration_api.py
 │       ├── 📋 requirements.txt
 │       └── 📖 README.md
 │
@@ -720,8 +968,9 @@ Agentic_AI_system/
 - **키워드 추출**: 명사 중심, 500+ 불용어 필터링
 - **텍스트 분석**: 실시간 감정 및 위험도 분석
 - **페르소나 분석**: 10가지 직원 유형별 특성 분석
-- **텍스트 생성**: OpenAI GPT-4 기반 고품질 생성
+- **텍스트 생성**: GPT-5-nano 기반 고품질 생성 (.env 지원)
 - **퇴직 원인 분석**: 5가지 주요 원인 그룹별 세부 분석
+- **API 호출**: client.responses.create() 방식 사용
 
 ### 🌍 Agora 성능
 - **응답 시간**: < 500ms (개별 분석)
@@ -729,6 +978,22 @@ Agentic_AI_system/
 - **캐시 적중률**: > 80% (1시간 TTL)
 - **API 안정성**: 99.9% 가용성
 - **시장 분석**: 실시간 채용 공고 및 급여 데이터 분석
+- **LLM 해석**: GPT-5-nano 기반 자연스러운 분석 결과 해석
+
+### 🎯 Supervisor 성능
+- **워크플로우 처리**: LangGraph 기반 복잡한 다단계 분석
+- **결과 합성**: 6개 에이전트 결과 통합 분석
+- **의사결정 지원**: GPT-5-nano 기반 지능형 판단
+- **환경변수 지원**: .env 파일을 통한 API 키 관리
+- **자동화**: 워크플로우 자동 실행 및 품질 관리
+
+### 🎯 Integration 성능
+- **임계값 계산**: F1-score 기반 최적화
+- **가중치 최적화**: Grid Search, Bayesian Optimization 지원
+- **레포트 생성**: GPT-5-nano 기반 고품질 분석
+- **API 호출**: client.responses.create() 방식 사용
+- **Fallback 시스템**: LLM 실패 시 규칙 기반 분석 제공
+- **환경변수 지원**: .env 파일을 통한 API 키 관리
 
 ### 확장성 평가
 - **소규모 조직** (100명 미만): 실시간 분석 가능
@@ -776,21 +1041,79 @@ pip install flask-cors
 # React 개발 서버 주소 확인 (localhost:3000)
 ```
 
-### Sentio 특정 문제
+### 에이전트별 데이터 문제
 
-#### 1. OpenAI API 오류
+#### 1. Structura 데이터 문제
 ```bash
-# API 키 설정 확인
-export OPENAI_API_KEY="your-openai-api-key"
-echo $OPENAI_API_KEY
+# IBM HR 데이터셋 확인
+ls -la data/IBM_HR.csv
 
-# API 키 유효성 확인
+# 필수 컬럼 확인
+head -1 data/IBM_HR.csv | grep -E "Age|JobSatisfaction|OverTime|Attrition"
+
+# 데이터 형식 오류 시
+# CSV 파일의 인코딩을 UTF-8로 변경
 ```
 
-#### 2. 텍스트 데이터 없음
+#### 2. Cognita Neo4j 연결 문제
 ```bash
-# HR 텍스트 데이터를 data/ 폴더에 배치
-# sample_hr_texts.csv 또는 IBM_HR_text.csv 확인
+# Neo4j 연결 확인
+export NEO4J_URI="bolt://54.162.43.24:7687"
+export NEO4J_USERNAME="neo4j"
+export NEO4J_PASSWORD="resident-success-moss"
+
+# 연결 테스트
+curl -u neo4j:resident-success-moss http://54.162.43.24:7474/db/data/
+
+# 방화벽 설정 확인 (포트 7687, 7474)
+```
+
+#### 3. Chronos 시계열 데이터 문제
+```bash
+# 시계열 데이터 확인
+ls -la data/IBM_HR_timeseries.csv
+
+# 데이터 형식 확인 (employee_id, week 컬럼 필수)
+head -5 data/IBM_HR_timeseries.csv
+
+# 시퀀스 길이 확인 (6주 데이터 필요)
+```
+
+#### 4. Sentio 텍스트 데이터 및 API 문제
+```bash
+# 텍스트 데이터 확인
+ls -la data/IBM_HR_text.csv data/sample_hr_texts.csv
+
+# GPT-5-nano API 키 설정 확인
+export OPENAI_API_KEY="your-gpt5nano-api-key"
+echo $OPENAI_API_KEY
+
+# .env 파일 확인
+cat app/Sentio/.env
+```
+
+#### 5. Agora 시장 데이터 문제
+```bash
+# Structura 데이터 의존성 확인
+# Agora는 IBM_HR.csv에서 직무, 급여 정보를 자동 추출
+
+# GPT-5-nano API 키 설정 확인
+export OPENAI_API_KEY="your-gpt5nano-api-key"
+
+# .env 파일 확인
+cat app/Agora/.env
+```
+
+#### 6. Integration 레포트 생성 문제
+```bash
+# GPT-5-nano API 키 설정 확인
+export OPENAI_API_KEY="your-gpt5nano-api-key"
+
+# .env 파일 확인
+cat app/Integration/.env
+
+# 에이전트 점수 데이터 형식 확인
+# JSON 형식: {"structura_score": 0.7, "cognita_score": 0.5, ...}
 ```
 
 ---
@@ -817,22 +1140,27 @@ echo $OPENAI_API_KEY
 ## 🏆 주요 성과
 
 ### 기술적 성과
-- ✅ **5개 워커 에이전트 아키텍처** 구현
+- ✅ **7개 에이전트 아키텍처** 구현 (6개 워커 + Supervisor + Integration)
 - ✅ **설명 가능한 AI** (SHAP, LIME, Attention) 적용
 - ✅ **관계형 네트워크 분석** 시스템 구축
-- ✅ **텍스트 감정 분석** 시스템 구축 (Sentio)
+- ✅ **텍스트 감정 분석** 시스템 구축 (Sentio - GPT-5-nano)
 - ✅ **시계열 딥러닝 분석** 시스템 구축 (Chronos)
-- ✅ **외부 시장 분석** 시스템 구축 (Agora)
+- ✅ **외부 시장 분석** 시스템 구축 (Agora - GPT-5-nano)
+- ✅ **워커 통합 관리** 시스템 구축 (Supervisor - LangGraph)
+- ✅ **최종 종합 레포트** 시스템 구축 (Integration - GPT-5-nano)
 - ✅ **실시간 통합 분석** 플랫폼 완성
 - ✅ **React 연동** 최적화
+- ✅ **환경변수 지원** (.env 파일 통합 관리)
 
 ### 성능 성과
 - ✅ **Structura**: 0.1초/명 예측 속도 달성
 - ✅ **Cognita**: 30% 성능 향상 (v1.1.0)
-- ✅ **Sentio**: 명사 중심 키워드 추출로 정확도 향상
+- ✅ **Sentio**: GPT-5-nano 기반 고품질 텍스트 분석
 - ✅ **Chronos**: GRU+CNN+Attention 하이브리드 모델 구현
-- ✅ **Agora**: 0.5초/명 시장 분석 속도 달성
-- ✅ **통합 시스템**: 5개 워커 에이전트 동시 실행
+- ✅ **Agora**: GPT-5-nano 기반 시장 분석 및 해석
+- ✅ **Supervisor**: LangGraph 기반 워크플로우 자동화
+- ✅ **Integration**: GPT-5-nano 기반 맞춤형 레포트 생성
+- ✅ **통합 시스템**: 7개 에이전트 동시 실행
 - ✅ **확장성**: 대규모 조직 지원 가능
 
 ---
@@ -863,7 +1191,7 @@ echo $OPENAI_API_KEY
 
 ---
 
-**버전**: 1.4.0 (Agora Integration)  
+**버전**: 1.6.0 (Supervisor & Integration Complete)  
 **최종 업데이트**: 2025년  
-**기술 스택**: Python, Flask, XGBoost, Neo4j, PyTorch, OpenAI GPT-4, 시장 분석 API, React  
-**아키텍처**: Multi-Agent AI System (5 Workers)  
+**기술 스택**: Python, Flask, XGBoost, Neo4j, PyTorch, GPT-5-nano, LangGraph, 시장 분석 API, React  
+**아키텍처**: Multi-Agent AI System (6 Workers + Supervisor + Integration)  

@@ -614,6 +614,17 @@ class CognitaRiskAnalyzer:
 # Flask 애플리케이션 생성 및 설정
 # ------------------------------------------------------
 
+def load_neo4j_config():
+    """저장된 Neo4j 설정 로드"""
+    try:
+        config_file = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'Cognita', 'neo4j_config.json')
+        if os.path.exists(config_file):
+            with open(config_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.warning(f"Neo4j 설정 로드 실패: {e}")
+    return None
+
 def create_app():
     """Flask 애플리케이션 팩토리"""
     
@@ -834,6 +845,112 @@ def create_app():
                 "total_relationships": 0,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
+            }), 500
+    
+    @app.route('/api/setup/neo4j', methods=['POST'])
+    def setup_neo4j_connection():
+        """Neo4j 연결 설정"""
+        try:
+            data = request.get_json()
+            
+            # 필수 파라미터 확인
+            required_params = ['uri', 'username', 'password']
+            missing_params = [param for param in required_params if param not in data]
+            
+            if missing_params:
+                return jsonify({
+                    "success": False,
+                    "error": f"필수 파라미터가 누락되었습니다: {', '.join(missing_params)}",
+                    "required_params": required_params
+                }), 400
+            
+            uri = data['uri']
+            username = data['username']
+            password = data['password']
+            
+            # 연결 테스트
+            try:
+                test_driver = GraphDatabase.driver(uri, auth=(username, password))
+                with test_driver.session() as session:
+                    # 간단한 쿼리로 연결 테스트
+                    result = session.run("RETURN 1 as test")
+                    test_result = result.single()["test"]
+                
+                # 연결 성공 시 설정을 JSON 파일로 저장
+                config_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'Cognita')
+                os.makedirs(config_dir, exist_ok=True)
+                
+                config_file = os.path.join(config_dir, 'neo4j_config.json')
+                config_data = {
+                    "uri": uri,
+                    "username": username,
+                    "password": password,  # 실제 운영에서는 암호화 필요
+                    "connected_at": datetime.now().isoformat(),
+                    "status": "connected"
+                }
+                
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    json.dump(config_data, f, indent=2, ensure_ascii=False)
+                
+                # 전역 Neo4j 매니저 업데이트
+                global neo4j_manager
+                if neo4j_manager:
+                    neo4j_manager.close()
+                
+                neo4j_manager = Neo4jManager(uri, username, password)
+                
+                # 데이터베이스 정보 조회
+                with neo4j_manager.driver.session() as session:
+                    # 노드 수 확인
+                    result = session.run("MATCH (n) RETURN labels(n) as label, count(n) as count")
+                    node_stats = {}
+                    for record in result:
+                        labels = record["label"]
+                        count = record["count"]
+                        if labels:
+                            node_stats[labels[0]] = count
+                    
+                    # 관계 수 확인
+                    result = session.run("MATCH ()-[r]->() RETURN type(r) as rel_type, count(r) as count")
+                    relationship_stats = {}
+                    for record in result:
+                        rel_type = record["rel_type"]
+                        count = record["count"]
+                        relationship_stats[rel_type] = count
+                
+                test_driver.close()
+                
+                return jsonify({
+                    "success": True,
+                    "message": "Neo4j 연결이 성공적으로 설정되었습니다.",
+                    "connection_info": {
+                        "uri": uri,
+                        "username": username,
+                        "connected": True,
+                        "config_file": config_file,
+                        "config_saved": True
+                    },
+                    "database_stats": {
+                        "nodes": node_stats,
+                        "relationships": relationship_stats
+                    }
+                })
+                
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "error": f"Neo4j 연결 실패: {str(e)}",
+                    "connection_info": {
+                        "uri": uri,
+                        "username": username,
+                        "connected": False
+                    }
+                }), 400
+                
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": f"연결 설정 오류: {str(e)}"
             }), 500
     
     @app.route('/api/employees')
