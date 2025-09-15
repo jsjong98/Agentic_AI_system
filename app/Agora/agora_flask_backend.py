@@ -58,6 +58,21 @@ DATA_PATH = {
     'market_cache': 'data/market_cache.json'
 }
 
+def get_structura_data_path():
+    """Structura에서 업로드된 데이터 경로 확인"""
+    # app/uploads/Structura 경로 우선 확인
+    upload_path = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'Structura', 'latest_hr_data.csv')
+    if os.path.exists(upload_path):
+        return upload_path
+    
+    # 기존 data 폴더 경로 확인
+    data_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'IBM_HR.csv')
+    if os.path.exists(data_path):
+        return data_path
+    
+    # 기본 경로 반환
+    return DATA_PATH['hr_data']
+
 @dataclass
 class AgoraAnalysisResult:
     """Agora 분석 결과 데이터 클래스"""
@@ -102,10 +117,11 @@ def initialize_system():
         market_processor = AgoraMarketProcessor()
         logger.info("✅ 시장 데이터 프로세서 초기화 완료")
         
-        # 시장 분석기 초기화
-        if os.path.exists(DATA_PATH['hr_data']):
-            market_analyzer = AgoraMarketAnalyzer(DATA_PATH['hr_data'])
-            logger.info("✅ 시장 분석기 초기화 완료")
+        # 시장 분석기 초기화 (Structura 업로드 데이터 우선 사용)
+        hr_data_path = get_structura_data_path()
+        if os.path.exists(hr_data_path):
+            market_analyzer = AgoraMarketAnalyzer(hr_data_path)
+            logger.info(f"✅ 시장 분석기 초기화 완료 (데이터: {hr_data_path})")
         else:
             logger.warning("⚠️ HR 데이터 파일을 찾을 수 없습니다.")
         
@@ -162,6 +178,61 @@ def health_check():
     }
     
     return jsonify(status)
+
+@app.route('/refresh/data', methods=['POST'])
+def refresh_structura_data():
+    """Structura에서 업로드된 새로운 데이터로 시스템 새로고침"""
+    try:
+        global market_analyzer
+        
+        # 새로운 데이터 경로 확인
+        hr_data_path = get_structura_data_path()
+        
+        if not os.path.exists(hr_data_path):
+            return jsonify({
+                "success": False,
+                "error": "Structura 데이터 파일을 찾을 수 없습니다.",
+                "searched_path": hr_data_path
+            }), 404
+        
+        # 시장 분석기 재초기화
+        try:
+            market_analyzer = AgoraMarketAnalyzer(hr_data_path)
+            
+            # 데이터 통계 확인
+            import pandas as pd
+            df = pd.read_csv(hr_data_path)
+            
+            data_stats = {
+                "total_employees": len(df),
+                "unique_job_roles": df['JobRole'].nunique() if 'JobRole' in df.columns else 0,
+                "unique_departments": df['Department'].nunique() if 'Department' in df.columns else 0,
+                "salary_range": {
+                    "min": df['MonthlyIncome'].min() if 'MonthlyIncome' in df.columns else 0,
+                    "max": df['MonthlyIncome'].max() if 'MonthlyIncome' in df.columns else 0,
+                    "avg": df['MonthlyIncome'].mean() if 'MonthlyIncome' in df.columns else 0
+                } if 'MonthlyIncome' in df.columns else {}
+            }
+            
+            return jsonify({
+                "success": True,
+                "message": "Structura 데이터로 시스템이 성공적으로 새로고침되었습니다.",
+                "data_path": hr_data_path,
+                "data_stats": data_stats,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": f"시장 분석기 재초기화 실패: {str(e)}"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"데이터 새로고침 오류: {str(e)}"
+        }), 500
 
 @app.route('/analyze/market', methods=['POST'])
 def analyze_individual_market():

@@ -6,32 +6,34 @@ PwC RA팀의 **에이전틱 AI 기반 HR 분석 플랫폼**입니다.
 
 ```
                     ┌─────────────────────────────────────┐
-                    │         Supervisor 에이전트         │
-                    │          (향후 구현)               │
+                    │      🎯 Agentic Master Server      │
+                    │         (포트: 8000)              │
+                    │      통합 조정 및 결과 합성         │
                     └─────────────────────────────────────┘
                                     │
-        ┌───────────┬───────────┬───────────┬───────────┬───────────┐
-        │  워커1    │  워커2    │  워커3    │  워커4    │  워커5    │
-        │  정형     │  관계형   │  시계열   │  자연어   │  외부     │
-        │  데이터   │  데이터   │  데이터   │  데이터   │  시장     │
-        │  분석     │  분석     │  분석     │  분석     │  분석     │
-        │  ✅      │  ✅      │  ⏳      │  ⏳      │  ⏳      │
-        └───────────┴───────────┴───────────┴───────────┴───────────┘
+        ┌───────────┬───────────┬───────────┬───────────┬───────────┬───────────┐
+        │  워커1    │  워커2    │  워커3    │  워커4    │  워커5    │  워커6    │
+        │  정형     │  관계형   │  시계열   │  자연어   │  외부     │  워커     │
+        │  데이터   │  데이터   │  데이터   │  데이터   │  시장     │  통합     │
+        │  분석     │  분석     │  분석     │  분석     │  분석     │  관리     │
+        │  ✅      │  ✅      │  ✅      │  ✅      │  ✅      │  ✅      │
+        └───────────┴───────────┴───────────┴───────────┴───────────┴───────────┘
                                     │
                     ┌─────────────────────────────────────┐
-                    │       최종 종합 에이전트            │
-                    │          (향후 구현)               │
+                    │       🎯 Integration 시스템         │
+                    │         (포트: 5007)              │
+                    │    GPT-5-nano 기반 최종 레포트     │
                     └─────────────────────────────────────┘
 ```
 
-**현재 구현**: 워커 에이전트 1, 2가 **마스터 서버**에서 **동시 실행**  
-**향후 확장**: Supervisor, 워커 3-5, 최종 종합 에이전트
+**현재 구현**: 6개 워커 에이전트 + Supervisor + Integration이 **마스터 서버**에서 **동시 실행**  
+**완료 상태**: 모든 에이전트 구현 완료 (GPT-5-nano, LangGraph 적용)
 
 ## 🏗️ 프로젝트 구조
 
 ```
 app/
-├── Structura/          # 일반 데이터 분석 (XGBoost + xAI)
+├── Structura/          # 정형 데이터 분석 (XGBoost + xAI)
 │   ├── structura_flask_backend.py
 │   ├── hr_attrition_backend.py
 │   ├── run_structura_server.py
@@ -46,7 +48,59 @@ app/
 │   ├── requirements.txt
 │   └── README.md
 │
-└── README.md          # 이 파일
+├── Chronos/           # 시계열 데이터 분석 (GRU+CNN+Attention)
+│   ├── chronos_flask_backend.py
+│   ├── chronos_models.py
+│   ├── chronos_processor.py
+│   ├── run_chronos_server.py
+│   ├── test_chronos_api.py
+│   ├── requirements.txt
+│   └── README.md
+│
+├── Sentio/            # 텍스트 감정 분석 (NLP + GPT-5-nano)
+│   ├── sentio_flask_backend.py
+│   ├── sentio_processor.py
+│   ├── sentio_analyzer.py
+│   ├── sentio_generator.py
+│   ├── run_sentio_server.py
+│   ├── test_sentio_api.py
+│   ├── requirements.txt
+│   └── README.md
+│
+├── Agora/             # 외부 시장 분석 (시장 분석 + GPT-5-nano)
+│   ├── agora_flask_backend.py
+│   ├── agora_analyzer.py
+│   ├── agora_processor.py
+│   ├── agora_llm_generator.py
+│   ├── run_agora_server.py
+│   ├── test_agora_api.py
+│   ├── requirements.txt
+│   └── README.md
+│
+├── Supervisor/        # 워커 통합 관리 (LangGraph + GPT-5-nano)
+│   ├── supervisor_flask_backend.py
+│   ├── supervisor_processor.py
+│   ├── langgraph_workflow.py
+│   ├── run_supervisor_server.py
+│   ├── test_supervisor_api.py
+│   ├── requirements.txt
+│   └── README.md
+│
+├── Integration/       # 최종 종합 레포트 (GPT-5-nano)
+│   ├── integration_flask_backend.py
+│   ├── threshold_calculator.py
+│   ├── weight_optimizer.py
+│   ├── report_generator.py
+│   ├── run_integration_server.py
+│   ├── test_integration_api.py
+│   ├── requirements.txt
+│   └── README.md
+│
+├── agentic_master_server.py    # 통합 마스터 서버
+├── run_agentic_system.py       # 시스템 실행 스크립트
+├── test_agentic_system.py      # 통합 테스트
+├── requirements_agentic.txt    # 통합 의존성
+└── README.md                   # 이 파일
 ```
 
 ## 🚀 시스템 개요
@@ -81,6 +135,149 @@ app/
   - 관리자 안정성 평가
   - 부서별 위험도 분석
 
+### ⏰ Chronos - 시계열 데이터 분석 시스템
+**포트**: `5002` | **기술**: GRU+CNN+Attention 하이브리드 딥러닝
+
+- **목적**: 직원 행동 패턴의 시간적 변화 추적 및 예측
+- **특징**:
+  - 시계열 패턴 분석
+  - Attention 메커니즘으로 중요 시점 식별
+  - 딥러닝 기반 고정밀 예측
+- **데이터**: 시계열 CSV 데이터
+- **주요 기능**:
+  - 6주 단위 시계열 분석
+  - Feature/Temporal Attention 시각화
+  - 하이퍼파라미터 최적화
+  - 인터랙티브 차트 제공
+
+### 📝 Sentio - 텍스트 감정 분석 시스템
+**포트**: `5003` | **기술**: NLP + 키워드 분석 + GPT-5-nano
+
+- **목적**: HR 텍스트의 감정 분석 및 퇴직 위험 신호 탐지
+- **특징**:
+  - 명사 중심 키워드 추출
+  - 5가지 퇴직 원인별 위험 신호 분석
+  - GPT-5-nano 기반 텍스트 생성
+  - .env 파일을 통한 API 키 관리
+- **데이터**: HR 텍스트 데이터
+- **주요 기능**:
+  - 텍스트 감정 점수 계산
+  - 페르소나 기반 텍스트 생성
+  - JD-R 모델 기반 분석
+  - client.responses.create() API 호출
+
+### 🌍 Agora - 외부 시장 분석 시스템
+**포트**: `5004` | **기술**: 시장 데이터 분석 + GPT-5-nano LLM 해석
+
+- **목적**: 외부 시장 상황을 고려한 이직 위험도 분석
+- **특징**:
+  - 시장 압력 지수 계산
+  - 보상 격차 분석
+  - GPT-5-nano 기반 자연스러운 해석
+  - .env 파일을 통한 API 키 관리
+- **데이터**: 채용 공고 API 데이터
+- **주요 기능**:
+  - 직무별 시장 분석
+  - 경쟁력 평가
+  - 시장 트렌드 분석
+  - LLM 기반 해석 제공
+
+### 🎯 Supervisor - 워커 통합 관리 시스템
+**포트**: `5005` | **기술**: LangGraph + GPT-5-nano 워크플로우
+
+- **목적**: 6개 워커 에이전트의 결과를 종합 분석 및 관리
+- **특징**:
+  - LangGraph 기반 워크플로우 자동화
+  - GPT-5-nano 기반 지능형 의사결정
+  - 다중 에이전트 결과 합성
+  - .env 파일을 통한 API 키 관리
+- **데이터**: 워커 에이전트 결과 통합
+- **주요 기능**:
+  - 종합 분석 워크플로우
+  - 결과 합성 및 우선순위 결정
+  - 워크플로우 상태 관리
+  - 품질 관리 및 일관성 보장
+
+### 🎯 Integration - 최종 종합 레포트 시스템
+**포트**: `5007` | **기술**: GPT-5-nano 기반 종합 분석 및 레포트 생성
+
+- **목적**: 모든 에이전트 결과를 종합한 최종 퇴사 위험 레포트 생성
+- **특징**:
+  - 임계값 설정 및 F1-score 최적화
+  - 가중치 최적화 (Grid Search, Bayesian)
+  - GPT-5-nano 기반 맞춤형 레포트
+  - .env 파일을 통한 API 키 관리
+- **데이터**: 에이전트 점수 및 직원 데이터
+- **주요 기능**:
+  - 개별 직원 레포트 생성
+  - 일괄 레포트 생성
+  - 3단계 위험도 분류
+  - Fallback 시스템 제공
+
+## 📋 데이터 준비 가이드
+
+### 🏢 Structura 데이터 준비
+```bash
+# IBM HR 데이터셋 배치
+cp IBM_HR.csv ../data/IBM_HR.csv
+
+# 필수 컬럼 확인
+# Age, JobSatisfaction, OverTime, MonthlyIncome, WorkLifeBalance, Attrition 등
+```
+
+### 🕸️ Cognita 데이터베이스 설정
+```bash
+# Neo4j 환경변수 설정 (필수)
+export NEO4J_URI="bolt://YOUR_NEO4J_HOST:7687"
+export NEO4J_USERNAME="neo4j"
+export NEO4J_PASSWORD="YOUR_NEO4J_PASSWORD"
+
+# 또는 .env 파일에 설정
+echo "NEO4J_URI=bolt://YOUR_NEO4J_HOST:7687" >> .env
+echo "NEO4J_USERNAME=neo4j" >> .env
+echo "NEO4J_PASSWORD=YOUR_NEO4J_PASSWORD" >> .env
+```
+
+### ⏰ Chronos 시계열 데이터 준비
+```bash
+# 시계열 데이터 배치
+cp IBM_HR_timeseries.csv ../data/IBM_HR_timeseries.csv
+
+# 데이터 형식: employee_id, week, 시계열 피처들
+# 6주 단위 시퀀스 데이터 필요
+```
+
+### 📝 Sentio 텍스트 데이터 준비
+```bash
+# HR 텍스트 데이터 배치
+cp IBM_HR_text.csv ../data/IBM_HR_text.csv
+# 또는
+cp sample_hr_texts.csv ../data/sample_hr_texts.csv
+
+# OpenAI API 키 설정 (GPT-5-nano용)
+export OPENAI_API_KEY="your-gpt5nano-api-key"
+# 또는 .env 파일에 설정
+echo "OPENAI_API_KEY=your-gpt5nano-api-key" >> .env
+```
+
+### 🌍 Agora 시장 데이터 설정
+```bash
+# Structura의 IBM_HR.csv 데이터를 자동으로 활용
+# 별도 데이터 준비 불필요 (Structura 데이터에서 직무, 급여 정보 추출)
+
+# OpenAI API 키 설정 (GPT-5-nano용)
+export OPENAI_API_KEY="your-gpt5nano-api-key"
+```
+
+### 🎯 Supervisor & Integration 설정
+```bash
+# OpenAI API 키 설정 (GPT-5-nano용)
+export OPENAI_API_KEY="your-gpt5nano-api-key"
+
+# 워커 에이전트들의 결과를 자동으로 수집
+# 별도 데이터 준비 불필요
+```
+
 ## 🚀 빠른 시작 (통합 에이전틱 시스템)
 
 ### 1. 통합 시스템 실행 (권장)
@@ -90,10 +287,11 @@ app/
 cd app
 pip install -r requirements_agentic.txt
 
-# 2. Neo4j 연결 설정 (환경변수)
-export NEO4J_URI="bolt://your-neo4j-host:7687"
+# 2. 환경변수 설정
+export NEO4J_URI="bolt://YOUR_NEO4J_HOST:7687"
 export NEO4J_USERNAME="neo4j"
-export NEO4J_PASSWORD="your-password"
+export NEO4J_PASSWORD="YOUR_NEO4J_PASSWORD"
+export OPENAI_API_KEY="your-gpt5nano-api-key"  # Sentio, Agora, Supervisor, Integration용
 
 # 3. 통합 마스터 서버 실행 (모든 워커 에이전트 동시 실행)
 python run_agentic_system.py
