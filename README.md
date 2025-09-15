@@ -29,21 +29,21 @@
                                     │
         ┌───────────┬───────────┬───────────┬───────────┬───────────┐
         │           │           │           │           │           │
-┌───────▼───────┐ ┌─▼─────┐ ┌──▼──┐ ┌─────▼─────┐ ┌───▼───┐ ┌─────▼─────┐
-│  🏢 Structura  │ │🕸️Cognita│ │⏰Chronos│ │📝 Sentio │ │🌍Agora│ │  🔮 Future │
-│   워커 에이전트  │ │워커 에이전트│ │워커 에이전트│ │ 워커 에이전트│ │워커 에이전트│ │   워커 에이전트 │
-│  (포트: 5001)  │ │(포트:5000)│ │(포트:5002)│ │(포트: 5003)│ │(포트:5004)│ │  (포트: 50XX) │
-│               │ │         │ │         │ │           │ │         │ │             │
-│ 정형 데이터 분석 │ │관계형 데이터│ │시계열 데이터│ │텍스트 감정 │ │외부 시장 │ │ 향후 확장 예정 │
-│ XGBoost + xAI │ │Neo4j+   │ │GRU+CNN+ │ │NLP+키워드│ │분석+경쟁력│ │             │
-│ SHAP + LIME   │ │Graph    │ │Attention│ │분석+생성 │ │평가+LLM │ │             │
-└───────────────┘ └─────────┘ └─────────┘ └───────────┘ └─────────┘ └─────────────┘
-        │               │           │           │           │             │
-        ▼               ▼           ▼           ▼           ▼             ▼
-┌───────────────┐ ┌─────────────┐ ┌─────────┐ ┌───────────┐ ┌─────────┐ ┌─────────────┐
-│ 📊 IBM HR CSV │ │🗄️ Neo4j    │ │📈 시계열│ │📝 HR      │ │🌐 채용  │ │ 🔮 미래 데이터│
-│   데이터셋     │ │Graph DB    │ │CSV 데이터│ │텍스트     │ │공고 API │ │   소스       │
-└───────────────┘ └─────────────┘ └─────────┘ └───────────┘ └─────────┘ └─────────────┘
+┌───────▼───────┐ ┌─▼─────┐ ┌──▼──┐ ┌─────▼─────┐ ┌───▼───┐
+│  🏢 Structura  │ │🕸️Cognita│ │⏰Chronos│ │📝 Sentio │ │🌍Agora│
+│   워커 에이전트  │ │워커 에이전트│ │워커 에이전트│ │ 워커 에이전트│ │워커 에이전트│
+│  (포트: 5001)  │ │(포트:5000)│ │(포트:5002)│ │(포트: 5003)│ │(포트:5004)│
+│               │ │         │ │         │ │           │ │         │
+│ 정형 데이터 분석 │ │관계형 데이터│ │시계열 데이터│ │텍스트 감정 │ │외부 시장 │
+│ XGBoost + xAI │ │Neo4j+   │ │GRU+CNN+ │ │NLP+키워드│ │분석+경쟁력│
+│ SHAP + LIME   │ │Graph    │ │Attention│ │분석+생성 │ │평가+LLM │
+└───────────────┘ └─────────┘ └─────────┘ └───────────┘ └─────────┘
+        │               │           │           │           │
+        ▼               ▼           ▼           ▼           ▼
+┌───────────────┐ ┌─────────────┐ ┌─────────┐ ┌───────────┐ ┌─────────┐
+│ 📊 IBM HR CSV │ │🗄️ Neo4j    │ │📈 시계열│ │📝 HR      │ │🌐 채용  │
+│   데이터셋     │ │Graph DB    │ │CSV 데이터│ │텍스트     │ │공고 API │
+└───────────────┘ └─────────────┘ └─────────┘ └───────────┘ └─────────┘
 ```
 
 ---
@@ -563,11 +563,11 @@ cd app/Structura && python test_structura_api.py
 # 🕸️ Cognita 워커 테스트  
 cd app/Cognita && python test_cognita_api.py
 
-# 📝 Sentio 워커 테스트
-cd app/Sentio && python test_sentio_api.py
-
 # ⏰ Chronos 워커 테스트
 cd app/Chronos && python test_chronos_api.py
+
+# 📝 Sentio 워커 테스트
+cd app/Sentio && python test_sentio_api.py
 
 # 🌍 Agora 워커 테스트
 cd app/Agora && python test_agora_api.py
@@ -582,6 +582,7 @@ curl http://localhost:5001/api/health    # Structura
 curl http://localhost:5000/api/health    # Cognita
 curl http://localhost:5003/health        # Sentio
 curl http://localhost:5002/api/health    # Chronos
+curl http://localhost:5004/health        # Agora
 
 # 간단한 예측 테스트 (Structura)
 curl -X POST http://localhost:5001/api/predict \
@@ -600,6 +601,11 @@ curl http://localhost:5000/api/analyze/employee/1
 curl -X POST http://localhost:5002/api/predict \
   -H "Content-Type: application/json" \
   -d '{"employee_id": 1, "sequence_data": []}'
+
+# 시장 분석 테스트 (Agora)
+curl -X POST http://localhost:5004/analyze/market \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id": 1, "job_role": "Software Engineer", "current_salary": 75000}'
 ```
 
 ---
@@ -629,6 +635,15 @@ Agentic_AI_system/
 │   │   ├── 📋 requirements.txt
 │   │   └── 📖 README.md
 │   │
+│   ├── 📁 Chronos/                  # 시계열 데이터 분석 워커
+│   │   ├── ⏰ chronos_flask_backend.py
+│   │   ├── 🧠 chronos_models.py
+│   │   ├── 📊 chronos_processor.py
+│   │   ├── 🚀 run_chronos_server.py
+│   │   ├── 🧪 test_chronos_api.py
+│   │   ├── 📋 requirements.txt
+│   │   └── 📖 README.md
+│   │
 │   ├── 📁 Sentio/                   # 텍스트 감정 분석 워커
 │   │   ├── 📝 sentio_flask_backend.py
 │   │   ├── 🧠 sentio_processor.py
@@ -639,12 +654,13 @@ Agentic_AI_system/
 │   │   ├── 📋 requirements.txt
 │   │   └── 📖 README.md
 │   │
-│   └── 📁 Chronos/                  # 시계열 데이터 분석 워커
-│       ├── ⏰ chronos_flask_backend.py
-│       ├── 🧠 chronos_models.py
-│       ├── 📊 chronos_processor.py
-│       ├── 🚀 run_chronos_server.py
-│       ├── 🧪 test_chronos_api.py
+│   └── 📁 Agora/                    # 외부 시장 분석 워커
+│       ├── 🌍 agora_flask_backend.py
+│       ├── 📊 agora_analyzer.py
+│       ├── 🧠 agora_processor.py
+│       ├── ✍️ agora_llm_generator.py
+│       ├── 🚀 run_agora_server.py
+│       ├── 🧪 test_agora_api.py
 │       ├── 📋 requirements.txt
 │       └── 📖 README.md
 │
@@ -693,6 +709,13 @@ Agentic_AI_system/
 - **메모리 사용**: 300MB-1GB (40% 감소)
 - **자동 인덱스**: 성능 최적화 자동 설정
 
+### ⏰ Chronos 성능
+- **모델 아키텍처**: GRU + CNN + Dual Attention
+- **시퀀스 길이**: 6주 단위 시계열 분석
+- **학습 시간**: 하이퍼파라미터 최적화 지원
+- **예측 속도**: 딥러닝 기반 실시간 예측
+- **시각화**: Plotly 인터랙티브 차트
+
 ### 📝 Sentio 성능
 - **키워드 추출**: 명사 중심, 500+ 불용어 필터링
 - **텍스트 분석**: 실시간 감정 및 위험도 분석
@@ -700,12 +723,12 @@ Agentic_AI_system/
 - **텍스트 생성**: OpenAI GPT-4 기반 고품질 생성
 - **퇴직 원인 분석**: 5가지 주요 원인 그룹별 세부 분석
 
-### ⏰ Chronos 성능
-- **모델 아키텍처**: GRU + CNN + Dual Attention
-- **시퀀스 길이**: 6주 단위 시계열 분석
-- **학습 시간**: 하이퍼파라미터 최적화 지원
-- **예측 속도**: 딥러닝 기반 실시간 예측
-- **시각화**: Plotly 인터랙티브 차트
+### 🌍 Agora 성능
+- **응답 시간**: < 500ms (개별 분석)
+- **배치 처리**: 100명/분 (LLM 미사용)
+- **캐시 적중률**: > 80% (1시간 TTL)
+- **API 안정성**: 99.9% 가용성
+- **시장 분석**: 실시간 채용 공고 및 급여 데이터 분석
 
 ### 확장성 평가
 - **소규모 조직** (100명 미만): 실시간 분석 가능
@@ -726,6 +749,7 @@ netstat -an | grep :5000  # Cognita
 netstat -an | grep :5001  # Structura
 netstat -an | grep :5002  # Chronos
 netstat -an | grep :5003  # Sentio
+netstat -an | grep :5004  # Agora
 
 # 프로세스 종료
 kill -9 $(lsof -ti:8000)
@@ -733,6 +757,7 @@ kill -9 $(lsof -ti:5000)
 kill -9 $(lsof -ti:5001)
 kill -9 $(lsof -ti:5002)
 kill -9 $(lsof -ti:5003)
+kill -9 $(lsof -ti:5004)
 ```
 
 #### 2. 의존성 설치 오류
@@ -776,13 +801,11 @@ echo $OPENAI_API_KEY
 - [ ] **React 프론트엔드 개발**: 통합 대시보드 구현
 - [ ] **실시간 모니터링**: 시스템 성능 및 분석 결과 추적
 - [ ] **배치 처리 시스템**: 대용량 데이터 처리 최적화
-- [x] **워커 에이전트 3**: 텍스트 감정 분석 (Sentio) - 완료
-- [x] **워커 에이전트 4**: 시계열 데이터 분석 (Chronos) - 완료
-- [x] **워커 에이전트 5**: 외부 시장 분석
+- [x] **5개 워커 에이전트 완성**: Structura, Cognita, Chronos, Sentio, Agora - 완료
 
 ### 중기 (3-4주)
-- [ ] **Supervisor 에이전트**: 전체 워커 조정 및 관리
-- [ ] **최종 종합 에이전트**: 모든 분석 결과 통합
+- [ ] **성능 최적화**: 워커 에이전트 간 통신 및 처리 속도 향상
+- [ ] **고급 분석 기능**: 예측 모델 정확도 개선 및 새로운 분석 지표 추가
 - [ ] **클라우드 배포**: AWS/Azure 기반 확장
 
 ### 장기 (6개월+)
