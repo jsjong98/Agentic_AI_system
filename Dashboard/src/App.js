@@ -7,7 +7,10 @@ import {
   SettingOutlined,
   UserOutlined,
   BarChartOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  ApiOutlined,
+  RobotOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons';
 
 import Dashboard from './components/Dashboard';
@@ -17,6 +20,9 @@ import WeightOptimization from './components/WeightOptimization';
 import EmployeePrediction from './components/EmployeePrediction';
 import ResultVisualization from './components/ResultVisualization';
 import ExportResults from './components/ExportResults';
+import IntegrationAnalysis from './components/IntegrationAnalysis';
+import SupervisorWorkflow from './components/SupervisorWorkflow';
+import XAIResults from './components/XAIResults';
 import { apiService } from './services/apiService';
 
 const { Header, Sider, Content } = Layout;
@@ -30,6 +36,19 @@ const App = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [thresholdResults, setThresholdResults] = useState(null);
   const [weightResults, setWeightResults] = useState(null);
+  const [integrationResults, setIntegrationResults] = useState(null);
+  const [supervisorResults, setSupervisorResults] = useState(null);
+  const [xaiResults, setXAIResults] = useState(null);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [stepStatuses, setStepStatuses] = useState({
+    upload: false,
+    threshold: false,
+    weight: false,
+    prediction: false,
+    integration: false,
+    supervisor: false,
+    xai: false
+  });
 
   // 메뉴 아이템
   const menuItems = [
@@ -57,6 +76,21 @@ const App = () => {
       key: 'prediction',
       icon: <UserOutlined />,
       label: '직원 예측',
+    },
+    {
+      key: 'integration',
+      icon: <ApiOutlined />,
+      label: 'Integration 분석',
+    },
+    {
+      key: 'supervisor',
+      icon: <RobotOutlined />,
+      label: 'Supervisor 워크플로우',
+    },
+    {
+      key: 'xai',
+      icon: <ExperimentOutlined />,
+      label: 'XAI 결과',
     },
     {
       key: 'visualization',
@@ -94,32 +128,83 @@ const App = () => {
     }
   };
 
+  // 단계 상태 업데이트 함수
+  const updateStepStatus = (step, status) => {
+    setStepStatuses(prev => ({
+      ...prev,
+      [step]: status
+    }));
+  };
+
+  // 다음 단계로 이동
+  const moveToNextStep = () => {
+    setCurrentStep(prev => Math.min(prev + 1, 6));
+  };
+
   // 데이터 로드 성공 콜백
   const onDataLoaded = (success) => {
     setDataLoaded(success);
+    updateStepStatus('upload', success);
     if (success) {
       notification.success({
         message: '데이터 로드 성공',
         description: '데이터가 성공적으로 로드되었습니다.',
       });
+      moveToNextStep();
     }
   };
 
   // 임계값 계산 완료 콜백
   const onThresholdCalculated = (results) => {
     setThresholdResults(results);
+    updateStepStatus('threshold', true);
     notification.success({
       message: '임계값 계산 완료',
       description: '모든 Score의 최적 임계값이 계산되었습니다.',
     });
+    moveToNextStep();
   };
 
   // 가중치 최적화 완료 콜백
   const onWeightOptimized = (results) => {
     setWeightResults(results);
+    updateStepStatus('weight', true);
     notification.success({
       message: '가중치 최적화 완료',
       description: `${results.method} 방법으로 최적화가 완료되었습니다.`,
+    });
+    moveToNextStep();
+  };
+
+  // Integration 분석 완료 콜백
+  const onIntegrationCompleted = (results) => {
+    setIntegrationResults(results);
+    updateStepStatus('integration', true);
+    notification.success({
+      message: 'Integration 분석 완료',
+      description: '통합 분석이 성공적으로 완료되었습니다.',
+    });
+    moveToNextStep();
+  };
+
+  // Supervisor 워크플로우 완료 콜백
+  const onSupervisorCompleted = (results) => {
+    setSupervisorResults(results);
+    updateStepStatus('supervisor', true);
+    notification.success({
+      message: 'Supervisor 워크플로우 완료',
+      description: '슈퍼바이저 워크플로우가 성공적으로 완료되었습니다.',
+    });
+    moveToNextStep();
+  };
+
+  // XAI 결과 완료 콜백
+  const onXAICompleted = (results) => {
+    setXAIResults(results);
+    updateStepStatus('xai', true);
+    notification.success({
+      message: 'XAI 분석 완료',
+      description: 'XAI 분석이 성공적으로 완료되었습니다.',
     });
   };
 
@@ -137,6 +222,11 @@ const App = () => {
       dataLoaded,
       thresholdResults,
       weightResults,
+      integrationResults,
+      supervisorResults,
+      xaiResults,
+      currentStep,
+      stepStatuses,
     };
 
     switch (selectedKey) {
@@ -172,6 +262,27 @@ const App = () => {
         return (
           <EmployeePrediction
             {...commonProps}
+          />
+        );
+      case 'integration':
+        return (
+          <IntegrationAnalysis
+            {...commonProps}
+            onIntegrationCompleted={onIntegrationCompleted}
+          />
+        );
+      case 'supervisor':
+        return (
+          <SupervisorWorkflow
+            {...commonProps}
+            onSupervisorCompleted={onSupervisorCompleted}
+          />
+        );
+      case 'xai':
+        return (
+          <XAIResults
+            {...commonProps}
+            onXAICompleted={onXAICompleted}
           />
         );
       case 'visualization':
@@ -274,24 +385,42 @@ const App = () => {
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               {/* 상태 표시 */}
-              <div style={{ display: 'flex', gap: '12px', fontSize: '14px' }}>
+              <div style={{ display: 'flex', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
                 <span style={{ 
-                  color: dataLoaded ? '#52c41a' : '#faad14',
+                  color: stepStatuses.upload ? '#52c41a' : '#faad14',
                   fontWeight: 'bold'
                 }}>
-                  📊 데이터: {dataLoaded ? '로드됨' : '미로드'}
+                  📊 데이터: {stepStatuses.upload ? '✓' : '○'}
                 </span>
                 <span style={{ 
-                  color: thresholdResults ? '#52c41a' : '#faad14',
+                  color: stepStatuses.threshold ? '#52c41a' : '#faad14',
                   fontWeight: 'bold'
                 }}>
-                  🎯 임계값: {thresholdResults ? '계산됨' : '미계산'}
+                  🎯 임계값: {stepStatuses.threshold ? '✓' : '○'}
                 </span>
                 <span style={{ 
-                  color: weightResults ? '#52c41a' : '#faad14',
+                  color: stepStatuses.weight ? '#52c41a' : '#faad14',
                   fontWeight: 'bold'
                 }}>
-                  ⚖️ 가중치: {weightResults ? '최적화됨' : '미최적화'}
+                  ⚖️ 가중치: {stepStatuses.weight ? '✓' : '○'}
+                </span>
+                <span style={{ 
+                  color: stepStatuses.integration ? '#52c41a' : '#faad14',
+                  fontWeight: 'bold'
+                }}>
+                  🔗 통합: {stepStatuses.integration ? '✓' : '○'}
+                </span>
+                <span style={{ 
+                  color: stepStatuses.supervisor ? '#52c41a' : '#faad14',
+                  fontWeight: 'bold'
+                }}>
+                  🤖 워크플로우: {stepStatuses.supervisor ? '✓' : '○'}
+                </span>
+                <span style={{ 
+                  color: stepStatuses.xai ? '#52c41a' : '#faad14',
+                  fontWeight: 'bold'
+                }}>
+                  🔬 XAI: {stepStatuses.xai ? '✓' : '○'}
                 </span>
               </div>
             </div>

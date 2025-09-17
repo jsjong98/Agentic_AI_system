@@ -17,7 +17,12 @@ const Dashboard = ({
   serverStatus, 
   dataLoaded, 
   thresholdResults, 
-  weightResults, 
+  weightResults,
+  integrationResults,
+  supervisorResults,
+  xaiResults,
+  stepStatuses,
+  currentStep,
   onRefreshStatus,
   setLoading 
 }) => {
@@ -26,7 +31,7 @@ const Dashboard = ({
 
   useEffect(() => {
     loadSystemStats();
-  }, [thresholdResults, weightResults]);
+  }, [thresholdResults, weightResults, integrationResults, supervisorResults, xaiResults]);
 
   const loadSystemStats = async () => {
     try {
@@ -45,6 +50,36 @@ const Dashboard = ({
 
   const updateRecentActivity = () => {
     const activities = [];
+    
+    if (xaiResults) {
+      activities.push({
+        time: new Date().toLocaleTimeString(),
+        title: 'XAI 분석 완료',
+        description: '설명 가능한 AI 분석이 완료되었습니다',
+        status: 'success',
+        icon: <ExclamationCircleOutlined />
+      });
+    }
+    
+    if (supervisorResults) {
+      activities.push({
+        time: new Date().toLocaleTimeString(),
+        title: 'Supervisor 워크플로우 완료',
+        description: '다중 에이전트 협업 분석이 완료되었습니다',
+        status: 'success',
+        icon: <UserOutlined />
+      });
+    }
+    
+    if (integrationResults) {
+      activities.push({
+        time: new Date().toLocaleTimeString(),
+        title: 'Integration 분석 완료',
+        description: '통합 분석 및 리포트 생성이 완료되었습니다',
+        status: 'success',
+        icon: <BarChartOutlined />
+      });
+    }
     
     if (weightResults) {
       activities.push({
@@ -82,12 +117,15 @@ const Dashboard = ({
   // 전체 진행률 계산
   const calculateProgress = () => {
     let completed = 0;
-    const total = 4; // 서버연결, 데이터로드, 임계값계산, 가중치최적화
+    const total = 7; // 서버연결, 데이터로드, 임계값계산, 가중치최적화, Integration, Supervisor, XAI
     
     if (serverStatus) completed++;
     if (dataLoaded) completed++;
     if (thresholdResults) completed++;
     if (weightResults) completed++;
+    if (integrationResults) completed++;
+    if (supervisorResults) completed++;
+    if (xaiResults) completed++;
     
     return (completed / total) * 100;
   };
@@ -123,7 +161,7 @@ const Dashboard = ({
             '100%': '#87d068',
           }}
         />
-        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <Text type={serverStatus ? 'success' : 'secondary'}>
             {serverStatus ? '✅' : '⏳'} 서버 연결
           </Text>
@@ -135,6 +173,15 @@ const Dashboard = ({
           </Text>
           <Text type={weightResults ? 'success' : 'secondary'}>
             {weightResults ? '✅' : '⏳'} 가중치 최적화
+          </Text>
+          <Text type={integrationResults ? 'success' : 'secondary'}>
+            {integrationResults ? '✅' : '⏳'} Integration
+          </Text>
+          <Text type={supervisorResults ? 'success' : 'secondary'}>
+            {supervisorResults ? '✅' : '⏳'} Supervisor
+          </Text>
+          <Text type={xaiResults ? 'success' : 'secondary'}>
+            {xaiResults ? '✅' : '⏳'} XAI
           </Text>
         </div>
       </Card>
