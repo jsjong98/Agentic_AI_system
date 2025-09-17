@@ -165,6 +165,137 @@ export const apiService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // Integration API
+  async integrateResults(uploadedFiles) {
+    try {
+      const response = await apiClient.post('/integration/integrate', {
+        files: uploadedFiles
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async generateReport(reportConfig) {
+    try {
+      const response = await apiClient.post('/integration/generate_report', reportConfig);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Supervisor API
+  async startSupervisorSession(config) {
+    try {
+      const response = await apiClient.post('/supervisor/start_session', config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async runSupervisorAnalysis(sessionId, analysisConfig) {
+    try {
+      const response = await apiClient.post(`/supervisor/analyze/${sessionId}`, analysisConfig);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async runAgentCollaboration(sessionId) {
+    try {
+      const response = await apiClient.post(`/supervisor/collaborate/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async synthesizeResults(sessionId) {
+    try {
+      const response = await apiClient.post(`/supervisor/synthesize/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async pauseSupervisorSession(sessionId) {
+    try {
+      const response = await apiClient.post(`/supervisor/pause/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async resumeSupervisorSession(sessionId) {
+    try {
+      const response = await apiClient.post(`/supervisor/resume/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async stopSupervisorSession(sessionId) {
+    try {
+      const response = await apiClient.post(`/supervisor/stop/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // XAI API
+  async analyzeFeatureImportance(config) {
+    try {
+      const response = await apiClient.post('/xai/feature_importance', config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async analyzeSHAP(config) {
+    try {
+      const response = await apiClient.post('/xai/shap', config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async analyzeLIME(config) {
+    try {
+      const response = await apiClient.post('/xai/lime', config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async generateDecisionTree(config) {
+    try {
+      const response = await apiClient.post('/xai/decision_tree', config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  async generateCounterfactuals(config) {
+    try {
+      const response = await apiClient.post('/xai/counterfactuals', config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 

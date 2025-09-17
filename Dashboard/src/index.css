@@ -146,6 +146,98 @@ code {
   margin: 16px 0;
 }
 
+/* 타이핑 애니메이션 */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.typing-cursor {
+  animation: blink 1s infinite;
+  font-weight: bold;
+}
+
+.typing-text {
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* 에이전트 메시지 스타일 */
+.agent-message {
+  background: linear-gradient(135deg, #f0f2f5 0%, #e6f7ff 100%);
+  border-left: 4px solid #1890ff;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 8px 0;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 워크플로우 단계 애니메이션 */
+.workflow-step {
+  transition: all 0.3s ease;
+}
+
+.workflow-step.active {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(24, 144, 255, 0.3);
+}
+
+/* XAI 결과 카드 스타일 */
+.xai-card {
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.xai-card:hover {
+  border-color: #1890ff;
+  box-shadow: 0 8px 24px rgba(24, 144, 255, 0.15);
+}
+
+/* 특성 중요도 바 */
+.feature-importance-bar {
+  background: linear-gradient(90deg, #52c41a 0%, #1890ff 100%);
+  height: 8px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+/* 진행률 표시 개선 */
+.step-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f0f2f5;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.step-progress.completed {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.step-progress.in-progress {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+/* 반응형 디자인 */
 @media (max-width: 768px) {
   .dashboard-content {
     padding: 16px;
@@ -157,5 +249,13 @@ code {
   
   .metric-value {
     font-size: 2rem;
+  }
+  
+  .agent-message {
+    padding: 12px;
+  }
+  
+  .typing-text {
+    font-size: 14px;
   }
 }
