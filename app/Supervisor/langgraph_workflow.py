@@ -317,7 +317,7 @@ class SupervisorWorkflow:
         
         Args:
             worker_configs: 워커 설정
-            llm: LangChain LLM 인스턴스
+            llm: LangChain LLM 인스턴스 (gpt-5 사용)
             max_retry_count: 최대 재시도 횟수
             timeout_minutes: 타임아웃 (분)
         """
@@ -328,7 +328,12 @@ class SupervisorWorkflow:
             worker_configs = DEFAULT_WORKER_CONFIGS
         
         if llm is None:
-            llm = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0.1)
+            # OpenAI API 키가 없으면 None으로 설정
+            import os
+            if os.getenv("OPENAI_API_KEY"):
+                llm = ChatOpenAI(model="gpt-5", temperature=0.1)
+            else:
+                llm = None
         
         # 컴포넌트 초기화
         self.worker_integrator = WorkerIntegrator(worker_configs)

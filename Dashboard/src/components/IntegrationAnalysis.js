@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Button,
@@ -13,16 +13,12 @@ import {
   Table,
   Tag,
   Alert,
-  Spin,
-  Divider,
-  Space,
-  Tooltip
+  Space
 } from 'antd';
 import {
   UploadOutlined,
   FileTextOutlined,
   CheckCircleOutlined,
-  LoadingOutlined,
   ApiOutlined,
   BarChartOutlined,
   ExclamationCircleOutlined
@@ -30,7 +26,6 @@ import {
 import { apiService } from '../services/apiService';
 
 const { Title, Text, Paragraph } = Typography;
-const { Step } = Steps;
 const { Dragger } = Upload;
 
 const IntegrationAnalysis = ({
@@ -46,36 +41,36 @@ const IntegrationAnalysis = ({
   const [reportData, setReportData] = useState(null);
   const [progress, setProgress] = useState(0);
 
-  // 필요한 파일들 정의
+  // 필요한 파일들 정의 (올바른 순서: Structura → Cognita → Chronos → Sentio → Agora)
   const requiredFiles = [
     {
-      key: 'agora_results',
-      name: 'Agora 분석 결과',
-      description: '텍스트 분석 결과 파일',
-      accept: '.json,.csv'
-    },
-    {
-      key: 'chronos_results',
-      name: 'Chronos 분석 결과',
-      description: '시계열 분석 결과 파일',
+      key: 'structura_results',
+      name: 'Structura 분석 결과',
+      description: '정형 데이터 분석 결과 파일 (HR 이직 예측)',
       accept: '.json,.csv'
     },
     {
       key: 'cognita_results',
       name: 'Cognita 분석 결과',
-      description: '네트워크 분석 결과 파일',
+      description: '관계형 데이터 분석 결과 파일 (그래프 DB)',
+      accept: '.json,.csv'
+    },
+    {
+      key: 'chronos_results',
+      name: 'Chronos 분석 결과',
+      description: '시계열 데이터 분석 결과 파일',
       accept: '.json,.csv'
     },
     {
       key: 'sentio_results',
       name: 'Sentio 분석 결과',
-      description: '감정 분석 결과 파일',
+      description: '텍스트 감정 분석 결과 파일',
       accept: '.json,.csv'
     },
     {
-      key: 'structura_results',
-      name: 'Structura 분석 결과',
-      description: '구조적 분석 결과 파일',
+      key: 'agora_results',
+      name: 'Agora 분석 결과',
+      description: '외부 시장 분석 결과 파일',
       accept: '.json,.csv'
     }
   ];

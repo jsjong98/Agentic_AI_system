@@ -29,26 +29,7 @@ const Dashboard = ({
   const [systemStats, setSystemStats] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
 
-  useEffect(() => {
-    loadSystemStats();
-  }, [thresholdResults, weightResults, integrationResults, supervisorResults, xaiResults]);
-
-  const loadSystemStats = async () => {
-    try {
-      setLoading(true);
-      const results = await apiService.getResults();
-      setSystemStats(results.results);
-      
-      // 최근 활동 업데이트
-      updateRecentActivity();
-    } catch (error) {
-      console.error('시스템 통계 로드 실패:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateRecentActivity = () => {
+  const updateRecentActivity = React.useCallback(() => {
     const activities = [];
     
     if (xaiResults) {
@@ -112,7 +93,29 @@ const Dashboard = ({
     }
     
     setRecentActivity(activities);
-  };
+  }, [xaiResults, supervisorResults, integrationResults, weightResults, thresholdResults, dataLoaded]);
+
+  // 시스템 통계를 한 번만 로드하는 useEffect
+  useEffect(() => {
+    const loadSystemStats = async () => {
+      try {
+        setLoading(true);
+        const results = await apiService.getResults();
+        setSystemStats(results.results);
+      } catch (error) {
+        console.error('시스템 통계 로드 실패:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSystemStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 컴포넌트 마운트 시에만 한 번 실행
+
+  useEffect(() => {
+    updateRecentActivity();
+  }, [updateRecentActivity]);
 
   // 전체 진행률 계산
   const calculateProgress = () => {
@@ -138,7 +141,7 @@ const Dashboard = ({
       {!serverStatus && (
         <Alert
           message="서버 연결 필요"
-          description="Final_calc 백엔드 서버가 실행되지 않았습니다. 서버를 시작한 후 새로고침하세요."
+          description="Agentic AI System 백엔드 서버가 실행되지 않았습니다. 서버를 시작한 후 새로고침하세요."
           type="error"
           showIcon
           style={{ marginBottom: 24 }}
@@ -233,11 +236,11 @@ const Dashboard = ({
         <Col xs={24} sm={12} lg={6}>
           <Card className="metric-card">
             <Statistic
-              title="최적화 방법"
-              value={weightResults ? apiUtils.getMethodName(weightResults.method) : '미설정'}
+              title="활성 워커"
+              value={systemStats ? `${systemStats.active_workers}/${systemStats.total_workers}` : '0/5'}
               valueStyle={{ 
-                color: weightResults ? '#3f8600' : '#666',
-                fontSize: '1rem'
+                color: systemStats && systemStats.active_workers === systemStats.total_workers ? '#3f8600' : '#fa8c16',
+                fontSize: '1.2rem'
               }}
               prefix={<UserOutlined />}
             />
@@ -373,28 +376,61 @@ const Dashboard = ({
         </Col>
       </Row>
 
+      {/* 시스템 상태 */}
+      {systemStats && (
+        <Card title="시스템 상태" className="card-shadow" style={{ marginTop: 24 }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={8}>
+              <Statistic
+                title="총 작업 수"
+                value={systemStats.total_tasks}
+                valueStyle={{ color: '#1890ff' }}
+              />
+            </Col>
+            <Col xs={24} sm={8}>
+              <Statistic
+                title="완료된 작업"
+                value={systemStats.completed_tasks}
+                valueStyle={{ color: '#52c41a' }}
+              />
+            </Col>
+            <Col xs={24} sm={8}>
+              <Statistic
+                title="시스템 가동률"
+                value={systemStats.total_workers > 0 ? Math.round((systemStats.active_workers / systemStats.total_workers) * 100) : 0}
+                suffix="%"
+                valueStyle={{ 
+                  color: systemStats.active_workers === systemStats.total_workers ? '#52c41a' : '#fa8c16'
+                }}
+              />
+            </Col>
+          </Row>
+        </Card>
+      )}
+
       {/* 최근 활동 */}
       {recentActivity.length > 0 && (
         <Card title="최근 활동" className="card-shadow" style={{ marginTop: 24 }}>
-          <Timeline>
-            {recentActivity.map((activity, index) => (
-              <Timeline.Item
-                key={index}
-                dot={activity.icon}
-                color={activity.status === 'success' ? 'green' : 'blue'}
-              >
+          <Timeline
+            items={recentActivity.map((activity, index) => ({
+              key: index,
+              dot: activity.icon,
+              color: activity.status === 'success' ? 'green' : 'blue',
+              children: (
                 <div>
-                  <Text strong>{activity.title}</Text>
-                  <Text type="secondary" style={{ marginLeft: 8, fontSize: '12px' }}>
-                    {activity.time}
-                  </Text>
+                  <div>
+                    <Text strong>{activity.title}</Text>
+                    <Text type="secondary" style={{ marginLeft: 8, fontSize: '12px' }}>
+                      {activity.time}
+                    </Text>
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary">{activity.description}</Text>
+                  </div>
                 </div>
-                <div style={{ marginTop: 4 }}>
-                  <Text type="secondary">{activity.description}</Text>
-                </div>
-              </Timeline.Item>
-            ))}
-          </Timeline>
+              )
+            }))}
+          />
         </Card>
       )}
 

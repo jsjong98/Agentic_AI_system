@@ -62,16 +62,27 @@ def check_worker_availability():
     
     for worker_name, base_url in workers.items():
         try:
-            health_url = urljoin(base_url, '/health')
-            response = requests.get(health_url, timeout=5)
+            # 먼저 /health를 시도하고, 실패하면 /api/health를 시도
+            health_urls = ['/health', '/api/health']
+            success = False
             
-            if response.status_code == 200:
-                print(f"  ✅ {worker_name}: {base_url} - 온라인")
-                available_workers.append(worker_name)
-            else:
-                print(f"  ❌ {worker_name}: {base_url} - 오프라인 (HTTP {response.status_code})")
+            for health_path in health_urls:
+                try:
+                    health_url = urljoin(base_url, health_path)
+                    response = requests.get(health_url, timeout=5)
+                    
+                    if response.status_code == 200:
+                        print(f"  ✅ {worker_name}: {base_url} - 온라인")
+                        available_workers.append(worker_name)
+                        success = True
+                        break
+                except requests.exceptions.RequestException:
+                    continue
+            
+            if not success:
+                print(f"  ❌ {worker_name}: {base_url} - 오프라인")
                 
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             print(f"  ❌ {worker_name}: {base_url} - 연결 실패 ({str(e)[:50]}...)")
     
     print(f"\n📊 사용 가능한 워커: {len(available_workers)}/5")

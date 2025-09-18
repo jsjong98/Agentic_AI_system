@@ -1,25 +1,35 @@
 import React, { useState, useCallback } from 'react';
-import { Card, Upload, Button, message, Alert, Table, Typography, Row, Col, Statistic, Progress } from 'antd';
+import { Card, Button, message, Alert, Table, Typography, Row, Col, Statistic, Progress, Form, Input } from 'antd';
 import { 
   InboxOutlined, 
   UploadOutlined, 
   FileTextOutlined, 
   CheckCircleOutlined,
-  ExclamationCircleOutlined 
+  ExclamationCircleOutlined,
+  DatabaseOutlined,
+  LinkOutlined
 } from '@ant-design/icons';
 import { useDropzone } from 'react-dropzone';
 import Papa from 'papaparse';
 import { apiService, apiUtils } from '../services/apiService';
 
-const { Dragger } = Upload;
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
-const FileUpload = ({ onDataLoaded, setLoading }) => {
+const FileUpload = ({ onDataLoaded, setLoading, moduleType = 'default' }) => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileData, setFileData] = useState(null);
   const [dataPreview, setDataPreview] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [validationResults, setValidationResults] = useState(null);
+  
+  // Neo4j 연결 관련 상태 (Cognita용)
+  const [neo4jConfig, setNeo4jConfig] = useState({
+    uri: 'bolt://44.212.67.74:7687',
+    username: 'neo4j',
+    password: 'legs-augmentations-cradle'
+  });
+  const [neo4jConnecting, setNeo4jConnecting] = useState(false);
+  const [neo4jConnected, setNeo4jConnected] = useState(false);
 
   // 파일 드롭 핸들러
   const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
@@ -32,6 +42,7 @@ const FileUpload = ({ onDataLoaded, setLoading }) => {
     if (file) {
       handleFileSelect(file);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -42,8 +53,49 @@ const FileUpload = ({ onDataLoaded, setLoading }) => {
       'text/plain': ['.csv']
     },
     multiple: false,
-    maxSize: 50 * 1024 * 1024 // 50MB
+    maxSize: 500 * 1024 * 1024 // 500MB
   });
+
+  // Neo4j 연결 테스트 함수
+  const handleNeo4jConnect = async () => {
+    setNeo4jConnecting(true);
+    try {
+      const response = await fetch('/api/cognita/setup/neo4j', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(neo4jConfig)
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setNeo4jConnected(true);
+        message.success('Neo4j 데이터베이스에 성공적으로 연결되었습니다!');
+        
+        // 연결 성공 시 데이터 로드됨을 알림
+        if (onDataLoaded) {
+          onDataLoaded({
+            type: 'neo4j',
+            config: neo4jConfig,
+            connected: true,
+            employees: result.employees || [],
+            departments: result.departments || []
+          });
+        }
+      } else {
+        message.error(`연결 실패: ${result.error}`);
+        setNeo4jConnected(false);
+      }
+    } catch (error) {
+      console.error('Neo4j 연결 오류:', error);
+      message.error('Neo4j 연결 중 오류가 발생했습니다.');
+      setNeo4jConnected(false);
+    } finally {
+      setNeo4jConnecting(false);
+    }
+  };
 
   // 파일 선택 처리
   const handleFileSelect = (file) => {
@@ -228,32 +280,84 @@ const FileUpload = ({ onDataLoaded, setLoading }) => {
 
   return (
     <div>
-      {/* 파일 업로드 영역 */}
-      <Card title="데이터 파일 업로드" className="card-shadow" style={{ marginBottom: 24 }}>
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={16}>
-            <div {...getRootProps()} className={`upload-area ${isDragActive ? 'dragover' : ''}`}>
-              <input {...getInputProps()} />
-              <p className="ant-upload-drag-icon">
-                <InboxOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
-              </p>
-              <p className="ant-upload-text">
-                {isDragActive ? '파일을 여기에 놓으세요' : '파일을 드래그하거나 클릭하여 업로드'}
-              </p>
-              <p className="ant-upload-hint">
-                CSV 형식의 HR 데이터 파일을 업로드하세요. (최대 50MB)
-              </p>
-              {uploadedFile && (
-                <div style={{ marginTop: 16, padding: '12px', background: '#f0f8ff', borderRadius: '6px' }}>
-                  <FileTextOutlined style={{ color: '#1890ff', marginRight: '8px' }} />
-                  <Text strong>{uploadedFile.name}</Text>
-                  <Text type="secondary" style={{ marginLeft: '8px' }}>
-                    ({apiUtils.formatFileSize(uploadedFile.size)})
-                  </Text>
-                </div>
-              )}
-            </div>
-          </Col>
+      {/* Cognita 모듈용 Neo4j 연결 설정 */}
+      {moduleType === 'cognita' ? (
+        <Card title="Neo4j 데이터베이스 연결" className="card-shadow" style={{ marginBottom: 24 }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={16}>
+              <Form layout="vertical">
+                <Form.Item label="Neo4j URI" required>
+                  <Input
+                    value={neo4jConfig.uri}
+                    onChange={(e) => setNeo4jConfig({...neo4jConfig, uri: e.target.value})}
+                    placeholder="bolt://localhost:7687"
+                    prefix={<DatabaseOutlined />}
+                  />
+                </Form.Item>
+                <Form.Item label="사용자명" required>
+                  <Input
+                    value={neo4jConfig.username}
+                    onChange={(e) => setNeo4jConfig({...neo4jConfig, username: e.target.value})}
+                    placeholder="neo4j"
+                  />
+                </Form.Item>
+                <Form.Item label="비밀번호" required>
+                  <Input.Password
+                    value={neo4jConfig.password}
+                    onChange={(e) => setNeo4jConfig({...neo4jConfig, password: e.target.value})}
+                    placeholder="password"
+                  />
+                </Form.Item>
+                <Form.Item>
+                  <Button
+                    type="primary"
+                    icon={<LinkOutlined />}
+                    onClick={handleNeo4jConnect}
+                    loading={neo4jConnecting}
+                    disabled={neo4jConnected}
+                  >
+                    {neo4jConnected ? '연결됨' : '연결 테스트'}
+                  </Button>
+                  {neo4jConnected && (
+                    <Alert
+                      message="Neo4j 데이터베이스에 성공적으로 연결되었습니다!"
+                      type="success"
+                      showIcon
+                      style={{ marginTop: 16 }}
+                    />
+                  )}
+                </Form.Item>
+              </Form>
+            </Col>
+          </Row>
+        </Card>
+      ) : (
+        /* 기본 파일 업로드 영역 */
+        <Card title="데이터 파일 업로드" className="card-shadow" style={{ marginBottom: 24 }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={16}>
+              <div {...getRootProps()} className={`upload-area ${isDragActive ? 'dragover' : ''}`}>
+                <input {...getInputProps()} />
+                <p className="ant-upload-drag-icon">
+                  <InboxOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
+                </p>
+                <p className="ant-upload-text">
+                  {isDragActive ? '파일을 여기에 놓으세요' : '파일을 드래그하거나 클릭하여 업로드'}
+                </p>
+                <p className="ant-upload-hint">
+                  CSV 형식의 HR 데이터 파일을 업로드하세요. (최대 500MB)
+                </p>
+                {uploadedFile && (
+                  <div style={{ marginTop: 16, padding: '12px', background: '#f0f8ff', borderRadius: '6px' }}>
+                    <FileTextOutlined style={{ color: '#1890ff', marginRight: '8px' }} />
+                    <Text strong>{uploadedFile.name}</Text>
+                    <Text type="secondary" style={{ marginLeft: '8px' }}>
+                      ({apiUtils.formatFileSize(uploadedFile.size)})
+                    </Text>
+                  </div>
+                )}
+              </div>
+            </Col>
           
           <Col xs={24} lg={8}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
@@ -295,9 +399,10 @@ const FileUpload = ({ onDataLoaded, setLoading }) => {
           </div>
         )}
       </Card>
+      )}
 
       {/* 데이터 유효성 검사 결과 */}
-      {validationResults && (
+      {moduleType !== 'cognita' && validationResults && (
         <Card title="데이터 유효성 검사" className="card-shadow" style={{ marginBottom: 24 }}>
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={8}>
@@ -397,7 +502,7 @@ const FileUpload = ({ onDataLoaded, setLoading }) => {
       )}
 
       {/* 로드된 데이터 정보 */}
-      {fileData && (
+      {moduleType !== 'cognita' && fileData && (
         <Card title="로드된 데이터 정보" className="card-shadow">
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={8}>

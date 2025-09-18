@@ -1,28 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Typography, notification, Spin } from 'antd';
+import { Layout, Menu, Typography, notification } from 'antd';
 import {
   DashboardOutlined,
-  UploadOutlined,
-  CalculatorOutlined,
-  SettingOutlined,
-  UserOutlined,
-  BarChartOutlined,
-  FileTextOutlined,
   ApiOutlined,
   RobotOutlined,
-  ExperimentOutlined
+  BarChartOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 
 import Dashboard from './components/Dashboard';
-import FileUpload from './components/FileUpload';
-import ThresholdCalculation from './components/ThresholdCalculation';
-import WeightOptimization from './components/WeightOptimization';
-import EmployeePrediction from './components/EmployeePrediction';
-import ResultVisualization from './components/ResultVisualization';
 import ExportResults from './components/ExportResults';
-import IntegrationAnalysis from './components/IntegrationAnalysis';
-import SupervisorWorkflow from './components/SupervisorWorkflow';
-import XAIResults from './components/XAIResults';
+import BatchAnalysis from './components/BatchAnalysis';
+import PostAnalysis from './components/PostAnalysis';
+import RelationshipAnalysis from './components/RelationshipAnalysis';
 import { apiService } from './services/apiService';
 
 const { Header, Sider, Content } = Layout;
@@ -30,77 +20,99 @@ const { Title } = Typography;
 
 const App = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedKey, setSelectedKey] = useState('dashboard');
+  const [selectedKey, setSelectedKey] = useState('batch');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
-  const [thresholdResults, setThresholdResults] = useState(null);
-  const [weightResults, setWeightResults] = useState(null);
-  const [integrationResults, setIntegrationResults] = useState(null);
-  const [supervisorResults, setSupervisorResults] = useState(null);
-  const [xaiResults, setXAIResults] = useState(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [stepStatuses, setStepStatuses] = useState({
-    upload: false,
-    threshold: false,
-    weight: false,
-    prediction: false,
-    integration: false,
-    supervisor: false,
-    xai: false
-  });
+  const [dataLoaded] = useState(true); // 데이터 로딩 상태를 기본적으로 활성화
 
-  // 메뉴 아이템
+  // 전역 에러 핸들러
+  useEffect(() => {
+    const handleUnhandledRejection = (event) => {
+      // Chrome 확장 프로그램 관련 오류는 완전히 무시
+      if (event.reason && event.reason.message && 
+          (event.reason.message.includes('Extension context invalidated') ||
+           event.reason.message.includes('message channel closed') ||
+           event.reason.message.includes('disconnected port object') ||
+           event.reason.message.includes('Attempting to use a disconnected port') ||
+           event.reason.message.includes('Could not establish connection') ||
+           event.reason.message.includes('SecretSessionError'))) {
+        event.preventDefault();
+        return;
+      }
+      
+      // Chrome extension URL 관련 오류도 무시
+      if (event.reason && event.reason.stack && 
+          event.reason.stack.includes('chrome-extension://')) {
+        event.preventDefault();
+        return;
+      }
+      
+      console.error('Unhandled promise rejection:', event.reason);
+      notification.error({
+        message: '예상치 못한 오류',
+        description: '시스템에서 예상치 못한 오류가 발생했습니다.',
+        duration: 4.5,
+      });
+    };
+
+    const handleError = (event) => {
+      // Chrome 확장 프로그램 관련 오류는 완전히 무시
+      if (event.error && event.error.message && 
+          (event.error.message.includes('Extension context invalidated') ||
+           event.error.message.includes('message channel closed') ||
+           event.error.message.includes('disconnected port object') ||
+           event.error.message.includes('Attempting to use a disconnected port') ||
+           event.error.message.includes('Could not establish connection') ||
+           event.error.message.includes('SecretSessionError'))) {
+        event.preventDefault();
+        return;
+      }
+      
+      // Chrome extension URL 관련 오류도 무시
+      if (event.error && event.error.stack && 
+          event.error.stack.includes('chrome-extension://')) {
+        event.preventDefault();
+        return;
+      }
+      
+      console.error('Global error:', event.error);
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    window.addEventListener('error', handleError);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener('error', handleError);
+    };
+  }, []);
+
+  // 메뉴 아이템 - 배치 분석 중심으로 단순화
   const menuItems = [
+    {
+      key: 'batch',
+      icon: <RobotOutlined />,
+      label: '🎯 배치 분석 (메인)',
+    },
     {
       key: 'dashboard',
       icon: <DashboardOutlined />,
-      label: '대시보드',
+      label: '📊 시스템 현황',
     },
     {
-      key: 'upload',
-      icon: <UploadOutlined />,
-      label: '데이터 업로드',
-    },
-    {
-      key: 'threshold',
-      icon: <CalculatorOutlined />,
-      label: '임계값 계산',
-    },
-    {
-      key: 'weight',
-      icon: <SettingOutlined />,
-      label: '가중치 최적화',
-    },
-    {
-      key: 'prediction',
-      icon: <UserOutlined />,
-      label: '직원 예측',
-    },
-    {
-      key: 'integration',
+      key: 'cognita',
       icon: <ApiOutlined />,
-      label: 'Integration 분석',
+      label: '🕸️ 개별 관계분석',
     },
     {
-      key: 'supervisor',
-      icon: <RobotOutlined />,
-      label: 'Supervisor 워크플로우',
-    },
-    {
-      key: 'xai',
-      icon: <ExperimentOutlined />,
-      label: 'XAI 결과',
-    },
-    {
-      key: 'visualization',
+      key: 'post-analysis',
       icon: <BarChartOutlined />,
-      label: '결과 시각화',
+      label: '📈 사후 분석',
     },
     {
       key: 'export',
       icon: <FileTextOutlined />,
-      label: '결과 내보내기',
+      label: '📋 결과 내보내기',
     },
   ];
 
@@ -115,98 +127,20 @@ const App = () => {
       setServerStatus(status);
       notification.success({
         message: '서버 연결 성공',
-        description: `${status.service} v${status.version} 연결됨`,
+        description: 'Agentic AI System이 정상적으로 작동 중입니다.',
         duration: 3,
       });
     } catch (error) {
+      console.error('서버 상태 확인 실패:', error);
       setServerStatus(null);
       notification.error({
         message: '서버 연결 실패',
-        description: 'Final_calc 서버가 실행 중인지 확인해주세요.',
-        duration: 5,
+        description: 'Agentic AI System 백엔드 서버가 실행되지 않았습니다. 서버를 시작한 후 새로고침하세요.',
+        duration: 0,
       });
     }
   };
 
-  // 단계 상태 업데이트 함수
-  const updateStepStatus = (step, status) => {
-    setStepStatuses(prev => ({
-      ...prev,
-      [step]: status
-    }));
-  };
-
-  // 다음 단계로 이동
-  const moveToNextStep = () => {
-    setCurrentStep(prev => Math.min(prev + 1, 6));
-  };
-
-  // 데이터 로드 성공 콜백
-  const onDataLoaded = (success) => {
-    setDataLoaded(success);
-    updateStepStatus('upload', success);
-    if (success) {
-      notification.success({
-        message: '데이터 로드 성공',
-        description: '데이터가 성공적으로 로드되었습니다.',
-      });
-      moveToNextStep();
-    }
-  };
-
-  // 임계값 계산 완료 콜백
-  const onThresholdCalculated = (results) => {
-    setThresholdResults(results);
-    updateStepStatus('threshold', true);
-    notification.success({
-      message: '임계값 계산 완료',
-      description: '모든 Score의 최적 임계값이 계산되었습니다.',
-    });
-    moveToNextStep();
-  };
-
-  // 가중치 최적화 완료 콜백
-  const onWeightOptimized = (results) => {
-    setWeightResults(results);
-    updateStepStatus('weight', true);
-    notification.success({
-      message: '가중치 최적화 완료',
-      description: `${results.method} 방법으로 최적화가 완료되었습니다.`,
-    });
-    moveToNextStep();
-  };
-
-  // Integration 분석 완료 콜백
-  const onIntegrationCompleted = (results) => {
-    setIntegrationResults(results);
-    updateStepStatus('integration', true);
-    notification.success({
-      message: 'Integration 분석 완료',
-      description: '통합 분석이 성공적으로 완료되었습니다.',
-    });
-    moveToNextStep();
-  };
-
-  // Supervisor 워크플로우 완료 콜백
-  const onSupervisorCompleted = (results) => {
-    setSupervisorResults(results);
-    updateStepStatus('supervisor', true);
-    notification.success({
-      message: 'Supervisor 워크플로우 완료',
-      description: '슈퍼바이저 워크플로우가 성공적으로 완료되었습니다.',
-    });
-    moveToNextStep();
-  };
-
-  // XAI 결과 완료 콜백
-  const onXAICompleted = (results) => {
-    setXAIResults(results);
-    updateStepStatus('xai', true);
-    notification.success({
-      message: 'XAI 분석 완료',
-      description: 'XAI 분석이 성공적으로 완료되었습니다.',
-    });
-  };
 
   // 로딩 상태 관리
   const setGlobalLoading = (isLoading) => {
@@ -220,16 +154,15 @@ const App = () => {
       setLoading: setGlobalLoading,
       serverStatus,
       dataLoaded,
-      thresholdResults,
-      weightResults,
-      integrationResults,
-      supervisorResults,
-      xaiResults,
-      currentStep,
-      stepStatuses,
     };
 
     switch (selectedKey) {
+      case 'batch':
+        return (
+          <BatchAnalysis
+            {...commonProps}
+          />
+        );
       case 'dashboard':
         return (
           <Dashboard
@@ -237,57 +170,16 @@ const App = () => {
             onRefreshStatus={checkServerStatus}
           />
         );
-      case 'upload':
+      case 'cognita':
         return (
-          <FileUpload
+          <RelationshipAnalysis
             {...commonProps}
-            onDataLoaded={onDataLoaded}
+            batchResults={localStorage.getItem('batchAnalysisResults') ? JSON.parse(localStorage.getItem('batchAnalysisResults')) : null}
           />
         );
-      case 'threshold':
+      case 'post-analysis':
         return (
-          <ThresholdCalculation
-            {...commonProps}
-            onThresholdCalculated={onThresholdCalculated}
-          />
-        );
-      case 'weight':
-        return (
-          <WeightOptimization
-            {...commonProps}
-            onWeightOptimized={onWeightOptimized}
-          />
-        );
-      case 'prediction':
-        return (
-          <EmployeePrediction
-            {...commonProps}
-          />
-        );
-      case 'integration':
-        return (
-          <IntegrationAnalysis
-            {...commonProps}
-            onIntegrationCompleted={onIntegrationCompleted}
-          />
-        );
-      case 'supervisor':
-        return (
-          <SupervisorWorkflow
-            {...commonProps}
-            onSupervisorCompleted={onSupervisorCompleted}
-          />
-        );
-      case 'xai':
-        return (
-          <XAIResults
-            {...commonProps}
-            onXAICompleted={onXAICompleted}
-          />
-        );
-      case 'visualization':
-        return (
-          <ResultVisualization
+          <PostAnalysis
             {...commonProps}
           />
         );
@@ -298,7 +190,11 @@ const App = () => {
           />
         );
       default:
-        return <Dashboard {...commonProps} />;
+        return (
+          <BatchAnalysis
+            {...commonProps}
+          />
+        );
     }
   };
 
@@ -310,135 +206,101 @@ const App = () => {
         collapsed={collapsed}
         onCollapse={setCollapsed}
         theme="light"
-        width={250}
+        width={280}
         style={{
           boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
-          zIndex: 100,
         }}
       >
         <div style={{ 
-          padding: '16px', 
+          padding: '20px 16px', 
           textAlign: 'center',
           borderBottom: '1px solid #f0f0f0',
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white'
+          color: 'white',
+          height: '84px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center'
         }}>
-          <Title level={4} style={{ color: 'white', margin: 0 }}>
-            {collapsed ? 'FC' : 'Final_calc'}
+          <Title level={4} style={{ margin: 0, color: 'white' }}>
+            Retain Sentinel 360
           </Title>
-          {!collapsed && (
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>
-              HR Attrition 예측 시스템
-            </div>
-          )}
+          <div style={{ fontSize: '12px', opacity: 0.9 }}>
+            AI 기반 이직 예측 시스템
+          </div>
         </div>
         
         <Menu
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={menuItems}
           onClick={({ key }) => setSelectedKey(key)}
-          style={{ border: 'none', paddingTop: '16px' }}
+          items={menuItems}
+          style={{ 
+            border: 'none',
+            fontSize: '14px',
+            paddingTop: '8px'
+          }}
         />
-        
-        {/* 서버 상태 표시 */}
-        {!collapsed && (
-          <div style={{ 
-            position: 'absolute', 
-            bottom: '16px', 
-            left: '16px', 
-            right: '16px',
-            padding: '12px',
-            background: serverStatus ? '#f6ffed' : '#fff2f0',
-            border: `1px solid ${serverStatus ? '#b7eb8f' : '#ffccc7'}`,
-            borderRadius: '6px',
-            fontSize: '12px'
-          }}>
-            <div style={{ 
-              color: serverStatus ? '#52c41a' : '#ff4d4f',
-              fontWeight: 'bold'
-            }}>
-              {serverStatus ? '🟢 서버 연결됨' : '🔴 서버 연결 안됨'}
-            </div>
-            {serverStatus && (
-              <div style={{ color: '#666', marginTop: '4px' }}>
-                {serverStatus.service} v{serverStatus.version}
-              </div>
-            )}
-          </div>
-        )}
       </Sider>
 
-      {/* 메인 레이아웃 */}
+      {/* 메인 콘텐츠 */}
       <Layout>
-        {/* 헤더 */}
-        <Header className="dashboard-header">
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            height: '100%'
-          }}>
-            <Title level={3} style={{ color: 'white', margin: 0 }}>
-              {menuItems.find(item => item.key === selectedKey)?.label || '대시보드'}
-            </Title>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {/* 상태 표시 */}
-              <div style={{ display: 'flex', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
-                <span style={{ 
-                  color: stepStatuses.upload ? '#52c41a' : '#faad14',
-                  fontWeight: 'bold'
-                }}>
-                  📊 데이터: {stepStatuses.upload ? '✓' : '○'}
-                </span>
-                <span style={{ 
-                  color: stepStatuses.threshold ? '#52c41a' : '#faad14',
-                  fontWeight: 'bold'
-                }}>
-                  🎯 임계값: {stepStatuses.threshold ? '✓' : '○'}
-                </span>
-                <span style={{ 
-                  color: stepStatuses.weight ? '#52c41a' : '#faad14',
-                  fontWeight: 'bold'
-                }}>
-                  ⚖️ 가중치: {stepStatuses.weight ? '✓' : '○'}
-                </span>
-                <span style={{ 
-                  color: stepStatuses.integration ? '#52c41a' : '#faad14',
-                  fontWeight: 'bold'
-                }}>
-                  🔗 통합: {stepStatuses.integration ? '✓' : '○'}
-                </span>
-                <span style={{ 
-                  color: stepStatuses.supervisor ? '#52c41a' : '#faad14',
-                  fontWeight: 'bold'
-                }}>
-                  🤖 워크플로우: {stepStatuses.supervisor ? '✓' : '○'}
-                </span>
-                <span style={{ 
-                  color: stepStatuses.xai ? '#52c41a' : '#faad14',
-                  fontWeight: 'bold'
-                }}>
-                  🔬 XAI: {stepStatuses.xai ? '✓' : '○'}
-                </span>
-              </div>
+        <Header style={{ 
+          background: '#fff', 
+          padding: '0 24px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          height: '64px',
+          lineHeight: '64px'
+        }}>
+          <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+            대시보드
+          </Title>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {/* 서버 상태 표시 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: serverStatus ? '#52c41a' : '#ff4d4f'
+              }} />
+              <span style={{ fontSize: '14px', color: '#666' }}>
+                {serverStatus ? '서버 연결됨' : '서버 연결 실패'}
+              </span>
             </div>
+            
+            {/* 새로고침 버튼 */}
+            <button
+              onClick={checkServerStatus}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: '16px',
+                color: '#1890ff'
+              }}
+              title="서버 상태 새로고침"
+            >
+              🔄 다시 확인
+            </button>
           </div>
         </Header>
-
-        {/* 컨텐츠 */}
-        <Content className="dashboard-content">
+        
+        <Content style={{ 
+          margin: '16px 24px',
+          padding: '24px',
+          background: '#fff',
+          borderRadius: '8px',
+          overflow: 'auto',
+          minHeight: 'calc(100vh - 64px - 32px)'
+        }}>
           {renderContent()}
         </Content>
       </Layout>
-
-      {/* 전역 로딩 오버레이 */}
-      {loading && (
-        <div className="loading-overlay">
-          <Spin size="large" tip="처리 중입니다..." />
-        </div>
-      )}
     </Layout>
   );
 };

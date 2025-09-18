@@ -1,0 +1,49 @@
+{
+  "agora_result": {
+    "agent_type": "agora",
+    "analysis_type": "individual",
+    "market_analysis": {
+      "compensation_gap": 0.9991329199095462,
+      "job_role": "Sales Executive",
+      "market_pressure_index": 0.7961456565068004,
+      "risk_level": "HIGH"
+    }
+  },
+  "chronos_result": null,
+  "cognita_result": {
+    "agent_type": "cognita",
+    "analysis_type": "individual",
+    "risk_analysis": {
+      "analysis_timestamp": "2025-09-18T11:22:10.606220",
+      "employee_id": "1",
+      "manager_instability_score": 0.8,
+      "network_centrality_score": 0.7,
+      "network_stats": {
+        "avg_strength": 1.0,
+        "degree_centrality": 1.0,
+        "direct_connections": 25,
+        "project_centrality": 0.0,
+        "quality_score": 0.5,
+        "strength_centrality": 1.0
+      },
+      "overall_risk_score": 0.53,
+      "risk_category": "MEDIUM",
+      "risk_factors": [
+        "\uad00\ub9ac\uc790_\ubd88\uc548\uc815\uc131"
+      ],
+      "social_isolation_index": 0.6,
+      "team_volatility_index": 0.3
+    }
+  },
+  "combined_analysis": null,
+  "error_message": null,
+  "execution_time": 1.8362007141113281,
+  "saved_path": "results\\departments\\Sales\\job_roles\\Sales_Executive\\positions\\Sales_Executive\\employees\\employee_1",
+  "sentio_result": null,
+  "status": "completed",
+  "structura_result": null,
+  "task_id": "individual_1758162128769",
+  "task_type": "individual_analysis",
+  "timestamp": "2025-09-18T11:22:08.770539",
+  "visualizations_available": []
+}

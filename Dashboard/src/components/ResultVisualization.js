@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, Row, Col, Select, Typography, Statistic, Alert } from 'antd';
-import { BarChartOutlined, PieChartOutlined, LineChartOutlined } from '@ant-design/icons';
+import { BarChartOutlined } from '@ant-design/icons';
 import { 
   BarChart, 
   Bar, 

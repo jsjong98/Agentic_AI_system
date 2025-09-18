@@ -7,11 +7,16 @@ Agentic AI System 통합 실행 스크립트
 
 import os
 import sys
+import subprocess
+import threading
+import time
 from pathlib import Path
 
 # 현재 디렉토리를 Python 경로에 추가
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
+
+# 단순화된 아키텍처: 마스터 서버에서 모든 기능을 통합 제공
 
 def main():
     """Agentic AI System 실행 메인 함수"""
@@ -21,9 +26,17 @@ def main():
     print("=" * 70)
     
     # 환경 변수 설정
-    os.environ.setdefault("NEO4J_URI", "bolt://54.162.43.24:7687")
+    os.environ.setdefault("NEO4J_URI", "bolt://44.212.67.74:7687")
     os.environ.setdefault("NEO4J_USERNAME", "neo4j")
-    os.environ.setdefault("NEO4J_PASSWORD", "resident-success-moss")
+    os.environ.setdefault("NEO4J_PASSWORD", "legs-augmentations-cradle")
+    
+    # OpenAI API 키 확인 및 안내
+    if not os.getenv("OPENAI_API_KEY"):
+        print("⚠️ 경고: OPENAI_API_KEY 환경변수가 설정되지 않았습니다.")
+        print("   Supervisor, Integration, Sentio, Agora의 LLM 기능이 제한됩니다.")
+        print("   다음 명령어로 설정하세요:")
+        print("   export OPENAI_API_KEY='your-api-key-here'")
+        print()
     
     # 서버 설정
     host = os.getenv("HOST", "0.0.0.0")
@@ -35,10 +48,10 @@ def main():
     print(f"🔄 디버그 모드: {'활성화' if debug else '비활성화'}")
     print()
     
-    print("🏗️ 에이전틱 AI 아키텍처:")
+    print("🏗️ 통합 AI 아키텍처:")
     print("┌─────────────────────────────────────────────────────────────┐")
-    print("│                    Supervisor 에이전트                      │")
-    print("│                      (향후 구현)                           │")
+    print("│                     마스터 서버 (포트 8000)                 │")
+    print("│                        ✅ 통합 구현                        │")
     print("├─────────────────────────────────────────────────────────────┤")
     print("│  워커1     │  워커2     │  워커3     │  워커4     │  워커5   │")
     print("│  정형      │  관계형    │  시계열    │  텍스트    │  외부    │")
@@ -46,9 +59,6 @@ def main():
     print("│  분석      │  분석      │  분석      │  분석      │  분석    │")
     print("│  ✅       │  ✅       │  ✅       │  ✅       │  ✅     │")
     print("└─────────────────────────────────────────────────────────────┘")
-    print("                           │")
-    print("                    최종 종합 에이전트")
-    print("                      (향후 구현)")
     print()
     
     print("현재 구현된 워커 에이전트:")
@@ -70,7 +80,7 @@ def main():
     print("  📝 워커 에이전트 4: Sentio (텍스트 감정 분석)")
     print("     - NLP 기반 퇴직 위험 신호 탐지")
     print("     - 키워드 분석 및 감정 점수 계산")
-    print("     - GPT-4 기반 페르소나별 텍스트 생성")
+    print("     - GPT-5 기반 페르소나별 텍스트 생성")
     print()
     print("  🌍 워커 에이전트 5: Agora (외부 시장 분석)")
     print("     - 시장 압력 지수 및 보상 격차 분석")
@@ -78,16 +88,19 @@ def main():
     print("     - LLM 기반 시장 상황 해석")
     print()
     
-    print("향후 확장 예정:")
-    print("  ⏳ Supervisor 에이전트: 전체 워커 조정")
-    print("  ⏳ 최종 종합 에이전트: 결과 통합")
+    print("통합 시스템:")
+    print("  🎯 마스터 서버: 모든 에이전트 기능을 통합 제공")
+    print("     - 5개 워커 에이전트 내장")
+    print("     - 결과 통합 및 최적화")
+    print("     - 단일 포트(8000)에서 모든 API 제공")
     print()
     
     print("주요 API 엔드포인트:")
-    print(f"  • 시스템 상태: http://{host}:{port}/api/health")
-    print(f"  • 워커 상태: http://{host}:{port}/api/workers/status")
-    print(f"  • 개별 분석: http://{host}:{port}/api/analyze/individual")
-    print(f"  • 부서 분석: http://{host}:{port}/api/analyze/department")
+    print(f"  📡 마스터 서버 (포트 {port}):")
+    print(f"    • 시스템 상태: http://{host}:{port}/api/health")
+    print(f"    • 워커 상태: http://{host}:{port}/api/workers/status")
+    print(f"    • 개별 분석: http://{host}:{port}/api/analyze/individual")
+    print(f"    • 부서 분석: http://{host}:{port}/api/analyze/department")
     print()
     
     print("React 연동 예시:")
@@ -126,7 +139,8 @@ def main():
     print("=" * 70)
     
     try:
-        # Agentic Master Server 실행
+        print("🎯 마스터 서버 시작 중...")
+        # 마스터 서버만 실행 (모든 기능을 통합)
         from agentic_master_server import run_server
         run_server(host=host, port=port, debug=debug)
         

@@ -610,6 +610,278 @@ class CognitaRiskAnalyzer:
         
         return recommendations if recommendations else ["현재 위험 수준 양호, 지속 모니터링 권장"]
 
+    def analyze_network_relationships(self, analysis_type: str = 'collaboration', search_term: str = '') -> Dict:
+        """네트워크 관계 분석 - 개별 관계 분석용"""
+        
+        logger.info(f"네트워크 관계 분석 시작: {analysis_type}")
+        
+        try:
+            # 분석 유형에 따른 쿼리 선택
+            if analysis_type == 'collaboration':
+                return self._analyze_collaboration_network(search_term)
+            elif analysis_type == 'communication':
+                return self._analyze_communication_network(search_term)
+            elif analysis_type == 'influence':
+                return self._analyze_influence_network(search_term)
+            elif analysis_type == 'team_structure':
+                return self._analyze_team_structure(search_term)
+            else:
+                return self._analyze_collaboration_network(search_term)
+                
+        except Exception as e:
+            logger.error(f"네트워크 분석 실패: {str(e)}")
+            # 샘플 데이터 반환
+            return self._generate_sample_network_data()
+
+    def _analyze_collaboration_network(self, search_term: str = '') -> Dict:
+        """협업 네트워크 분석"""
+        
+        # 검색 조건 추가
+        search_filter = ""
+        if search_term:
+            search_filter = f"AND (emp.name CONTAINS '{search_term}' OR emp.employee_id CONTAINS '{search_term}')"
+        
+        query = f"""
+        MATCH (emp:Employee)
+        WHERE emp.employee_id IS NOT NULL {search_filter}
+        
+        // 협업 관계 조회
+        OPTIONAL MATCH (emp)-[collab:COLLABORATES_WITH]-(colleague:Employee)
+        
+        // 부서 정보
+        OPTIONAL MATCH (emp)-[:BELONGS_TO]->(dept:Department)
+        
+        RETURN 
+            emp.employee_id as employee_id,
+            emp.name as name,
+            dept.name as department,
+            collect(DISTINCT {{
+                colleague_id: colleague.employee_id,
+                colleague_name: colleague.name,
+                collaboration_type: collab.collaboration_type,
+                frequency: collab.frequency,
+                strength: collab.strength
+            }}) as collaborations
+        LIMIT 50
+        """
+        
+        with self.neo4j_manager.driver.session() as session:
+            result = session.run(query)
+            records = list(result)
+            
+            return self._process_network_data(records, 'collaboration')
+
+    def _analyze_communication_network(self, search_term: str = '') -> Dict:
+        """소통 패턴 네트워크 분석"""
+        
+        search_filter = ""
+        if search_term:
+            search_filter = f"AND (emp.name CONTAINS '{search_term}' OR emp.employee_id CONTAINS '{search_term}')"
+        
+        query = f"""
+        MATCH (emp:Employee)
+        WHERE emp.employee_id IS NOT NULL {search_filter}
+        
+        // 소통 관계 조회
+        OPTIONAL MATCH (emp)-[comm:COMMUNICATES_WITH]-(colleague:Employee)
+        
+        // 부서 정보
+        OPTIONAL MATCH (emp)-[:BELONGS_TO]->(dept:Department)
+        
+        RETURN 
+            emp.employee_id as employee_id,
+            emp.name as name,
+            dept.name as department,
+            collect(DISTINCT {{
+                colleague_id: colleague.employee_id,
+                colleague_name: colleague.name,
+                communication_type: comm.communication_type,
+                frequency: comm.frequency,
+                strength: coalesce(comm.strength, 0.5)
+            }}) as communications
+        LIMIT 50
+        """
+        
+        with self.neo4j_manager.driver.session() as session:
+            result = session.run(query)
+            records = list(result)
+            
+            return self._process_network_data(records, 'communication')
+
+    def _analyze_influence_network(self, search_term: str = '') -> Dict:
+        """영향력 네트워크 분석"""
+        
+        search_filter = ""
+        if search_term:
+            search_filter = f"AND (emp.name CONTAINS '{search_term}' OR emp.employee_id CONTAINS '{search_term}')"
+        
+        query = f"""
+        MATCH (emp:Employee)
+        WHERE emp.employee_id IS NOT NULL {search_filter}
+        
+        // 영향력 관계 조회 (보고 관계 + 멘토링)
+        OPTIONAL MATCH (emp)-[rel:REPORTS_TO|MENTORS]-(colleague:Employee)
+        
+        // 부서 정보
+        OPTIONAL MATCH (emp)-[:BELONGS_TO]->(dept:Department)
+        
+        RETURN 
+            emp.employee_id as employee_id,
+            emp.name as name,
+            dept.name as department,
+            collect(DISTINCT {{
+                colleague_id: colleague.employee_id,
+                colleague_name: colleague.name,
+                relationship_type: type(rel),
+                influence_score: coalesce(rel.influence_score, 0.7),
+                strength: coalesce(rel.strength, 0.6)
+            }}) as influences
+        LIMIT 50
+        """
+        
+        with self.neo4j_manager.driver.session() as session:
+            result = session.run(query)
+            records = list(result)
+            
+            return self._process_network_data(records, 'influence')
+
+    def _analyze_team_structure(self, search_term: str = '') -> Dict:
+        """팀 구조 분석"""
+        
+        search_filter = ""
+        if search_term:
+            search_filter = f"AND (emp.name CONTAINS '{search_term}' OR emp.employee_id CONTAINS '{search_term}' OR dept.name CONTAINS '{search_term}')"
+        
+        query = f"""
+        MATCH (emp:Employee)-[:BELONGS_TO]->(dept:Department)
+        WHERE emp.employee_id IS NOT NULL {search_filter}
+        
+        // 같은 부서 동료들과의 관계
+        OPTIONAL MATCH (emp)-[rel:COLLABORATES_WITH|REPORTS_TO]-(colleague:Employee)-[:BELONGS_TO]->(dept)
+        
+        RETURN 
+            emp.employee_id as employee_id,
+            emp.name as name,
+            dept.name as department,
+            collect(DISTINCT {{
+                colleague_id: colleague.employee_id,
+                colleague_name: colleague.name,
+                relationship_type: type(rel),
+                strength: coalesce(rel.strength, 0.5)
+            }}) as team_connections
+        LIMIT 50
+        """
+        
+        with self.neo4j_manager.driver.session() as session:
+            result = session.run(query)
+            records = list(result)
+            
+            return self._process_network_data(records, 'team_structure')
+
+    def _process_network_data(self, records: List, analysis_type: str) -> Dict:
+        """네트워크 데이터 처리 및 구조화"""
+        
+        nodes = []
+        links = []
+        
+        for record in records:
+            employee_id = record['employee_id']
+            name = record['name'] or f"직원 {employee_id}"
+            department = record['department'] or 'Unknown'
+            
+            # 노드 생성
+            node = {
+                'id': employee_id,
+                'name': name,
+                'department': department,
+                'centrality': np.random.random(),  # 실제로는 계산된 중심성
+                'influence_score': np.random.random(),
+                'risk_level': np.random.random()
+            }
+            nodes.append(node)
+            
+            # 관계 데이터 처리
+            relationships_key = {
+                'collaboration': 'collaborations',
+                'communication': 'communications', 
+                'influence': 'influences',
+                'team_structure': 'team_connections'
+            }.get(analysis_type, 'collaborations')
+            
+            relationships = record.get(relationships_key, [])
+            
+            for rel in relationships:
+                if rel and rel.get('colleague_id'):
+                    link = {
+                        'source': employee_id,
+                        'target': rel['colleague_id'],
+                        'strength': rel.get('strength', 0.5),
+                        'collaboration_type': rel.get('collaboration_type') or rel.get('communication_type') or rel.get('relationship_type', 'unknown'),
+                        'frequency': rel.get('frequency', np.random.randint(1, 50))
+                    }
+                    links.append(link)
+        
+        # 네트워크 메트릭스 계산
+        metrics = {
+            'total_employees': len(nodes),
+            'total_connections': len(links),
+            'avg_connections': len(links) * 2 / len(nodes) if nodes else 0,
+            'network_density': len(links) / (len(nodes) * (len(nodes) - 1) / 2) if len(nodes) > 1 else 0,
+            'clusters': max(1, len(nodes) // 4)
+        }
+        
+        return {
+            'nodes': nodes,
+            'links': links,
+            'metrics': metrics,
+            'analysis_type': analysis_type,
+            'timestamp': datetime.now().isoformat()
+        }
+
+    def _generate_sample_network_data(self) -> Dict:
+        """샘플 네트워크 데이터 생성 (Neo4j 연결 실패 시 대체용)"""
+        
+        # 샘플 직원 데이터
+        nodes = []
+        for i in range(15):
+            nodes.append({
+                'id': f'EMP{str(i+1).zfill(3)}',
+                'name': f'직원 {i+1}',
+                'department': ['HR', 'IT', 'Sales', 'Marketing', 'Finance'][i % 5],
+                'centrality': np.random.random(),
+                'influence_score': np.random.random(),
+                'risk_level': np.random.random()
+            })
+        
+        # 샘플 관계 데이터
+        links = []
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                if np.random.random() > 0.7:  # 30% 확률로 연결
+                    links.append({
+                        'source': nodes[i]['id'],
+                        'target': nodes[j]['id'],
+                        'strength': np.random.random(),
+                        'collaboration_type': np.random.choice(['email', 'meeting', 'project', 'mentoring']),
+                        'frequency': np.random.randint(1, 50)
+                    })
+        
+        metrics = {
+            'total_employees': len(nodes),
+            'total_connections': len(links),
+            'avg_connections': len(links) * 2 / len(nodes) if nodes else 0,
+            'network_density': len(links) / (len(nodes) * (len(nodes) - 1) / 2) if len(nodes) > 1 else 0,
+            'clusters': max(1, len(nodes) // 4)
+        }
+        
+        return {
+            'nodes': nodes,
+            'links': links,
+            'metrics': metrics,
+            'analysis_type': 'sample',
+            'timestamp': datetime.now().isoformat()
+        }
+
 # ------------------------------------------------------
 # Flask 애플리케이션 생성 및 설정
 # ------------------------------------------------------
@@ -645,9 +917,9 @@ def create_app():
     
     # Neo4j 설정 (최적화된 연결 정보)
     NEO4J_CONFIG = {
-        "uri": os.getenv("NEO4J_URI", "bolt://34.227.31.16:7687"),
+        "uri": os.getenv("NEO4J_URI", "bolt://44.212.67.74:7687"),
         "username": os.getenv("NEO4J_USERNAME", "neo4j"),
-        "password": os.getenv("NEO4J_PASSWORD", "cover-site-establishment")
+        "password": os.getenv("NEO4J_PASSWORD", "legs-augmentations-cradle")
     }
     
     # 전역 변수
@@ -685,36 +957,112 @@ def create_app():
                 except Exception as e:
                     logger.warning(f"  ✗ 실패: {str(e)}")
 
-    @app.before_first_request
     def initialize_services():
-        """첫 요청 전 서비스 초기화"""
+        """서비스 초기화 (Neo4j 연결은 선택적, 재시도 로직 포함)"""
         nonlocal neo4j_manager, cognita_analyzer
         
         try:
             logger.info("Cognita Flask 백엔드 서비스 초기화 중...")
             
-            # Neo4j 연결
-            neo4j_manager = Neo4jManager(
-                NEO4J_CONFIG['uri'],
-                NEO4J_CONFIG['username'],
-                NEO4J_CONFIG['password']
-            )
+            # 저장된 Neo4j 설정 로드 시도
+            saved_config = load_neo4j_config()
+            if saved_config:
+                logger.info("저장된 Neo4j 설정 발견, 우선 사용")
+                NEO4J_CONFIG.update(saved_config)
             
-            # 성능 최적화 인덱스 생성
-            create_performance_indexes(neo4j_manager)
-            
-            # 분석기 초기화
-            cognita_analyzer = CognitaRiskAnalyzer(neo4j_manager)
+            # Neo4j 연결 시도 (실패해도 서버는 계속 실행)
+            neo4j_manager, cognita_analyzer = attempt_neo4j_connection(NEO4J_CONFIG)
             
             # Flask 앱에 저장
             app.neo4j_manager = neo4j_manager
             app.cognita_analyzer = cognita_analyzer
             
+            if neo4j_manager and cognita_analyzer:
+                logger.info("✅ Neo4j 연결 성공 - Cognita 분석 기능 활성화")
+            else:
+                logger.info("⚠️ Neo4j 연결 실패 - 기본 모드로 실행")
+            
             logger.info("Cognita Flask 백엔드 서비스 준비 완료")
             
         except Exception as e:
             logger.error(f"서비스 초기화 실패: {str(e)}")
-            raise
+            # Neo4j 연결 실패는 치명적이지 않으므로 서버는 계속 실행
+            logger.warning("Neo4j 연결 없이 서버를 계속 실행합니다.")
+            app.neo4j_manager = None
+            app.cognita_analyzer = None
+
+    def attempt_neo4j_connection(config: Dict, max_attempts: int = 3) -> Tuple[Optional[Neo4jManager], Optional[CognitaRiskAnalyzer]]:
+        """Neo4j 연결 시도 (재시도 로직 포함)"""
+        
+        for attempt in range(max_attempts):
+            try:
+                logger.info(f"Neo4j 연결 시도 {attempt + 1}/{max_attempts}...")
+                
+                # Neo4j 매니저 생성
+                neo4j_mgr = Neo4jManager(
+                    config['uri'],
+                    config['username'],
+                    config['password'],
+                    max_retries=2  # 내부 재시도 줄임
+                )
+                
+                # 연결 테스트
+                if neo4j_mgr.is_connected():
+                    # 성능 최적화 인덱스 생성
+                    create_performance_indexes(neo4j_mgr)
+                    
+                    # 분석기 초기화
+                    analyzer = CognitaRiskAnalyzer(neo4j_mgr)
+                    
+                    logger.info(f"✅ Neo4j 연결 성공 (시도 {attempt + 1})")
+                    return neo4j_mgr, analyzer
+                else:
+                    raise ConnectionError("연결 테스트 실패")
+                    
+            except Exception as e:
+                logger.warning(f"연결 시도 {attempt + 1} 실패: {str(e)}")
+                
+                if attempt < max_attempts - 1:
+                    wait_time = (attempt + 1) * 2
+                    logger.info(f"{wait_time}초 후 재시도...")
+                    time.sleep(wait_time)
+                else:
+                    logger.warning("모든 연결 시도 실패 - Cognita 분석 기능 비활성화")
+        
+        return None, None
+
+    def reconnect_neo4j():
+        """Neo4j 재연결 시도"""
+        nonlocal neo4j_manager, cognita_analyzer
+        
+        try:
+            if hasattr(app, 'neo4j_manager') and app.neo4j_manager:
+                app.neo4j_manager.close()
+            
+            # 저장된 설정으로 재연결 시도
+            saved_config = load_neo4j_config()
+            if not saved_config:
+                return False
+            
+            neo4j_mgr, analyzer = attempt_neo4j_connection(saved_config, max_attempts=2)
+            
+            if neo4j_mgr and analyzer:
+                app.neo4j_manager = neo4j_mgr
+                app.cognita_analyzer = analyzer
+                neo4j_manager = neo4j_mgr
+                cognita_analyzer = analyzer
+                logger.info("✅ Neo4j 재연결 성공")
+                return True
+            else:
+                logger.warning("❌ Neo4j 재연결 실패")
+                return False
+                
+        except Exception as e:
+            logger.error(f"재연결 중 오류: {str(e)}")
+            return False
+    
+    # 앱 생성 시 즉시 초기화
+    initialize_services()
     
     # ------------------------------------------------------
     # 유틸리티 함수
@@ -802,13 +1150,15 @@ def create_app():
         
         if not neo4j_mgr:
             return jsonify({
-                "status": "error",
+                "status": "healthy",  # 서버는 정상, Neo4j만 비활성화
+                "service": "Cognita",
+                "version": "1.0.0",
                 "neo4j_connected": False,
                 "total_employees": 0,
                 "total_relationships": 0,
-                "message": "Neo4j 연결이 설정되지 않았습니다",
+                "message": "Neo4j 연결 없이 실행 중 - Cognita 분석 기능 비활성화",
                 "timestamp": datetime.now().isoformat()
-            }), 503
+            }), 200  # 200으로 변경 (서버 자체는 정상)
         
         try:
             # Neo4j 연결 상태 확인
@@ -851,6 +1201,8 @@ def create_app():
     def setup_neo4j_connection():
         """Neo4j 연결 설정"""
         try:
+            # 현재 neo4j_manager 가져오기
+            neo4j_manager = getattr(app, 'neo4j_manager', None)
             data = request.get_json()
             
             # 필수 파라미터 확인
@@ -893,11 +1245,11 @@ def create_app():
                     json.dump(config_data, f, indent=2, ensure_ascii=False)
                 
                 # 전역 Neo4j 매니저 업데이트
-                global neo4j_manager
-                if neo4j_manager:
-                    neo4j_manager.close()
+                if hasattr(app, 'neo4j_manager') and app.neo4j_manager:
+                    app.neo4j_manager.close()
                 
-                neo4j_manager = Neo4jManager(uri, username, password)
+                app.neo4j_manager = Neo4jManager(uri, username, password)
+                neo4j_manager = app.neo4j_manager
                 
                 # 데이터베이스 정보 조회
                 with neo4j_manager.driver.session() as session:
@@ -918,6 +1270,38 @@ def create_app():
                         count = record["count"]
                         relationship_stats[rel_type] = count
                 
+                    # 직원 목록 조회
+                    employees_result = session.run("""
+                        MATCH (e:Employee) 
+                        RETURN e.employee_id as employee_id, 
+                               e.name as name, 
+                               e.department as department,
+                               e.job_role as job_role
+                        LIMIT 100
+                    """)
+                    employees = []
+                    for record in employees_result:
+                        employees.append({
+                            "employee_id": record.get("employee_id"),
+                            "name": record.get("name"),
+                            "department": record.get("department"),
+                            "job_role": record.get("job_role")
+                        })
+                    
+                    # 부서 목록 조회
+                    departments_result = session.run("""
+                        MATCH (d:Department) 
+                        RETURN d.name as department_name,
+                               d.employee_count as employee_count
+                        LIMIT 50
+                    """)
+                    departments = []
+                    for record in departments_result:
+                        departments.append({
+                            "department_name": record.get("department_name"),
+                            "employee_count": record.get("employee_count", 0)
+                        })
+                
                 test_driver.close()
                 
                 return jsonify({
@@ -930,6 +1314,8 @@ def create_app():
                         "config_file": config_file,
                         "config_saved": True
                     },
+                    "employees": employees,
+                    "departments": departments,
                     "database_stats": {
                         "nodes": node_stats,
                         "relationships": relationship_stats

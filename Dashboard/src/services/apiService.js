@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API 기본 설정
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5007';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -45,7 +45,7 @@ export const apiService = {
   // 서버 상태 확인
   async checkHealth() {
     try {
-      const response = await apiClient.get('/health');
+      const response = await apiClient.get('/api/health');
       return response.data;
     } catch (error) {
       throw new Error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
@@ -135,7 +135,7 @@ export const apiService = {
   // 현재 결과 조회
   async getResults() {
     try {
-      const response = await apiClient.get('/get_results');
+      const response = await apiClient.get('/api/results');
       return response.data;
     } catch (error) {
       throw error;
@@ -292,6 +292,26 @@ export const apiService = {
   async generateCounterfactuals(config) {
     try {
       const response = await apiClient.post('/xai/counterfactuals', config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 배치 분석 API
+  async analyzeBatch(batchConfig) {
+    try {
+      const response = await apiClient.post('/api/analyze/batch', batchConfig);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Integration 보고서 생성
+  async generateIntegrationReport(reportConfig) {
+    try {
+      const response = await apiClient.post('/api/integration/report', reportConfig);
       return response.data;
     } catch (error) {
       throw error;

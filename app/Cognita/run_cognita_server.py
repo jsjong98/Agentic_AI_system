@@ -21,9 +21,9 @@ def main():
     print("=" * 60)
     
     # 환경 변수 설정 (최적화된 연결 정보)
-    os.environ.setdefault("NEO4J_URI", "bolt://34.227.31.16:7687")
+    os.environ.setdefault("NEO4J_URI", "bolt://44.212.67.74:7687")
     os.environ.setdefault("NEO4J_USERNAME", "neo4j")
-    os.environ.setdefault("NEO4J_PASSWORD", "cover-site-establishment")
+    os.environ.setdefault("NEO4J_PASSWORD", "legs-augmentations-cradle")
     
     # 서버 설정
     host = os.getenv("HOST", "0.0.0.0")

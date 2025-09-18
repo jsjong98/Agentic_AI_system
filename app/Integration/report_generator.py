@@ -6,13 +6,13 @@ LLM 기반 퇴사 레포트 생성기
 import pandas as pd
 import numpy as np
 import json
-import openai
 import time
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-import os
-from dotenv import load_dotenv
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ReportGenerator:
     """LLM 기반 퇴사 레포트 생성 클래스"""
     
-    def __init__(self, api_key: str = None):
+    def __init__(self, llm: Optional[ChatOpenAI] = None):
         self.employee_data = None
         self.agent_scores = {}
         self.risk_thresholds = {
@@ -29,31 +29,20 @@ class ReportGenerator:
             'high': 1.0
         }
         
-        # OpenAI 클라이언트 초기화 (Sentio/Agora와 동일한 방식)
-        self.client = None
-        self.model = "gpt-5-nano-2025-08-07"  # GPT-5-nano 모델 사용
+        # LangChain LLM 초기화 (강력한 gpt-5 모델 사용)
+        self.llm = llm or ChatOpenAI(
+            model="gpt-5",
+            temperature=0.2,
+            max_tokens=2000
+        )
         
-        if api_key:
-            try:
-                self.client = openai.OpenAI(api_key=api_key)
-                logger.info(f"OpenAI 클라이언트 초기화 완료 - 모델: {self.model}")
-            except Exception as e:
-                logger.error(f"OpenAI 클라이언트 초기화 실패: {e}")
-                self.client = None
-        else:
-            # 환경변수에서 API 키 로드 (Sentio/Agora와 동일)
-            load_dotenv()
-            env_api_key = os.getenv("OPENAI_API_KEY")
-            if not env_api_key:
-                logger.warning("⚠️ OpenAI API 키가 없습니다. 시뮬레이션 모드로 실행됩니다.")
-                self.client = None
-            else:
-                try:
-                    self.client = openai.OpenAI(api_key=env_api_key)
-                    logger.info(f"✅ 환경변수에서 API 키 로드 완료 - 모델: {self.model}")
-                except Exception as e:
-                    logger.error(f"환경변수 API 키로 클라이언트 초기화 실패: {e}")
-                    self.client = None
+        logger.info(f"✅ Integration LLM 초기화 완료 - 모델: gpt-5")
+        
+        # 분석 프롬프트 템플릿
+        self.analysis_prompt = ChatPromptTemplate.from_messages([
+            ("system", self._get_analysis_system_prompt()),
+            ("human", self._get_analysis_human_prompt())
+        ])
         
         # 에이전트별 분석 컨텍스트
         self.agent_contexts = {
@@ -209,26 +198,109 @@ class ReportGenerator:
         
         return recommendations
     
-    def generate_llm_insights(self, employee_id: str, analysis: Dict[str, Any], 
+    def _get_analysis_system_prompt(self) -> str:
+        """Integration 분석을 위한 시스템 프롬프트"""
+        return """
+당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR 통합 분석 전문가입니다. 다중 에이전트 시스템(Sentio, Agora, Chronos, Structura, Cognita)을 통한 종합적인 분석 결과를 바탕으로 해당 직원의 퇴사 위험도에 대한 전문적이고 실용적인 해석을 제공해야 합니다.
+
+**분석 맥락:**
+- 심리적 상태 (Sentio): 직무 요구-자원 모델 기반 분석
+- 시장 상황 (Agora): 외부 기회 및 보상 경쟁력 분석  
+- 시계열 패턴 (Chronos): 행동 변화 및 트렌드 분석
+- 이탈 위험 (Structura): 구조적 요인 기반 예측
+- 네트워크 영향 (Cognita): 조직 내 관계 및 영향력 분석
+
+**작성 가이드라인:**
+- 전문적이면서도 실무진이 이해하기 쉬운 표현 사용
+- 객관적이고 건설적인 톤 유지
+- 직원의 프라이버시와 존엄성을 존중하는 표현 사용
+- 각 섹션은 2-3문장으로 간결하게 작성
+
+한국어로 응답하고, 전문적이면서도 실용적인 톤으로 작성해주세요.
+"""
+    
+    def _get_analysis_human_prompt(self) -> str:
+        """Integration 분석을 위한 휴먼 프롬프트"""
+        return """
+**직원 기본 정보:**
+- 직원 ID: {employee_id}
+- 종합 위험 점수: {risk_score:.4f} (0~1 척도, 1에 가까울수록 높은 위험)
+- 위험 등급: {risk_level} ({risk_context})
+- 분석 신뢰도: {confidence:.1%}
+
+**다중 에이전트 분석 결과:**
+{agent_details}
+
+**요청사항:**
+1. 현재 상태를 한 문장으로 간결하게 평가해주세요
+2. 가장 중요한 위험 요인 2-3개를 구체적으로 언급해주세요
+3. HR 담당자나 직속 관리자가 취할 수 있는 구체적인 조치를 제안해주세요
+4. 지속적으로 모니터링해야 할 핵심 지표들을 제시해주세요
+5. 전체 응답은 다음 형식으로 구성해주세요:
+
+## 종합 분석
+[현재 직원의 전반적인 상황 분석]
+
+## 주요 위험 요인
+[가장 중요한 위험 요인들과 그 원인 분석]
+
+## 개선 방안
+[구체적이고 실행 가능한 개선 방안들]
+
+## 모니터링 포인트
+[지속적으로 관찰해야 할 지표들과 예상 결과]
+"""
+    
+    def _prepare_analysis_input(self, employee_id: str, analysis: Dict[str, Any], 
+                               integrated_risk: Dict[str, Any]) -> Dict[str, Any]:
+        """분석 입력 데이터 준비"""
+        # 위험도 레벨 판정
+        risk_score = integrated_risk['integrated_score']
+        if risk_score > 0.7:
+            risk_level = "고위험"
+            risk_context = "즉각적인 개입이 필요한 상황"
+        elif risk_score > 0.5:
+            risk_level = "잠재위험"
+            risk_context = "지속적인 모니터링이 필요한 상황"
+        elif risk_score > 0.3:
+            risk_level = "중간위험"
+            risk_context = "예방적 관리가 권장되는 상황"
+        else:
+            risk_level = "저위험"
+            risk_context = "현재 상태 유지가 바람직한 상황"
+        
+        # 에이전트별 상세 정보 구성
+        agent_details = []
+        for agent, data in analysis.items():
+            agent_details.append(f"- {data['name']}: {data['score']:.4f} ({data['risk_level']})")
+            if data['indicators']:
+                agent_details.append(f"  주요 지표: {', '.join(data['indicators'][:3])}")
+        
+        return {
+            'employee_id': employee_id,
+            'risk_score': risk_score,
+            'risk_level': risk_level,
+            'risk_context': risk_context,
+            'confidence': integrated_risk['confidence'],
+            'agent_details': chr(10).join(agent_details)
+        }
+    
+    async def generate_llm_insights(self, employee_id: str, analysis: Dict[str, Any], 
                              integrated_risk: Dict[str, Any], use_llm: bool = True) -> Dict[str, str]:
         """LLM을 사용한 심층 분석 및 인사이트 생성"""
         
-        if not use_llm or not self.client:
+        if not use_llm:
             return self._generate_rule_based_insights(analysis, integrated_risk)
         
         try:
-            # 프롬프트 구성
-            prompt = self._build_analysis_prompt(employee_id, analysis, integrated_risk)
+            # 분석 입력 데이터 준비
+            analysis_input = self._prepare_analysis_input(employee_id, analysis, integrated_risk)
             
-            # Sentio/Agora와 동일한 OpenAI API 호출 방식 사용
-            response = self.client.responses.create(
-                model=self.model,
-                input=prompt,
-                reasoning={"effort": "medium"},
-                text={"verbosity": "medium"}
-            )
+            # LangChain 방식으로 분석 수행
+            chain = self.analysis_prompt | self.llm
+            response = await chain.ainvoke(analysis_input)
             
-            llm_response = response.output_text.strip()
+            llm_response = response.content.strip()
             
             # 응답 품질 검증
             if len(llm_response) < 30:
@@ -251,7 +323,7 @@ class ReportGenerator:
     
     def _build_analysis_prompt(self, employee_id: str, analysis: Dict[str, Any], 
                               integrated_risk: Dict[str, Any]) -> str:
-        """Sentio/Agora 스타일의 분석 프롬프트 구성"""
+        """Sentio/Agora와 일관된 구조화된 분석 프롬프트 구성"""
         
         # 위험도 레벨 판정
         risk_score = integrated_risk['integrated_score']
@@ -275,22 +347,30 @@ class ReportGenerator:
             if data['indicators']:
                 agent_details.append(f"  주요 지표: {', '.join(data['indicators'][:3])}")
         
-        prompt = f"""
-당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR 분석 전문가입니다. 다중 에이전트 시스템을 통한 종합적인 분석 결과를 바탕으로 해당 직원의 퇴사 위험도에 대한 전문적이고 실용적인 해석을 제공해야 합니다.
+        # Sentio/Agora와 일관된 구조화된 프롬프트
+        full_prompt = f"""
+당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR 통합 분석 전문가입니다. 다중 에이전트 시스템(Sentio, Agora, Chronos, Structura, Cognita)을 통한 종합적인 분석 결과를 바탕으로 해당 직원의 퇴사 위험도에 대한 전문적이고 실용적인 해석을 제공해야 합니다.
 
-**분석 결과:**
+**직원 기본 정보:**
 - 직원 ID: {employee_id}
-- 종합 위험 점수: {risk_score:.4f} (0~1 척도)
+- 종합 위험 점수: {risk_score:.4f} (0~1 척도, 1에 가까울수록 높은 위험)
 - 위험 등급: {risk_level} ({risk_context})
 - 분석 신뢰도: {integrated_risk['confidence']:.1%}
 
-**에이전트별 세부 분석:**
+**다중 에이전트 분석 결과:**
 {chr(10).join(agent_details)}
+
+**분석 맥락:**
+- 심리적 상태 (Sentio): 직무 요구-자원 모델 기반 분석
+- 시장 상황 (Agora): 외부 기회 및 보상 경쟁력 분석  
+- 시계열 패턴 (Chronos): 행동 변화 및 트렌드 분석
+- 이탈 위험 (Structura): 구조적 요인 기반 예측
+- 네트워크 영향 (Cognita): 조직 내 관계 및 영향력 분석
 
 **요청사항:**
 1. 현재 상태를 한 문장으로 간결하게 평가해주세요
-2. 주요 위험 요인이나 긍정적 요인을 구체적으로 언급해주세요  
-3. 실무진이나 관리자가 취할 수 있는 구체적인 조치를 제안해주세요
+2. 가장 중요한 위험 요인 2-3개를 구체적으로 언급해주세요
+3. HR 담당자나 직속 관리자가 취할 수 있는 구체적인 조치를 제안해주세요
 4. 지속적으로 모니터링해야 할 핵심 지표들을 제시해주세요
 5. 전체 응답은 다음 형식으로 구성해주세요:
 
@@ -306,10 +386,16 @@ class ReportGenerator:
 ## 모니터링 포인트
 [지속적으로 관찰해야 할 지표들과 예상 결과]
 
+**작성 가이드라인:**
+- 전문적이면서도 실무진이 이해하기 쉬운 표현 사용
+- 객관적이고 건설적인 톤 유지
+- 직원의 프라이버시와 존엄성을 존중하는 표현 사용
+- 각 섹션은 2-3문장으로 간결하게 작성
+
 한국어로 응답하고, 전문적이면서도 실용적인 톤으로 작성해주세요.
 """
         
-        return prompt.strip()
+        return full_prompt.strip()
     
     def _parse_llm_response(self, response: str) -> Dict[str, str]:
         """LLM 응답을 섹션별로 파싱"""

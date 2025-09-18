@@ -1,0 +1,10 @@
+{
+  "employee_id": "1",
+  "cognita_analysis": {
+    "overall_risk_score": 0.53,
+    "network_centrality_score": 0.7,
+    "social_isolation_index": 0.2,
+    "manager_instability_score": 0.8,
+    "analysis_timestamp": "2025-09-18T11:22:10.606220"
+  }
+}

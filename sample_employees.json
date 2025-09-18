@@ -1,0 +1,32 @@
+[
+  {
+    "Age": 35,
+    "JobSatisfaction": 2,
+    "OverTime": "Yes",
+    "MonthlyIncome": 4500,
+    "WorkLifeBalance": 1,
+    "JobRole": "Sales Executive",
+    "Department": "Sales",
+    "EmployeeNumber": "EMP001"
+  },
+  {
+    "Age": 28,
+    "JobSatisfaction": 4,
+    "OverTime": "No",
+    "MonthlyIncome": 6000,
+    "WorkLifeBalance": 3,
+    "JobRole": "Research Scientist",
+    "Department": "Research & Development",
+    "EmployeeNumber": "EMP002"
+  },
+  {
+    "Age": 42,
+    "JobSatisfaction": 3,
+    "OverTime": "No",
+    "MonthlyIncome": 5500,
+    "WorkLifeBalance": 2,
+    "JobRole": "Manufacturing Technician",
+    "Department": "Manufacturing",
+    "EmployeeNumber": "EMP003"
+  }
+]

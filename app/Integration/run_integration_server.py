@@ -29,7 +29,9 @@ def check_requirements():
     
     for package in required_packages:
         try:
-            __import__(package.replace('-', '_'))
+            # scikit-learn은 sklearn으로 import됨
+            import_name = 'sklearn' if package == 'scikit-learn' else package.replace('-', '_')
+            __import__(import_name)
             print(f"✅ {package}")
         except ImportError:
             missing_required.append(package)

@@ -13,16 +13,15 @@ import {
   Space,
   Table,
   Tag,
-  Divider
+  message
 } from 'antd';
 import {
   SettingOutlined,
   PlayCircleOutlined,
   TrophyOutlined,
-  CompareOutlined,
-  InfoCircleOutlined
+  SwapOutlined
 } from '@ant-design/icons';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { apiService, apiUtils } from '../services/apiService';
 
 const { Title, Text } = Typography;
@@ -399,7 +398,7 @@ const WeightOptimization = ({
         className="card-shadow" 
         extra={
           <Button
-            icon={<CompareOutlined />}
+            icon={<SwapOutlined />}
             onClick={handleCompareMethods}
             loading={comparing}
             disabled={!thresholdResults}
@@ -435,7 +434,7 @@ const WeightOptimization = ({
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-            <CompareOutlined style={{ fontSize: '24px', marginBottom: '8px' }} />
+            <SwapOutlined style={{ fontSize: '24px', marginBottom: '8px' }} />
             <div>여러 최적화 방법을 비교해보세요.</div>
             <div style={{ fontSize: '12px' }}>Grid Search와 Scipy Optimization을 비교합니다.</div>
           </div>

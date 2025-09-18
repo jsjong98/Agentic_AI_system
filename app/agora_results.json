@@ -1,0 +1,9 @@
+{
+  "employee_id": "1",
+  "agora_analysis": {
+    "market_pressure_index": 0.796,
+    "compensation_gap": 0.999,
+    "risk_level": "HIGH",
+    "job_role": "Sales Executive"
+  }
+}

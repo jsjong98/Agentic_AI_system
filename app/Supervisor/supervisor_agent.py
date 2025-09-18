@@ -29,15 +29,24 @@ class SupervisorAgent:
         슈퍼바이저 에이전트 초기화
         
         Args:
-            llm: LangChain LLM 인스턴스
+            llm: LangChain LLM 인스턴스 (gpt-5 사용)
             max_retry_count: 최대 재시도 횟수
             timeout_minutes: 워커 타임아웃 (분)
         """
-        self.llm = llm or ChatOpenAI(
-            model="gpt-4-turbo-preview",
-            temperature=0.1,
-            max_tokens=1000
-        )
+        # LangChain LLM 초기화 (강력한 gpt-5 모델 사용)
+        if llm is None:
+            import os
+            if os.getenv("OPENAI_API_KEY"):
+                self.llm = ChatOpenAI(
+                    model="gpt-5",
+                    temperature=0.1,
+                    max_tokens=1000
+                )
+            else:
+                self.llm = None
+        else:
+            self.llm = llm
+        
         self.max_retry_count = max_retry_count
         self.timeout_minutes = timeout_minutes
         
@@ -57,26 +66,28 @@ class SupervisorAgent:
         ])
     
     def _get_routing_system_prompt(self) -> str:
-        """라우팅 결정을 위한 시스템 프롬프트"""
+        """Sentio/Agora와 일관된 구조화된 라우팅 시스템 프롬프트"""
         return """
-당신은 HR Attrition 예측 시스템의 슈퍼바이저 에이전트입니다.
+당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR Attrition 예측 시스템의 슈퍼바이저 에이전트입니다. 다중 에이전트 시스템의 워크플로우를 관리하고 다음 단계를 결정하는 전문가입니다.
+
+**시스템 구성:**
 다음 워커 에이전트들의 분석 상태를 검토하여 워크플로우의 다음 단계를 결정해야 합니다:
 
-워커 에이전트들:
-- STRUCTURA: 정형 데이터 분석 (HR 기본 정보, 성과 데이터)
-- COGNITA: 지식 그래프 분석 (조직 관계, 프로젝트 연결성)
-- CHRONOS: 시계열 분석 (근무 패턴, 이상 탐지)
-- SENTIO: NLP 감성 분석 (피드백, 설문 텍스트)
-- AGORA: 외부 시장 분석 (채용 시장, 연봉 벤치마크)
+**워커 에이전트 분석 영역:**
+- STRUCTURA: 정형 데이터 분석 (HR 기본 정보, 성과 데이터, 구조적 요인)
+- COGNITA: 지식 그래프 분석 (조직 관계, 프로젝트 연결성, 네트워크 영향)
+- CHRONOS: 시계열 분석 (근무 패턴, 행동 변화, 이상 탐지)
+- SENTIO: NLP 감성 분석 (피드백, 설문 텍스트, 심리적 상태)
+- AGORA: 외부 시장 분석 (채용 시장, 연봉 벤치마크, 시장 압력)
 
-가능한 다음 단계:
+**워크플로우 결정 옵션:**
 - CONTINUE_ANALYSIS: 아직 완료되지 않은 분석이 있음
 - RETRY_FAILED: 실패한 분석을 재시도해야 함
 - FINALIZE: 모든 분석이 완료되어 최종 종합 분석 단계로 진행
 - ERROR_CRITICAL: 치명적 오류로 인한 중단 (인간 개입 필요)
 - TIMEOUT: 시간 초과로 인한 중단
 
-결정 기준:
+**결정 기준:
 1. 모든 워커가 SUCCESS 상태면 -> FINALIZE
 2. PENDING 또는 IN_PROGRESS 워커가 있으면 -> CONTINUE_ANALYSIS
 3. ERROR 워커가 있고 재시도 가능하면 -> RETRY_FAILED
@@ -87,17 +98,19 @@ class SupervisorAgent:
 """
     
     def _get_routing_human_prompt(self) -> str:
-        """라우팅을 위한 인간 프롬프트"""
+        """Sentio/Agora와 일관된 구조화된 라우팅 휴먼 프롬프트"""
         return """
-현재 분석 상태를 검토하여 다음 단계를 결정해주세요:
+**현재 분석 상태 검토:**
+다음 정보를 바탕으로 워크플로우의 다음 단계를 결정해주세요:
 
-직원 ID: {employee_id}
-세션 ID: {session_id}
-시작 시간: {started_at}
-현재 시간: {current_time}
-경과 시간: {elapsed_minutes}분
+**직원 분석 정보:**
+- 직원 ID: {employee_id}
+- 세션 ID: {session_id}
+- 시작 시간: {started_at}
+- 현재 시간: {current_time}
+- 경과 시간: {elapsed_minutes}분
 
-분석 체크리스트:
+**다중 에이전트 분석 체크리스트:**
 {analysis_checklist}
 
 워커 결과 요약:
@@ -201,6 +214,7 @@ JSON 형식으로 응답해주세요:
             # LLM을 통한 지능적 라우팅 결정
             routing_input = self._prepare_routing_input(state, current_time, elapsed_minutes)
             
+            # LangChain 방식으로 라우팅 결정
             chain = self.routing_prompt | self.llm
             response = await chain.ainvoke(routing_input)
             
@@ -276,6 +290,7 @@ JSON 형식으로 응답해주세요:
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
+            # LangChain 방식으로 에러 분석
             chain = self.error_analysis_prompt | self.llm
             response = await chain.ainvoke(error_input)
             

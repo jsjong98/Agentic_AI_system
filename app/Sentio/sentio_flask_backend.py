@@ -82,27 +82,35 @@ def initialize_system():
     try:
         logger.info("Sentio 시스템 초기화 시작...")
         
-        # 키워드 분석기 초기화 (JD-R 모델 포함)
-        if os.path.exists(DATA_PATH['sample_texts']):
-            keyword_analyzer = SentioKeywordAnalyzer(DATA_PATH['sample_texts'])
-            keyword_analyzer.load_data()
-            logger.info("✅ 키워드 분석기 초기화 완료")
-        else:
-            logger.warning("⚠️ 텍스트 데이터 파일을 찾을 수 없습니다.")
+        # 키워드 분석기 초기화 (선택적)
+        try:
+            if os.path.exists(DATA_PATH['sample_texts']):
+                keyword_analyzer = SentioKeywordAnalyzer(DATA_PATH['sample_texts'])
+                keyword_analyzer.load_data()
+                logger.info("✅ 키워드 분석기 초기화 완료")
+            else:
+                logger.info("⚠️ 텍스트 데이터 파일이 없습니다. 파일 업로드 후 분석 가능합니다.")
+                keyword_analyzer = None
+        except Exception as e:
+            logger.warning(f"⚠️ 키워드 분석기 초기화 실패: {e}")
             keyword_analyzer = None
         
         # 텍스트 프로세서 초기화 (analyzer 연결)
         text_processor = SentioTextProcessor(analyzer=keyword_analyzer)
         logger.info("✅ 텍스트 프로세서 초기화 완료 (JD-R 모델 연결)")
         
-        # 텍스트 생성기는 페르소나 정보 없이 키워드 기반으로만 동작
+        # 텍스트 생성기 초기화 (선택적)
         api_key = os.environ.get('OPENAI_API_KEY')
         if api_key:
-            # 페르소나 파일 없이 키워드 기반 텍스트 생성기 초기화
-            text_generator = SentioTextGenerator(api_key, None)
-            logger.info("✅ 텍스트 생성기 초기화 완료 (키워드 기반)")
+            try:
+                # 페르소나 파일 없이 키워드 기반 텍스트 생성기 초기화
+                text_generator = SentioTextGenerator(api_key, None)
+                logger.info("✅ 텍스트 생성기 초기화 완료 (키워드 기반)")
+            except Exception as e:
+                logger.warning(f"⚠️ 텍스트 생성기 초기화 실패: {e}")
+                text_generator = None
         else:
-            logger.warning("⚠️ OpenAI API 키를 찾을 수 없습니다.")
+            logger.info("⚠️ OpenAI API 키가 없습니다. 텍스트 생성 기능은 비활성화됩니다.")
         
         logger.info("🎉 Sentio 시스템 초기화 완료!")
         return True

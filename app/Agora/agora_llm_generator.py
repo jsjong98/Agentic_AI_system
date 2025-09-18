@@ -17,34 +17,33 @@ class AgoraLLMGenerator:
     
     def __init__(self, api_key: str):
         self.client = openai.OpenAI(api_key=api_key)
-        self.model = "gpt-3.5-turbo"
+        self.model = "gpt-4o-mini"  # 실제 사용 가능한 모델로 변경
         
-        # 직무별 시장 컨텍스트
+        # 직무별 시장 컨텍스트 (Agora.ipynb와 동일한 구조)
         self.market_context = {
             'Sales': {
                 'market_volatility': 'high',
                 'competition_level': 'intense',
-                'key_factors': ['실적', '고객관계', '영업스킬', '시장지식']
+                'opportunity_keywords': ['신규 시장 개척', '고객사 확대', '매출 성장'],
+                'risk_factors': ['실적 압박', '경쟁 심화', '목표 달성 부담']
             },
-            'Research': {
+            'Research and Development': {
                 'market_volatility': 'medium',
-                'competition_level': 'high',
-                'key_factors': ['기술력', '논문실적', '연구경험', '혁신능력']
-            },
-            'Manufacturing': {
-                'market_volatility': 'low',
-                'competition_level': 'medium',
-                'key_factors': ['생산효율', '품질관리', '안전관리', '프로세스개선']
-            },
-            'Healthcare': {
-                'market_volatility': 'low',
-                'competition_level': 'medium',
-                'key_factors': ['전문지식', '환자케어', '의료기술', '규정준수']
+                'competition_level': 'moderate',  
+                'opportunity_keywords': ['기술 혁신', '연구 개발', '특허 출원'],
+                'risk_factors': ['프로젝트 불확실성', '기술 트렌드 변화', '장기 투자 필요']
             },
             'Human Resources': {
-                'market_volatility': 'medium',
-                'competition_level': 'medium',
-                'key_factors': ['인사관리', '채용', '교육기획', '노무관리']
+                'market_volatility': 'low',
+                'competition_level': 'moderate',
+                'opportunity_keywords': ['조직 개발', '인사 제도 개선', '문화 혁신'],
+                'risk_factors': ['조직 갈등', '제도 변화 저항', '인건비 압박']
+            },
+            'Manufacturing': {
+                'market_volatility': 'medium', 
+                'competition_level': 'high',
+                'opportunity_keywords': ['생산성 향상', '자동화 도입', '품질 개선'],
+                'risk_factors': ['원자재 가격 변동', '생산 효율성 압박', '기술 혁신 요구']
             }
         }
         
@@ -60,20 +59,20 @@ class AgoraLLMGenerator:
             # LLM 프롬프트 구성
             prompt = self._build_market_analysis_prompt(analysis_result)
             
-            # OpenAI API 호출
+            # 표준 OpenAI Chat Completions API 사용
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": "당신은 HR 시장 분석 전문가입니다. 주어진 데이터를 바탕으로 직원의 이직 위험도와 시장 상황을 분석하여 한국어로 명확하고 실용적인 해석을 제공해주세요."
+                        "content": "당신은 시장 분석 및 외부 기회 평가 전문가입니다."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                max_tokens=800,
+                max_tokens=1000,
                 temperature=0.7
             )
             
@@ -91,74 +90,85 @@ class AgoraLLMGenerator:
             return self._generate_rule_based_interpretation(analysis_result)
     
     def _build_market_analysis_prompt(self, analysis_result: Dict) -> str:
-        """시장 분석 프롬프트 구성"""
+        """Agora.ipynb의 create_market_analysis_prompt 형식을 따른 프롬프트 구성"""
         
         employee_id = analysis_result.get('employee_id', 'unknown')
         job_role = analysis_result.get('job_role', '')
         department = analysis_result.get('department', '')
+        job_level = analysis_result.get('job_level', 1)
+        current_salary = analysis_result.get('current_salary', 0)
+        years_at_company = analysis_result.get('years_at_company', 0)
         market_pressure = analysis_result.get('market_pressure_index', 0)
         compensation_gap = analysis_result.get('compensation_gap', 0)
         job_postings = analysis_result.get('job_postings_count', 0)
-        risk_level = analysis_result.get('risk_level', 'MEDIUM')
         market_data = analysis_result.get('market_data', {})
         
         # 직무별 컨텍스트 추가
         job_category = self._get_job_category(job_role)
-        context = self.market_context.get(job_category, {})
+        dept_context = self.market_context.get(job_category, self.market_context.get('Sales', {}))
         
+        # 위험도 레벨 계산 (Agora.ipynb와 동일한 방식)
+        overall_risk = (market_pressure * 0.6 + compensation_gap * 0.4)
+        if overall_risk > 0.7:
+            risk_level = "높음"
+            risk_description = "퇴사 위험이 높은 상황"
+        elif overall_risk > 0.4:
+            risk_level = "보통" 
+            risk_description = "주의 깊은 모니터링이 필요한 상황"
+        else:
+            risk_level = "낮음"
+            risk_description = "안정적인 상황"
+        
+        # Agora.ipynb의 정확한 프롬프트 구조 적용
         prompt = f"""
-다음 직원의 시장 분석 결과를 해석해주세요:
+당신은 HR 데이터 분석 전문가입니다. 아래 정보를 바탕으로 해당 직원의 외부 시장 분석 결과를 자연스럽고 실무적인 한국어로 해석해주세요.
 
-=== 직원 정보 ===
-- 직원 ID: {employee_id}
-- 직무: {job_role}
-- 부서: {department}
+**직원 기본 정보:**
+- 직무: {job_role} ({department} 부서)
+- 직급: Level {job_level}
+- 현재 월급: ${current_salary:,}
+- 재직 기간: {years_at_company}년
 
-=== 시장 분석 결과 ===
-- 시장 압력 지수: {market_pressure:.3f}/1.0
-- 보상 격차: {compensation_gap:.3f} ({'시장 대비 낮음' if compensation_gap > 0 else '시장 대비 높음'})
+**시장 분석 결과:**
 - 관련 채용 공고 수: {job_postings}개
-- 위험 수준: {risk_level}
+- 시장 평균 월급: ${market_data.get('market_avg_salary', 'N/A'):,}
+- 시장 압력 지수: {market_pressure} (0~1, 높을수록 외부 기회 많음)
+- 보상 격차 지수: {compensation_gap} (0~1, 높을수록 시장 대비 불리)
+- 종합 퇴사 위험도: {risk_level} ({overall_risk:.3f})
 
-=== 시장 현황 ===
-- 평균 급여: {market_data.get('avg_salary', 0):,}원
-- 시장 트렌드: {market_data.get('market_trend', 'STABLE')}
-- 경쟁 수준: {market_data.get('competition_level', 'MEDIUM')}
+**업계 특성:**
+- 시장 변동성: {dept_context.get('market_volatility', 'medium')}
+- 경쟁 수준: {dept_context.get('competition_level', 'medium')}
+- 주요 기회 요인: {', '.join(dept_context.get('opportunity_keywords', []))}
+- 리스크 요인: {', '.join(dept_context.get('risk_factors', []))}
 
-=== 직무 특성 ===
-- 시장 변동성: {context.get('market_volatility', 'medium')}
-- 경쟁 강도: {context.get('competition_level', 'medium')}
-- 핵심 요소: {', '.join(context.get('key_factors', []))}
+**작성 지침:**
+1. 약 4-6문장으로 구성해주세요
+2. 구체적인 수치보다는 해석과 시사점에 집중해주세요
+3. HR 담당자가 실무에서 활용할 수 있는 관점으로 작성해주세요
+4. 직원 개인정보나 평가 점수는 언급하지 마세요
+5. 퇴사 가능성을 직접적으로 언급하기보다는 "관심 필요", "모니터링 권장" 같은 표현을 사용해주세요
 
-다음 형식으로 해석해주세요:
-1. 현재 시장 상황 요약
-2. 이직 위험도 분석
-3. 주요 위험 요인
-4. 구체적인 권장 조치 (회사 관점)
-5. 향후 모니터링 포인트
-
-한국어로 작성하고, 실무진이 바로 활용할 수 있도록 구체적이고 실용적인 내용으로 구성해주세요.
+위 정보를 종합하여 이 직원의 외부 시장 상황과 HR 관점에서의 시사점을 자연스럽게 해석해주세요.
 """
         
         return prompt.strip()
     
     def _get_job_category(self, job_role: str) -> str:
-        """직무를 카테고리로 분류"""
+        """직무를 카테고리로 분류 (Agora.ipynb와 동일한 방식)"""
         
         job_role_lower = job_role.lower()
         
         if 'sales' in job_role_lower or 'executive' in job_role_lower:
             return 'Sales'
         elif 'research' in job_role_lower or 'scientist' in job_role_lower:
-            return 'Research'
+            return 'Research and Development'
         elif 'manufacturing' in job_role_lower or 'technician' in job_role_lower:
             return 'Manufacturing'
-        elif 'healthcare' in job_role_lower or 'representative' in job_role_lower:
-            return 'Healthcare'
         elif 'human' in job_role_lower or 'hr' in job_role_lower:
             return 'Human Resources'
         else:
-            return 'General'
+            return 'Sales'  # 기본값을 Sales로 설정 (Agora.ipynb와 동일)
     
     def _generate_rule_based_interpretation(self, analysis_result: Dict) -> str:
         """규칙 기반 해석 생성 (LLM 대체)"""

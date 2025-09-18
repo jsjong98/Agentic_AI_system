@@ -7,12 +7,23 @@ Agentic AI System - 결과 관리자
 import os
 import json
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import logging
+
+# matplotlib과 seaborn을 조건부 import (GUI 백엔드 문제 방지)
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # GUI 없는 백엔드 사용
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    VISUALIZATION_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: 시각화 라이브러리 import 실패: {e}")
+    VISUALIZATION_AVAILABLE = False
+    plt = None
+    sns = None
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +185,10 @@ class AgenticResultManager:
     
     def _save_structura_visualizations(self, employee_id: str, result: Dict, output_dir: Path):
         """Structura xAI 시각화 저장"""
+        if not VISUALIZATION_AVAILABLE:
+            logger.warning("시각화 라이브러리가 없어 시각화를 건너뜁니다.")
+            return
+            
         viz_dir = output_dir / "visualizations"
         viz_dir.mkdir(exist_ok=True)
         
@@ -211,6 +226,10 @@ class AgenticResultManager:
     
     def _save_chronos_visualizations(self, employee_id: str, result: Dict, output_dir: Path):
         """Chronos Attention 시각화 저장"""
+        if not VISUALIZATION_AVAILABLE:
+            logger.warning("시각화 라이브러리가 없어 시각화를 건너뜁니다.")
+            return
+            
         viz_dir = output_dir / "visualizations"
         viz_dir.mkdir(exist_ok=True)
         

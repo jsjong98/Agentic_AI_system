@@ -96,7 +96,7 @@ def run_server():
     
     try:
         # 서버 실행
-        from app.Chronos.chronos_flask_backend import app
+        from chronos_flask_backend import app
         
         print("\n🌐 서버 정보:")
         print("   - URL: http://localhost:5003")
