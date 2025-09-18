@@ -1,5 +1,5 @@
 # ============================================================================
-# 개선된 Chronos 데이터 처리 모듈 (Chronos_analysis_fixed.py 기반)
+# 개선된 Chronos 데이터 처리 모듈 (Chronos_analysis_fixed.py에서 추출)
 # ============================================================================
 
 import pandas as pd
@@ -18,17 +18,21 @@ import joblib
 import io
 import base64
 from typing import Dict, List, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
 class ProperTimeSeriesProcessor:
-    """
-    개선된 시계열 데이터 처리 클래스 (Chronos_analysis_fixed.py 기반)
-    사람별 시계열 패턴 학습에 최적화
-    """
-    def __init__(self, sequence_length: int = 50, prediction_horizon: int = 4, aggregation_unit: str = 'week'):
+    def __init__(self, sequence_length=6, prediction_horizon=4, aggregation_unit='week'):
+        """
+        올바른 시계열 예측을 위한 프로세서
+        
+        Args:
+            sequence_length (int): 예측에 사용할 과거 시퀀스 길이
+            prediction_horizon (int): 예측 시점 (N주 후 퇴사 여부 예측)
+            aggregation_unit (str): 집계 단위 ('day', 'week', 'month')
+        """
         self.sequence_length = sequence_length
         self.prediction_horizon = prediction_horizon
         self.aggregation_unit = aggregation_unit
@@ -38,16 +42,13 @@ class ProperTimeSeriesProcessor:
             'social_dining_ratio', 'break_relaxation_ratio', 'shared_work_ratio'
         ]
         self.feature_columns = []
-        self.ts_data = None
-        self.personas_data = None
-        self.processed_data = None
         
-        print(f"🔧 개선된 시계열 설정:")
+        print(f"🔧 올바른 시계열 설정:")
         print(f"   시퀀스 길이: {sequence_length}{aggregation_unit[0]}")
         print(f"   예측 시점: {prediction_horizon}{aggregation_unit[0]} 후")
         print(f"   집계 단위: {aggregation_unit}")
         
-    def load_data(self, timeseries_path: str, personas_path: str):
+    def load_data(self, timeseries_path, personas_path):
         """데이터 로딩"""
         print("=" * 50)
         print("데이터 로딩 중...")
@@ -125,7 +126,7 @@ class ProperTimeSeriesProcessor:
     def preprocess_data(self):
         """데이터 전처리 및 시간 범위 분석"""
         print("=" * 50)
-        print("개선된 시계열 전처리 중...")
+        print("올바른 시계열 전처리 중...")
         print("=" * 50)
         
         # 날짜 변환
@@ -181,9 +182,9 @@ class ProperTimeSeriesProcessor:
         print(f"✅ 사용할 피처: {len(self.feature_columns)}개")
 
     def create_proper_sequences(self):
-        """개선된 시계열 시퀀스 생성 - 사람별 패턴 학습"""
+        """올바른 시계열 시퀀스 생성 - 시간 순서 고려"""
         print("=" * 50)
-        print("개선된 시계열 시퀀스 생성 중...")
+        print("올바른 시계열 시퀀스 생성 중...")
         print("=" * 50)
         
         # 시간별 집계
@@ -212,7 +213,7 @@ class ProperTimeSeriesProcessor:
         employee_ids = []
         time_points = []
         
-        print("🔄 직원별 개선된 시퀀스 생성 중...")
+        print("🔄 직원별 올바른 시퀀스 생성 중...")
         
         for employee_id in tqdm(merged_data[self.employee_id_col].unique(), desc="직원별 처리"):
             employee_data = merged_data[
@@ -221,38 +222,37 @@ class ProperTimeSeriesProcessor:
             
             attrition_label = employee_data['attrition_binary'].iloc[0]
             
-            # 각 직원당 하나의 전체 시계열 패턴
-            if len(employee_data) >= self.sequence_length:
-                if len(employee_data) > self.sequence_length:
-                    # 데이터가 더 길면 균등하게 샘플링
-                    indices = np.linspace(0, len(employee_data)-1, self.sequence_length, dtype=int)
-                    sequence_data = employee_data.iloc[indices][self.feature_columns].values
-                else:
-                    # 데이터가 정확히 맞으면 그대로 사용
-                    sequence_data = employee_data[self.feature_columns].values
+            # 충분한 데이터가 있는 경우만 처리
+            min_required_length = self.sequence_length + self.prediction_horizon
+            if len(employee_data) >= min_required_length:
                 
-                # 각 직원당 하나의 시퀀스만 생성
-                sequences.append(sequence_data)
-                labels.append(attrition_label)
-                employee_ids.append(employee_id)
-                time_points.append(employee_data.iloc[0]['time_period'])  # 시작 시점
+                # 전체 시계열 데이터를 고정 길이로 맞춤 (패딩 또는 샘플링)
+                if len(employee_data) >= self.sequence_length:
+                    if len(employee_data) > self.sequence_length:
+                        # 데이터가 더 길면 균등하게 샘플링
+                        indices = np.linspace(0, len(employee_data)-1, self.sequence_length, dtype=int)
+                        sequence_data = employee_data.iloc[indices][self.feature_columns].values
+                    else:
+                        # 데이터가 정확히 맞으면 그대로 사용
+                        sequence_data = employee_data[self.feature_columns].values
+                    
+                    # 각 직원당 하나의 시퀀스만 생성
+                    sequences.append(sequence_data)
+                    labels.append(attrition_label)
+                    employee_ids.append(employee_id)
+                    time_points.append(employee_data.iloc[0]['time_period'])  # 시작 시점
         
         self.X = np.array(sequences, dtype=np.float32)
         self.y = np.array(labels, dtype=np.int64)
         self.employee_ids_seq = np.array(employee_ids)
         self.time_points = np.array(time_points)
         
-        print(f"✅ 개선된 시퀀스 생성 완료:")
+        print(f"✅ 올바른 시퀀스 생성 완료:")
         print(f"   총 시퀀스: {len(self.X)}개")
         print(f"   시퀀스 형태: {self.X.shape}")
         print(f"   퇴사 라벨 비율: {np.mean(self.y) * 100:.1f}%")
         
         return self.X, self.y, self.employee_ids_seq
-
-    # 하위 호환성을 위한 별칭
-    def create_sequences(self):
-        """하위 호환성을 위한 별칭"""
-        return self.create_proper_sequences()
 
 def employee_based_train_test_split(X, y, employee_ids, test_ratio=0.2):
     """직원 기반 train/test 분할 (시간 순서 고려하면서 클래스 균형 유지)"""
@@ -303,9 +303,7 @@ def employee_based_train_test_split(X, y, employee_ids, test_ratio=0.2):
     
     return X_train, X_test, y_train, y_test
 
-# 하위 호환성을 위한 별칭
-ChronosDataProcessor = ProperTimeSeriesProcessor
-
+# 시각화 클래스는 기존 chronos_processor.py에서 가져옴
 class ChronosVisualizer:
     """
     Chronos 시각화 클래스
@@ -475,21 +473,3 @@ class ChronosVisualizer:
         )
         
         return fig.to_html(include_plotlyjs='cdn')
-
-def create_matplotlib_plot_base64(plot_func, *args, **kwargs) -> str:
-    """
-    Matplotlib 플롯을 base64 문자열로 변환
-    """
-    plt.figure(figsize=(10, 6))
-    plot_func(*args, **kwargs)
-    
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
-    buffer.seek(0)
-    
-    plot_data = buffer.getvalue()
-    buffer.close()
-    plt.close()
-    
-    encoded_plot = base64.b64encode(plot_data).decode('utf-8')
-    return f"data:image/png;base64,{encoded_plot}"

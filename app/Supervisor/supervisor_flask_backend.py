@@ -12,8 +12,12 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 import os
 import json
+from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
+
+# 환경변수 로드
+load_dotenv()
 
 from .langgraph_workflow import SupervisorWorkflow
 from .worker_integrator import DEFAULT_WORKER_CONFIGS
@@ -44,13 +48,22 @@ def initialize_supervisor():
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
             logger.warning("OPENAI_API_KEY not found in environment variables")
-        
-        # LLM 초기화
-        llm = ChatOpenAI(
-            model="gpt-4-turbo-preview",
-            temperature=0.1,
-            api_key=openai_api_key
-        )
+            logger.warning("Supervisor 서버는 OpenAI API 키 없이 시작됩니다. LLM 기능은 비활성화됩니다.")
+            llm = None
+        else:
+            # LLM 초기화 (gpt-5 모델 사용)
+            try:
+                from langchain_openai import ChatOpenAI
+                llm = ChatOpenAI(
+                    model="gpt-5",
+                    temperature=0.1,
+                    api_key=openai_api_key
+                )
+                logger.info("✅ OpenAI LLM (gpt-5) 초기화 완료")
+            except Exception as llm_error:
+                logger.warning(f"⚠️ OpenAI LLM 초기화 실패: {llm_error}")
+                logger.warning("LLM 없이 Supervisor 서버를 시작합니다.")
+                llm = None
         
         # 워커 설정 (환경변수에서 오버라이드 가능)
         worker_configs = DEFAULT_WORKER_CONFIGS.copy()

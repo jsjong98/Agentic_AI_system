@@ -166,7 +166,7 @@ class SentioTextGenerator:
         return list(set(keywords))  # 중복 제거
 
     def create_keyword_based_prompt(self, keywords: List[str], text_type: str) -> str:
-        """키워드 기반 프롬프트 생성"""
+        """Sentio.ipynb의 full_prompt 형식을 따른 키워드 기반 프롬프트 생성"""
         
         text_type_descriptions = {
             "SELF_REVIEW": "자기 성과 평가 - 지난 1년간 자신의 주요 성과, 어려웠던 점, 그리고 향후 커리어 목표에 대해 작성하는 공식적인 문서",
@@ -176,20 +176,27 @@ class SentioTextGenerator:
         
         keyword_text = ", ".join(keywords[:10])  # 상위 10개 키워드만 사용
         
-        prompt = f"""
-당신은 HR 텍스트 생성 전문가입니다. 지금부터 {text_type_descriptions[text_type]}을 작성해야 합니다.
+        # Sentio.ipynb의 full_prompt 형식을 따른 구조화된 프롬프트
+        full_prompt = f"""
+당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR 텍스트 생성 전문가입니다. 지금부터 {text_type_descriptions[text_type]}을 작성해야 합니다.
+
+**분석 대상 키워드:**
+- 주요 감지 키워드: {keyword_text}
 
 **작성 지침:**
-1. 다음 키워드들을 자연스럽게 포함하여 작성하세요: {keyword_text}
+1. 위 키워드들을 자연스럽게 포함하여 작성하세요
 2. 키워드를 직접적으로 나열하지 말고, 텍스트의 맥락에 자연스럽게 녹여서 사용하세요
 3. 약 4-5문장 내외로 작성해주세요
 4. 한국어로 작성하며, 자연스럽고 진정성 있는 표현을 사용하세요
 5. 구체적인 점수, 등급, 수치는 언급하지 마세요
 6. 퇴사 의사나 이직 계획에 대해서는 직접적으로 언급하지 마세요
 
-위 지침에 따라 {text_type_descriptions[text_type]}을 작성해주세요.
+**요청사항:**
+위 지침에 따라 {text_type_descriptions[text_type]}을 전문적이면서도 실용적인 톤으로 작성해주세요.
+
+한국어로 응답하고, 전문적이면서도 실용적인 톤으로 작성해주세요.
 """
-        return prompt
+        return full_prompt
 
     def generate_text_from_keywords(self, keywords: List[str], text_type: str) -> str:
         """키워드 기반 텍스트 생성"""
@@ -198,14 +205,20 @@ class SentioTextGenerator:
         prompt = self.create_keyword_based_prompt(keywords, text_type)
         
         try:
-            # ChatGPT API 호출 (gpt-4 사용)
+            # 표준 OpenAI Chat Completions API 사용
             response = self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "당신은 HR 텍스트 생성 전문가입니다. 주어진 지시사항을 정확히 따라 자연스러운 한국어 텍스트를 생성해주세요."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR 분석 전문가입니다."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
                 ],
-                max_tokens=500,
+                max_tokens=1000,
                 temperature=0.7
             )
             

@@ -21,7 +21,8 @@ from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
 
 # ML 관련 imports
-from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import (
     roc_auc_score, average_precision_score, f1_score,
     precision_score, recall_score, accuracy_score,
@@ -110,12 +111,12 @@ class ExplainabilityResult:
 class StructuraHRPredictor:
     """Structura HR 이탈 예측 시스템 (xAI 포함)"""
     
-    def __init__(self, data_path: str = "../data/IBM_HR.csv", random_state: int = 42):
+    def __init__(self, data_path: str = "data/IBM_HR_personas_assigned.csv", random_state: int = 42):
         self.data_path = data_path
         self.random_state = random_state
         self.model = None
         self.feature_columns = None
-        self.optimal_threshold = 0.5
+        self.optimal_threshold = 0.018  # 노트북에서 최적화된 임계값 (재현율 70% 목표)
         self.scale_pos_weight = 1.0
         
         # xAI 관련
@@ -127,16 +128,27 @@ class StructuraHRPredictor:
         self.setup_preprocessing_config()
         
     def setup_preprocessing_config(self):
-        """전처리 설정 초기화"""
-        # 제거할 컬럼들
-        self.DROP_COLS = [
-            "EmployeeCount", "EmployeeNumber", "Over18", "StandardHours",
-            "DailyRate", "HourlyRate", "MonthlyRate",
-            "PercentSalaryHike", "YearsSinceLastPromotion", "NumCompaniesWorked",
-            "TotalWorkingYears"
-        ]
+        """전처리 설정 초기화 (노트북 기반)"""
+        # 순서형 변수들 (노트북과 동일)
+        self.ordinal_cols = ['RelationshipSatisfaction', 'Education', 'PerformanceRating', 
+                            'JobInvolvement', 'EnvironmentSatisfaction', 'JobLevel', 
+                            'JobSatisfaction', 'StockOptionLevel', 'WorkLifeBalance']
+
+        # 명목형 변수들 (노트북과 동일)
+        self.nominal_cols = ['BusinessTravel', 'Department', 'EducationField', 'Gender', 
+                            'JobRole', 'MaritalStatus', 'OverTime']
+
+        # 수치형 변수들 (노트북과 동일)
+        self.numerical_cols = ['Age', 'DailyRate', 'DistanceFromHome', 'HourlyRate', 
+                              'MonthlyIncome', 'MonthlyRate', 'NumCompaniesWorked', 
+                              'PercentSalaryHike', 'TotalWorkingYears', 'TrainingTimesLastYear', 
+                              'YearsAtCompany', 'YearsInCurrentRole', 'YearsSinceLastPromotion', 
+                              'YearsWithCurrManager', 'EmployeeCount', 'EmployeeNumber', 'StandardHours']
         
-        # 순서형 변수 매핑
+        # 저상관 임계값 (노트북과 동일)
+        self.low_corr_threshold = 0.03
+        
+        # 레거시 호환성을 위한 매핑들
         self.ORDINAL_MAPS = {
             "Education": {1: "Below College", 2: "College", 3: "Bachelor", 4: "Master", 5: "Doctor"},
             "JobLevel": {1: "Entry", 2: "Junior", 3: "Mid", 4: "Senior", 5: "Executive"},
@@ -149,11 +161,8 @@ class StructuraHRPredictor:
             "StockOptionLevel": {0: "None", 1: "Level 1", 2: "Level 2", 3: "Level 3"},
         }
         
-        # 명목형 변수들
-        self.NOMINAL_COLS = [
-            "BusinessTravel", "Department", "EducationField", "Gender",
-            "JobRole", "MaritalStatus", "OverTime"
-        ]
+        # 명목형 변수들 (레거시 호환성)
+        self.NOMINAL_COLS = self.nominal_cols
         
         # 순서형 라벨 순서
         self.ORDINAL_LABEL_ORDERS = {
@@ -178,47 +187,137 @@ class StructuraHRPredictor:
         return df
     
     def preprocess_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
-        """데이터 전처리"""
+        """데이터 전처리 (노트북 기반 최신 버전)"""
         logger.info("데이터 전처리 시작...")
         
-        # 1. 불필요한 컬럼 제거
-        drop_present = [c for c in self.DROP_COLS if c in df.columns]
-        df = df.drop(columns=drop_present)
+        # 1. 변수 타입별 분류 (노트북과 동일)
+        all_feature_columns = self.ordinal_cols + self.nominal_cols + self.numerical_cols
         
-        # 2. 타겟 변수 처리
-        TARGET = "Attrition"
-        if TARGET not in df.columns:
-            raise ValueError(f"Target column '{TARGET}' not found in data.")
+        # 2. 필요한 컬럼만 선택 + 타겟
+        df_processed = df[all_feature_columns + ['Attrition']].copy()
+        logger.info(f"선택된 특성 변수 개수: {len(all_feature_columns)}")
         
-        y = df[TARGET].map({"Yes": 1, "No": 0})
-        if y.isna().any():
-            y = pd.Series(pd.factorize(df[TARGET])[0], index=df.index)
+        # 3. 상수 컬럼 제거 (노트북과 동일)
+        constant_cols_found = []
+        for col in df_processed.columns:
+            if col != 'Attrition':
+                if df_processed[col].nunique() <= 1:
+                    constant_cols_found.append(col)
         
-        X = df.drop(columns=[TARGET])
+        if constant_cols_found:
+            df_processed = df_processed.drop(columns=constant_cols_found)
+            logger.info(f"상수 컬럼 제거: {constant_cols_found}")
+            # 제거된 컬럼들을 각 타입 리스트에서도 제거
+            self.ordinal_cols = [col for col in self.ordinal_cols if col not in constant_cols_found]
+            self.nominal_cols = [col for col in self.nominal_cols if col not in constant_cols_found]
+            self.numerical_cols = [col for col in self.numerical_cols if col not in constant_cols_found]
         
-        # 3. 컬럼 그룹 분류
-        ordinal_cols = [c for c in self.ORDINAL_MAPS.keys() if c in X.columns]
-        nominal_cols = [c for c in self.NOMINAL_COLS if c in X.columns]
-        numeric_cols = [c for c in X.columns 
-                       if (c not in ordinal_cols + nominal_cols) 
-                       and pd.api.types.is_numeric_dtype(X[c])]
+        # 4. 명목형 범주형 변수만 라벨 인코딩 (노트북과 동일)
+        logger.info(f"명목형 범주형 변수 인코딩: {self.nominal_cols}")
+        self.encoders = {}
+        for col in self.nominal_cols:
+            if col in df_processed.columns:
+                from sklearn.preprocessing import LabelEncoder
+                le = LabelEncoder()
+                df_processed[col] = le.fit_transform(df_processed[col].astype(str))
+                self.encoders[col] = le
         
-        # 4. 순서형 변수를 수치형으로 변환
-        X = self._coerce_ordinal_to_numeric(X, ordinal_cols)
+        # 5. 타겟 변수 인코딩 (노트북과 동일)
+        df_processed['Attrition'] = (df_processed['Attrition'] == 'Yes').astype(int)
         
-        # 5. 결측값 처리
-        for c in numeric_cols + ordinal_cols:
-            X[c] = pd.to_numeric(X[c], errors="coerce")
-            X[c] = X[c].fillna(X[c].median())
+        # 6. 상관관계 분석 및 저상관 변수 제거 (노트북과 동일)
+        correlation_with_target = df_processed.corr()['Attrition'].abs().sort_values(ascending=False)
+        low_corr_features = correlation_with_target[correlation_with_target < self.low_corr_threshold].index.tolist()
+        if 'Attrition' in low_corr_features:
+            low_corr_features.remove('Attrition')
         
-        for c in nominal_cols:
-            X[c] = X[c].astype("category")
-            if "__UNK__" not in X[c].cat.categories:
-                X[c] = X[c].cat.add_categories(["__UNK__"])
-            X[c] = X[c].fillna("__UNK__")
+        if low_corr_features:
+            df_processed = df_processed.drop(columns=low_corr_features)
+            logger.info(f"저상관 변수 제거 (< {self.low_corr_threshold}): {low_corr_features}")
         
+        # 7. X, y 분리
+        y = df_processed['Attrition']
+        X = df_processed.drop(columns=['Attrition'])
+        
+        # 8. 데이터 타입 변환 (XGBoost 호환성)
+        logger.info("데이터 타입 변환 중...")
+        for col in X.columns:
+            if X[col].dtype == 'object':
+                # object 타입을 수치형으로 변환
+                try:
+                    X[col] = pd.to_numeric(X[col], errors='coerce')
+                    # NaN 값이 있으면 0으로 채움
+                    if X[col].isna().any():
+                        X[col] = X[col].fillna(0)
+                        logger.info(f"  {col}: object → numeric (NaN → 0)")
+                    else:
+                        logger.info(f"  {col}: object → numeric")
+                except:
+                    # 변환 실패 시 라벨 인코딩
+                    from sklearn.preprocessing import LabelEncoder
+                    le = LabelEncoder()
+                    X[col] = le.fit_transform(X[col].astype(str))
+                    logger.info(f"  {col}: object → label encoded")
+        
+        # 9. 최종 특성 변수 리스트 업데이트
+        self.final_features = X.columns.tolist()
+        logger.info(f"최종 특성 변수 개수: {len(self.final_features)}")
         logger.info("데이터 전처리 완료")
+        
         return X, y
+    
+    def _preprocess_single_employee(self, df: pd.DataFrame) -> pd.DataFrame:
+        """개별 직원 데이터 전처리 (예측용)"""
+        df_processed = df.copy()
+        
+        # Attrition 컬럼 제거 (있다면)
+        if 'Attrition' in df_processed.columns:
+            df_processed = df_processed.drop(columns=['Attrition'])
+        
+        # 훈련 시 사용된 피처만 선택
+        if hasattr(self, 'final_features') and self.final_features:
+            # 누락된 피처는 0으로 채움
+            for feature in self.final_features:
+                if feature not in df_processed.columns:
+                    df_processed[feature] = 0
+            
+            # 필요한 피처만 선택하고 순서 맞춤
+            df_processed = df_processed[self.final_features]
+        else:
+            # 기본 전처리 적용
+            # 1. 필요한 컬럼만 선택
+            available_cols = [col for col in (self.ordinal_cols + self.nominal_cols + self.numerical_cols) 
+                            if col in df_processed.columns]
+            df_processed = df_processed[available_cols]
+            
+            # 2. 명목형 변수 인코딩 (훈련 시 사용된 인코더 적용)
+            if hasattr(self, 'encoders'):
+                for col, encoder in self.encoders.items():
+                    if col in df_processed.columns:
+                        try:
+                            # 새로운 카테고리는 가장 빈번한 값으로 대체
+                            unknown_mask = ~df_processed[col].astype(str).isin(encoder.classes_)
+                            if unknown_mask.any():
+                                most_frequent = encoder.classes_[0]  # 첫 번째 클래스 사용
+                                df_processed.loc[unknown_mask, col] = most_frequent
+                            
+                            df_processed[col] = encoder.transform(df_processed[col].astype(str))
+                        except Exception as e:
+                            logger.warning(f"인코딩 실패 {col}: {str(e)}, 기본값 0 사용")
+                            df_processed[col] = 0
+        
+        # 3. 데이터 타입 변환 (XGBoost 호환성)
+        for col in df_processed.columns:
+            if df_processed[col].dtype == 'object':
+                try:
+                    df_processed[col] = pd.to_numeric(df_processed[col], errors='coerce')
+                    if df_processed[col].isna().any():
+                        df_processed[col] = df_processed[col].fillna(0)
+                except:
+                    # 변환 실패 시 0으로 설정
+                    df_processed[col] = 0
+        
+        return df_processed
     
     def _coerce_ordinal_to_numeric(self, df: pd.DataFrame, ordinal_cols: List[str]) -> pd.DataFrame:
         """순서형 변수를 수치형으로 변환"""
@@ -334,7 +433,7 @@ class StructuraHRPredictor:
                 # 범주형 피처 인덱스 찾기
                 categorical_features = []
                 for i, col in enumerate(X_train.columns):
-                    if col in self.NOMINAL_COLS or pd.api.types.is_categorical_dtype(X_train[col]):
+                    if col in self.nominal_cols or pd.api.types.is_categorical_dtype(X_train[col]):
                         categorical_features.append(i)
                 
                 self.lime_explainer = lime.lime_tabular.LimeTabularExplainer(
@@ -350,16 +449,17 @@ class StructuraHRPredictor:
                 self.lime_explainer = None
     
     def _get_default_params(self) -> Dict:
-        """기본 하이퍼파라미터"""
+        """기본 하이퍼파라미터 (노트북에서 최적화된 값)"""
         return {
+            'n_estimators': 800,
+            'max_depth': 8,
             'learning_rate': 0.1,
-            'max_depth': 6,
             'subsample': 0.8,
             'colsample_bytree': 0.8,
-            'min_child_weight': 1,
-            'gamma': 0,
-            'reg_lambda': 1,
-            'reg_alpha': 0,
+            'reg_alpha': 5,
+            'reg_lambda': 10,
+            'min_child_weight': 5,
+            'scale_pos_weight': 8.0
         }
 
     def predict(self, X: pd.DataFrame, return_proba: bool = False) -> np.ndarray:
@@ -384,12 +484,11 @@ class StructuraHRPredictor:
         # 딕셔너리를 DataFrame으로 변환
         df = pd.DataFrame([employee_data])
         
-        # 전처리 (타겟 제외)
-        if 'Attrition' in df.columns:
-            df = df.drop(columns=['Attrition'])
+        # 전처리 적용 (개별 직원용)
+        df_processed = self._preprocess_single_employee(df)
         
         # 예측
-        probability = self.predict(df, return_proba=True)[0]
+        probability = self.predict(df_processed, return_proba=True)[0]
         prediction = int(probability >= self.optimal_threshold)
         
         # 위험 범주 결정
@@ -416,8 +515,8 @@ class StructuraHRPredictor:
         # 딕셔너리를 DataFrame으로 변환
         df = pd.DataFrame([employee_data])
         
-        if 'Attrition' in df.columns:
-            df = df.drop(columns=['Attrition'])
+        # 전처리 적용 (개별 직원용)
+        df = self._preprocess_single_employee(df)
         
         # 피처 중요도 (모델 기본)
         feature_importance = {}
@@ -514,10 +613,12 @@ class StructuraHRPredictor:
             'optimal_threshold': self.optimal_threshold,
             'scale_pos_weight': self.scale_pos_weight,
             'preprocessing_config': {
-                'DROP_COLS': self.DROP_COLS,
-                'ORDINAL_MAPS': self.ORDINAL_MAPS,
-                'NOMINAL_COLS': self.NOMINAL_COLS,
-                'ORDINAL_LABEL_ORDERS': self.ORDINAL_LABEL_ORDERS
+                'ordinal_cols': getattr(self, 'ordinal_cols', []),
+                'nominal_cols': getattr(self, 'nominal_cols', []),
+                'numerical_cols': getattr(self, 'numerical_cols', []),
+                'low_corr_threshold': getattr(self, 'low_corr_threshold', 0.03),
+                'ORDINAL_LABEL_ORDERS': getattr(self, 'ORDINAL_LABEL_ORDERS', {}),
+                'encoders': getattr(self, 'encoders', {})
             },
             'X_train_sample': self.X_train_sample
         }
@@ -542,10 +643,12 @@ class StructuraHRPredictor:
         
         # 전처리 설정 복원
         config = model_data['preprocessing_config']
-        self.DROP_COLS = config['DROP_COLS']
-        self.ORDINAL_MAPS = config['ORDINAL_MAPS']
-        self.NOMINAL_COLS = config['NOMINAL_COLS']
-        self.ORDINAL_LABEL_ORDERS = config['ORDINAL_LABEL_ORDERS']
+        self.ordinal_cols = config.get('ordinal_cols', [])
+        self.nominal_cols = config.get('nominal_cols', [])
+        self.numerical_cols = config.get('numerical_cols', [])
+        self.low_corr_threshold = config.get('low_corr_threshold', 0.03)
+        self.ORDINAL_LABEL_ORDERS = config.get('ORDINAL_LABEL_ORDERS', {})
+        self.encoders = config.get('encoders', {})
         
         # xAI 데이터 복원
         self.X_train_sample = model_data.get('X_train_sample')
@@ -570,7 +673,7 @@ class StructuraHRPredictor:
             try:
                 categorical_features = []
                 for i, col in enumerate(self.feature_columns):
-                    if col in self.NOMINAL_COLS:
+                    if col in self.nominal_cols:
                         categorical_features.append(i)
                 
                 self.lime_explainer = lime.lime_tabular.LimeTabularExplainer(
@@ -582,6 +685,338 @@ class StructuraHRPredictor:
                 )
             except Exception as e:
                 logger.warning(f"LIME 재설정 실패: {str(e)}")
+
+    def run_full_pipeline(self, optimize_hp: bool = False, use_sampling: bool = True) -> Dict:
+        """전체 파이프라인 실행 (노트북 기반 최신 버전)"""
+        logger.info("Structura 전체 파이프라인 시작 (노트북 기반)...")
+        
+        try:
+            # 1. 데이터 로딩
+            logger.info("1. 데이터 로딩 중...")
+            df = self.load_data()
+            
+            # 2. 전처리
+            logger.info("2. 데이터 전처리 중...")
+            X, y = self.preprocess_data(df)
+            
+            # 3. 훈련/테스트 분할 (노트북과 동일하게 30%)
+            logger.info("3. 데이터 분할 중...")
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.3, random_state=self.random_state, stratify=y
+            )
+            
+            logger.info(f"데이터 분할 완료 - 훈련: {X_train.shape}, 테스트: {X_test.shape}")
+            logger.info(f"클래스 균형 (훈련): {y_train.value_counts(normalize=True).round(3).to_dict()}")
+            
+            # 4. 클래스 불균형 해결 (노트북 기반)
+            if use_sampling:
+                logger.info("4. 클래스 불균형 해결 중...")
+                X_train_balanced, y_train_balanced = self._apply_sampling(X_train, y_train)
+                logger.info(f"샘플링 완료: {len(X_train)} → {len(X_train_balanced)}")
+            else:
+                X_train_balanced, y_train_balanced = X_train, y_train
+            
+            # 5. 하이퍼파라미터 최적화 (노트북 기반)
+            logger.info("5. 하이퍼파라미터 설정 중...")
+            if optimize_hp and OPTUNA_AVAILABLE:
+                hyperparams = self._optimize_hyperparameters_enhanced(X_train_balanced, y_train_balanced)
+            else:
+                # 노트북에서 최적화된 파라미터 사용
+                hyperparams = self._get_default_params()
+            
+            # 6. 모델 훈련
+            logger.info("6. 모델 훈련 중...")
+            self.train_model(X_train_balanced, y_train_balanced, hyperparams)
+            
+            # 7. 임계값 최적화 (재현율 70% 목표)
+            logger.info("7. 임계값 최적화 중...")
+            self.optimal_threshold = self._optimize_threshold(X_test, y_test, target_recall=0.7)
+            logger.info(f"최적 임계값: {self.optimal_threshold:.3f}")
+            
+            # 8. 성능 평가
+            logger.info("8. 성능 평가 중...")
+            y_pred_proba = self.predict(X_test, return_proba=True)
+            y_pred = self.predict(X_test, return_proba=False)
+            
+            # 9. 메트릭 계산
+            metrics = {
+                'roc_auc': roc_auc_score(y_test, y_pred_proba),
+                'accuracy': accuracy_score(y_test, y_pred),
+                'precision': precision_score(y_test, y_pred, zero_division=0),
+                'recall': recall_score(y_test, y_pred, zero_division=0),
+                'f1_score': f1_score(y_test, y_pred, zero_division=0),
+                'avg_precision': average_precision_score(y_test, y_pred_proba),
+                'optimal_threshold': self.optimal_threshold,
+                'training_samples': len(X_train_balanced),
+                'test_samples': len(X_test)
+            }
+            
+            logger.info(f"✅ 모델 훈련 완료!")
+            logger.info(f"성능 지표 - AUC: {metrics['roc_auc']:.3f}, F1: {metrics['f1_score']:.3f}, 재현율: {metrics['recall']:.3f}")
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"파이프라인 실행 실패: {str(e)}")
+            raise
+
+    def predict_single_employee(self, employee_data: Dict, employee_number: str) -> Dict:
+        """단일 직원 예측 (마스터 서버 호환)"""
+        try:
+            # 예측 수행
+            prediction_result = self.predict_single(employee_data)
+            explanation_result = self.explain_prediction(employee_data)
+            
+            # 통합 결과 구성
+            result = {
+                'employee_number': employee_number,
+                'attrition_probability': prediction_result.attrition_probability,
+                'attrition_prediction': prediction_result.attrition_prediction,
+                'risk_category': prediction_result.risk_category,
+                'confidence_score': prediction_result.confidence_score,
+                'prediction_timestamp': prediction_result.prediction_timestamp,
+                'explanation': {
+                    'feature_importance': explanation_result.feature_importance,
+                    'shap_values': explanation_result.shap_values,
+                    'top_risk_factors': explanation_result.top_risk_factors,
+                    'top_protective_factors': explanation_result.top_protective_factors,
+                    'individual_explanation': {
+                        'top_risk_factors': explanation_result.top_risk_factors,
+                        'top_protective_factors': explanation_result.top_protective_factors
+                    }
+                },
+                'recommendations': self._generate_recommendations({
+                    'risk_category': prediction_result.risk_category,
+                    'attrition_probability': prediction_result.attrition_probability,
+                    'explanation': {
+                        'individual_explanation': {
+                            'top_risk_factors': explanation_result.top_risk_factors
+                        }
+                    }
+                })
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"직원 {employee_number} 예측 실패: {str(e)}")
+            raise
+
+    def _apply_sampling(self, X_train: pd.DataFrame, y_train: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
+        """클래스 불균형 해결 (노트북 기반)"""
+        try:
+            # 여러 샘플링 기법 비교 테스트
+            from imblearn.over_sampling import SMOTE, ADASYN, BorderlineSMOTE
+            from imblearn.combine import SMOTETomek, SMOTEENN
+            from collections import Counter
+            
+            logger.info("클래스 불균형 해결 기법 비교 중...")
+            
+            sampling_methods = {
+                'SMOTE': SMOTE(random_state=self.random_state),
+                'ADASYN': ADASYN(random_state=self.random_state),
+                'BorderlineSMOTE': BorderlineSMOTE(random_state=self.random_state),
+                'SMOTETomek': SMOTETomek(random_state=self.random_state)
+            }
+            
+            sampling_results = {}
+            for name, sampler in sampling_methods.items():
+                try:
+                    X_resampled, y_resampled = sampler.fit_resample(X_train, y_train)
+                    
+                    # 간단한 테스트 모델로 성능 확인
+                    quick_model = XGBClassifier(
+                        n_estimators=100, 
+                        random_state=self.random_state,
+                        scale_pos_weight=5,
+                        verbosity=0
+                    )
+                    
+                    cv_f1 = cross_val_score(quick_model, X_resampled, y_resampled, 
+                                           cv=3, scoring='f1', n_jobs=-1).mean()
+                    
+                    sampling_results[name] = {
+                        'cv_f1': cv_f1,
+                        'size': len(y_resampled),
+                        'class_dist': Counter(y_resampled)
+                    }
+                    
+                    logger.info(f"  {name}: F1={cv_f1:.3f}, Size={len(y_resampled)}")
+                    
+                except Exception as e:
+                    logger.warning(f"  {name}: 실패 ({str(e)[:50]})")
+                    continue
+            
+            # 가장 좋은 샘플링 방법 선택
+            if sampling_results:
+                best_sampling_name = max(sampling_results.items(), key=lambda x: x[1]['cv_f1'])[0]
+                best_sampler = sampling_methods[best_sampling_name]
+                X_train_balanced, y_train_balanced = best_sampler.fit_resample(X_train, y_train)
+                
+                logger.info(f"선택된 샘플링: {best_sampling_name}")
+                logger.info(f"CV F1 Score: {sampling_results[best_sampling_name]['cv_f1']:.3f}")
+                
+                balanced_dist = pd.Series(y_train_balanced).value_counts()
+                logger.info(f"균형 후 분포: No={balanced_dist[0]}, Yes={balanced_dist[1]}")
+                
+                return pd.DataFrame(X_train_balanced, columns=X_train.columns), pd.Series(y_train_balanced)
+            else:
+                # 백업: 기본 SMOTE 사용
+                logger.warning("모든 샘플링 실패, 기본 SMOTE 사용")
+                smote = SMOTE(random_state=self.random_state)
+                X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
+                return pd.DataFrame(X_train_balanced, columns=X_train.columns), pd.Series(y_train_balanced)
+                
+        except ImportError:
+            logger.warning("imblearn 라이브러리가 없습니다. 샘플링 생략")
+            return X_train, y_train
+        except Exception as e:
+            logger.error(f"샘플링 실패: {str(e)}")
+            return X_train, y_train
+    
+    def _optimize_threshold(self, X_test: pd.DataFrame, y_test: pd.Series, target_recall: float = 0.7) -> float:
+        """임계값 최적화 (재현율 목표 기반)"""
+        try:
+            y_pred_proba = self.model.predict_proba(X_test)[:, 1]
+            
+            # Precision-Recall 곡선 계산
+            precision, recall, thresholds = precision_recall_curve(y_test, y_pred_proba)
+            
+            # 배열 길이 조정
+            if len(precision) > len(thresholds):
+                precision = precision[:-1]
+                recall = recall[:-1]
+            
+            # F1 점수 계산
+            with np.errstate(divide='ignore', invalid='ignore'):
+                f1_scores = 2 * (precision * recall) / (precision + recall)
+                f1_scores = np.nan_to_num(f1_scores)
+            
+            # 목표 재현율 이상인 인덱스 찾기
+            valid_indices = recall >= target_recall
+            
+            if np.any(valid_indices):
+                valid_f1 = f1_scores[valid_indices]
+                valid_thresholds = thresholds[valid_indices]
+                
+                if len(valid_f1) > 0 and len(valid_thresholds) > 0:
+                    best_idx = np.argmax(valid_f1)
+                    optimal_threshold = valid_thresholds[best_idx]
+                    logger.info(f"목표 재현율 {target_recall:.1%} 달성 임계값: {optimal_threshold:.3f}")
+                    return float(optimal_threshold)
+            
+            # 목표 달성 불가능한 경우, F1 최적화 임계값 사용
+            if len(f1_scores) > 0:
+                best_f1_idx = np.argmax(f1_scores)
+                optimal_threshold = thresholds[best_f1_idx]
+                logger.warning(f"목표 재현율 미달성, F1 최적화 임계값 사용: {optimal_threshold:.3f}")
+                return float(optimal_threshold)
+            
+            # 최종 백업
+            logger.warning("임계값 최적화 실패, 기본값 0.5 사용")
+            return 0.5
+            
+        except Exception as e:
+            logger.error(f"임계값 최적화 실패: {str(e)}")
+            return 0.5
+    
+    def _optimize_hyperparameters_enhanced(self, X_train: pd.DataFrame, y_train: pd.Series) -> Dict:
+        """향상된 하이퍼파라미터 최적화 (F1 Score 중심)"""
+        if not OPTUNA_AVAILABLE:
+            return self._get_default_params()
+        
+        def objective(trial):
+            # 클래스 가중치 범위 확대
+            pos_weight = trial.suggest_float('scale_pos_weight', 3.0, 15.0)
+            
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', 300, 1200),
+                'max_depth': trial.suggest_int('max_depth', 4, 12),
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.25),
+                'subsample': trial.suggest_float('subsample', 0.7, 1.0),
+                'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0),
+                'reg_alpha': trial.suggest_float('reg_alpha', 0, 20),
+                'reg_lambda': trial.suggest_float('reg_lambda', 0, 20),
+                'min_child_weight': trial.suggest_int('min_child_weight', 1, 20),
+                'scale_pos_weight': pos_weight
+            }
+            
+            # F1 Score 기반 교차검증
+            kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=self.random_state)
+            
+            model = XGBClassifier(
+                objective='binary:logistic',
+                eval_metric='auc',
+                tree_method='hist',
+                enable_categorical=True,
+                n_jobs=-1,
+                random_state=self.random_state,
+                verbosity=0,
+                **params
+            )
+            
+            cv_scores = cross_val_score(
+                model, X_train, y_train, 
+                cv=kfold,
+                scoring='f1',
+                n_jobs=-1
+            )
+            
+            return cv_scores.mean()
+        
+        study = optuna.create_study(
+            direction='maximize',
+            sampler=optuna.samplers.TPESampler(seed=self.random_state)
+        )
+        
+        logger.info("향상된 하이퍼파라미터 최적화 시작 (150회 시행)...")
+        study.optimize(objective, n_trials=150, show_progress_bar=False)
+        
+        logger.info(f"최적 F1 점수: {study.best_value:.4f}")
+        logger.info(f"최적 하이퍼파라미터: {study.best_params}")
+        return study.best_params
+
+    def _generate_recommendations(self, prediction_result):
+        """예측 결과 기반 권장사항 생성"""
+        recommendations = []
+        
+        risk_category = prediction_result['risk_category']
+        probability = prediction_result['attrition_probability']
+        
+        if risk_category == 'HIGH':
+            recommendations.extend([
+                "즉시 면담을 통한 이직 의도 파악 필요",
+                "업무 환경 및 만족도 개선 방안 논의",
+                "경력 개발 및 승진 기회 제공 검토",
+                "보상 체계 재검토 및 조정 고려"
+            ])
+        elif risk_category == 'MEDIUM':
+            recommendations.extend([
+                "정기적인 1:1 면담을 통한 상태 모니터링",
+                "업무 만족도 향상을 위한 개선 방안 모색",
+                "교육 및 개발 기회 제공",
+                "팀 내 역할 및 책임 재조정 검토"
+            ])
+        else:  # LOW
+            recommendations.extend([
+                "현재 상태 유지를 위한 지속적 관리",
+                "성과 인정 및 피드백 제공",
+                "장기 경력 개발 계획 수립 지원"
+            ])
+        
+        # XAI 설명 기반 추가 권장사항
+        if 'explanation' in prediction_result and 'individual_explanation' in prediction_result['explanation']:
+            exp = prediction_result['explanation']['individual_explanation']
+            if 'top_risk_factors' in exp:
+                for factor in exp['top_risk_factors'][:2]:  # 상위 2개 위험 요인
+                    feature = factor['feature']
+                    if 'Satisfaction' in feature:
+                        recommendations.append(f"{feature} 개선을 위한 구체적 액션 플랜 수립")
+                    elif 'WorkLifeBalance' in feature:
+                        recommendations.append("워라밸 개선을 위한 유연근무제 도입 검토")
+                    elif 'OverTime' in feature:
+                        recommendations.append("업무량 조정 및 초과근무 최소화 방안 마련")
+        
+        return recommendations
 
 # ------------------------------------------------------
 # Flask 애플리케이션 생성 및 설정
@@ -612,9 +1047,8 @@ def create_app():
     # 애플리케이션 초기화
     # ------------------------------------------------------
     
-    @app.before_first_request
     def initialize_services():
-        """첫 요청 전 서비스 초기화"""
+        """서비스 초기화"""
         nonlocal predictor
         
         try:
@@ -639,6 +1073,9 @@ def create_app():
         except Exception as e:
             logger.error(f"서비스 초기화 실패: {str(e)}")
             raise
+    
+    # 앱 생성 시 즉시 초기화
+    initialize_services()
     
     # ------------------------------------------------------
     # 유틸리티 함수
@@ -1135,7 +1572,7 @@ def create_app():
                     'distance_to_next_level': float(distance_to_next) if distance_to_next else None,
                     'percentile_rank': None  # 전체 직원 대비 순위 (추후 구현)
                 },
-                'recommendations': self._generate_recommendations(result),
+                'recommendations': predictor._generate_recommendations(result),
                 'timestamp': datetime.now().isoformat()
             }
             
@@ -1144,49 +1581,6 @@ def create_app():
         except Exception as e:
             logger.error(f"직원 분석 실패: {str(e)}")
             return jsonify({"error": f"직원 분석 실패: {str(e)}"}), 500
-    
-    def _generate_recommendations(self, prediction_result):
-        """예측 결과 기반 권장사항 생성"""
-        recommendations = []
-        
-        risk_category = prediction_result['risk_category']
-        probability = prediction_result['attrition_probability']
-        
-        if risk_category == 'HIGH':
-            recommendations.extend([
-                "즉시 면담을 통한 이직 의도 파악 필요",
-                "업무 환경 및 만족도 개선 방안 논의",
-                "경력 개발 및 승진 기회 제공 검토",
-                "보상 체계 재검토 및 조정 고려"
-            ])
-        elif risk_category == 'MEDIUM':
-            recommendations.extend([
-                "정기적인 1:1 면담을 통한 상태 모니터링",
-                "업무 만족도 향상을 위한 개선 방안 모색",
-                "교육 및 개발 기회 제공",
-                "팀 내 역할 및 책임 재조정 검토"
-            ])
-        else:  # LOW
-            recommendations.extend([
-                "현재 상태 유지를 위한 지속적 관리",
-                "성과 인정 및 피드백 제공",
-                "장기 경력 개발 계획 수립 지원"
-            ])
-        
-        # XAI 설명 기반 추가 권장사항
-        if 'explanation' in prediction_result and 'individual_explanation' in prediction_result['explanation']:
-            exp = prediction_result['explanation']['individual_explanation']
-            if 'top_risk_factors' in exp:
-                for factor in exp['top_risk_factors'][:2]:  # 상위 2개 위험 요인
-                    feature = factor['feature']
-                    if 'Satisfaction' in feature:
-                        recommendations.append(f"{feature} 개선을 위한 구체적 액션 플랜 수립")
-                    elif 'WorkLifeBalance' in feature:
-                        recommendations.append("워라밸 개선을 위한 유연근무제 도입 검토")
-                    elif 'OverTime' in feature:
-                        recommendations.append("업무량 조정 및 초과근무 최소화 방안 마련")
-        
-        return recommendations
     
     return app
 

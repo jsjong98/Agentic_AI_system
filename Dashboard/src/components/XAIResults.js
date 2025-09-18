@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Button,
@@ -8,19 +8,17 @@ import {
   Table,
   Tag,
   Alert,
-  Spin,
   Progress,
   Space,
   Divider,
   Tabs,
-  Tooltip,
   Modal,
   Select,
-  Switch,
   Statistic,
   Tree,
   Image,
-  Empty
+  Empty,
+  Tooltip
 } from 'antd';
 import {
   ExperimentOutlined,
@@ -31,8 +29,7 @@ import {
   NodeIndexOutlined,
   BulbOutlined,
   FileImageOutlined,
-  TableOutlined,
-  TreeSelect
+  BranchesOutlined
 } from '@ant-design/icons';
 import { apiService } from '../services/apiService';
 
@@ -52,12 +49,12 @@ const XAIResults = ({
   const [selectedModel, setSelectedModel] = useState('all');
   const [selectedFeature, setSelectedFeature] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [analysisType, setAnalysisType] = useState('feature_importance');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  // XAI 분석 유형
-  const analysisTypes = [
+  // XAI 분석 유형 (현재 사용하지 않지만 향후 확장용)
+  // eslint-disable-next-line no-unused-vars
+  const analysisTypesConfig = [
     {
       key: 'feature_importance',
       name: '특성 중요도',
@@ -567,7 +564,7 @@ const XAIResults = ({
                 <TabPane 
                   tab={
                     <span>
-                      <TreeSelect />
+                      <BranchesOutlined />
                       의사결정 트리
                     </span>
                   } 

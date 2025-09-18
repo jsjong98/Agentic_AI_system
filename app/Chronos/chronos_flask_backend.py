@@ -27,6 +27,9 @@ from chronos_processor_fixed import ProperTimeSeriesProcessor, ChronosVisualizer
 app = Flask(__name__)
 CORS(app)
 
+# 파일 업로드 크기 제한을 300MB로 설정
+app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024  # 300MB
+
 # 전역 변수
 processor = None
 model = None
@@ -324,6 +327,18 @@ def upload_timeseries_data():
         except Exception as e:
             print(f"최신 파일 링크 생성 실패: {e}")
         
+        # 파일 크기 확인 (300MB 제한)
+        file.seek(0, 2)  # 파일 끝으로 이동
+        file_size = file.tell()
+        file.seek(0)  # 파일 시작으로 되돌리기
+        
+        max_size = 300 * 1024 * 1024  # 300MB
+        if file_size > max_size:
+            return jsonify({
+                "success": False,
+                "error": f"파일 크기가 너무 큽니다. 최대 300MB까지 업로드 가능합니다. (현재: {file_size / (1024*1024):.1f}MB)"
+            }), 413
+        
         # 데이터 검증
         try:
             df = pd.read_csv(file_path)
@@ -582,7 +597,7 @@ def get_feature_importance():
             return jsonify({'error': '모델이 로드되지 않았습니다.'}), 400
         
         # 전체 데이터에 대한 평균 feature importance 계산
-        X, y, employee_ids = processor.create_sequences()
+        X, y, employee_ids = processor.create_proper_sequences()
         X_tensor = torch.FloatTensor(X).to(device)
         
         model.eval()
@@ -620,7 +635,7 @@ def get_model_analysis():
             return jsonify({'error': '모델이 로드되지 않았습니다.'}), 400
         
         # 전체 데이터 예측
-        X, y, employee_ids = processor.create_sequences()
+        X, y, employee_ids = processor.create_proper_sequences()
         X_tensor = torch.FloatTensor(X).to(device)
         y_tensor = torch.LongTensor(y)
         

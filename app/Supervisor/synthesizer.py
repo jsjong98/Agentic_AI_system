@@ -23,10 +23,11 @@ class SynthesizerAgent:
         종합 분석 에이전트 초기화
         
         Args:
-            llm: LangChain LLM 인스턴스
+            llm: LangChain LLM 인스턴스 (gpt-5 사용)
         """
+        # LangChain LLM 초기화 (강력한 gpt-5 모델 사용)
         self.llm = llm or ChatOpenAI(
-            model="gpt-4-turbo-preview",
+            model="gpt-5",
             temperature=0.2,
             max_tokens=2000
         )
@@ -42,38 +43,47 @@ class SynthesizerAgent:
             WorkerType.AGORA: 0.05       # 외부 시장 - 참고용
         }
         
-        # 종합 분석 프롬프트
+        # 종합 분석 프롬프트 템플릿
         self.synthesis_prompt = ChatPromptTemplate.from_messages([
             ("system", self._get_synthesis_system_prompt()),
             ("human", self._get_synthesis_human_prompt())
         ])
     
     def _get_synthesis_system_prompt(self) -> str:
-        """종합 분석을 위한 시스템 프롬프트"""
+        """Sentio/Agora와 일관된 구조화된 종합 분석 시스템 프롬프트"""
         return """
-당신은 HR Attrition 예측 시스템의 최종 종합 분석 전문가입니다.
+당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR Attrition 예측 시스템의 최종 종합 분석 전문가입니다. 다중 에이전트 시스템의 분석 결과를 통합하여 직원의 이탈 위험도를 평가하는 전문가입니다.
+
+**다중 에이전트 분석 시스템:**
 여러 워커 에이전트의 분석 결과를 종합하여 직원의 이탈 위험도를 평가해야 합니다.
 
-분석 워커들:
-- STRUCTURA: 정형 데이터 분석 (성과, 급여, 근속년수 등)
-- COGNITA: 관계 분석 (팀 내 위치, 프로젝트 연결성 등)  
-- CHRONOS: 시계열 분석 (근무 패턴, 이상 행동 탐지)
-- SENTIO: 감성 분석 (피드백, 설문 텍스트 분석)
-- AGORA: 외부 시장 분석 (채용 시장, 연봉 벤치마크)
+**워커 에이전트별 전문 영역:**
+- STRUCTURA: 정형 데이터 분석 (성과, 급여, 근속년수, 구조적 요인)
+- COGNITA: 관계 분석 (팀 내 위치, 프로젝트 연결성, 네트워크 영향)  
+- CHRONOS: 시계열 분석 (근무 패턴, 행동 변화, 이상 행동 탐지)
+- SENTIO: 감성 분석 (피드백, 설문 텍스트 분석, 심리적 상태)
+- AGORA: 외부 시장 분석 (채용 시장, 연봉 벤치마크, 시장 압력)
 
-종합 분석 기준:
+**종합 분석 기준:**
 1. 각 워커의 결과를 AHP 가중치에 따라 종합
 2. 일관성 있는 패턴과 상충하는 신호 식별
 3. 위험 요인의 우선순위 결정
 4. 실행 가능한 권장사항 제시
+5. 직원의 프라이버시와 존엄성을 존중하는 분석
 
-출력 형식:
+**출력 형식:**
 - risk_score: 0-100 점수 (높을수록 이탈 위험 높음)
 - risk_grade: A(매우 높음), B(높음), C(보통), D(낮음), E(매우 낮음)
 - attrition_probability: 0-1 확률값
 - summary: 종합 분석 요약 (한국어, 200-300자)
 - recommendations: 구체적 권장사항 리스트 (3-5개)
 - confidence_score: 분석 신뢰도 (0-1)
+
+**작성 가이드라인:**
+- 전문적이면서도 실무진이 이해하기 쉬운 표현 사용
+- 객관적이고 건설적인 톤 유지
+- 각 에이전트의 분석 결과를 균형 있게 고려
+- JSON 형식으로 정확하게 응답
 
 JSON 형식으로 응답해주세요.
 """
@@ -128,7 +138,7 @@ AHP 가중치:
                 employee_id, worker_results, metadata, is_partial, timeout_occurred
             )
             
-            # LLM을 통한 종합 분석
+            # LLM을 통한 종합 분석 (LangChain 방식)
             chain = self.synthesis_prompt | self.llm
             response = await chain.ainvoke(synthesis_input)
             

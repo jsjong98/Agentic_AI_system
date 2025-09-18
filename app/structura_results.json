@@ -1,0 +1,9 @@
+{
+  "employee_id": "1",
+  "structura_analysis": {
+    "attrition_probability": 0.25,
+    "risk_category": "MEDIUM",
+    "confidence_score": 0.85,
+    "key_factors": ["JobSatisfaction", "MonthlyIncome", "Age"]
+  }
+}

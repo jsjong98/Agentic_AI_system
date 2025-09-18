@@ -10,18 +10,14 @@ import {
   Typography, 
   Tag,
   Divider,
-  Space,
   Table,
-  Progress
+  Progress,
+  message
 } from 'antd';
 import {
-  UserOutlined,
-  PredictionOutlined,
-  WarningOutlined,
-  CheckCircleOutlined,
-  InfoCircleOutlined
+  ExperimentOutlined
 } from '@ant-design/icons';
-import { RadialBarChart, RadialBar, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { RadialBarChart, RadialBar, ResponsiveContainer } from 'recharts';
 import { apiService, apiUtils } from '../services/apiService';
 
 const { Title, Text } = Typography;
@@ -263,7 +259,7 @@ const EmployeePrediction = ({
               <Button
                 type="primary"
                 htmlType="submit"
-                icon={<PredictionOutlined />}
+                icon={<ExperimentOutlined />}
                 loading={predicting}
                 disabled={!thresholdResults || !weightResults}
               >

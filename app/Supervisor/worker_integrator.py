@@ -35,8 +35,18 @@ class WorkerClient:
         """워커 서버 상태 확인"""
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                async with session.get(f"{self.base_url}/health") as response:
-                    return response.status == 200
+                # 먼저 /health를 시도하고, 실패하면 /api/health를 시도
+                health_paths = ['/health', '/api/health']
+                
+                for health_path in health_paths:
+                    try:
+                        async with session.get(f"{self.base_url}{health_path}") as response:
+                            if response.status == 200:
+                                return True
+                    except Exception:
+                        continue
+                        
+                return False
         except Exception as e:
             self.logger.error(f"Health check failed for {self.worker_type}: {e}")
             return False

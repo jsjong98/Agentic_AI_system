@@ -1,0 +1,71 @@
+{
+  "employees": [
+    {
+      "employee_id": "1001",
+      "name": "김철수",
+      "department": "영업팀",
+      "manager_id": "2001",
+      "job_role": "Sales Executive",
+      "attrition": "No"
+    },
+    {
+      "employee_id": "1002", 
+      "name": "이영희",
+      "department": "영업팀",
+      "manager_id": "2001",
+      "job_role": "Sales Representative", 
+      "attrition": "No"
+    },
+    {
+      "employee_id": "1003",
+      "name": "박민수",
+      "department": "개발팀",
+      "manager_id": "2002",
+      "job_role": "Research Scientist",
+      "attrition": "Yes"
+    },
+    {
+      "employee_id": "2001",
+      "name": "최팀장",
+      "department": "영업팀", 
+      "manager_id": null,
+      "job_role": "Sales Manager",
+      "attrition": "No"
+    },
+    {
+      "employee_id": "2002",
+      "name": "정부장",
+      "department": "개발팀",
+      "manager_id": null, 
+      "job_role": "Research Director",
+      "attrition": "No"
+    }
+  ],
+  "relationships": [
+    {
+      "from_employee": "2001",
+      "to_employee": "1001",
+      "relationship_type": "MANAGES"
+    },
+    {
+      "from_employee": "2001", 
+      "to_employee": "1002",
+      "relationship_type": "MANAGES"
+    },
+    {
+      "from_employee": "2002",
+      "to_employee": "1003", 
+      "relationship_type": "MANAGES"
+    },
+    {
+      "from_employee": "1001",
+      "to_employee": "1002",
+      "relationship_type": "COLLABORATES"
+    },
+    {
+      "from_employee": "1001",
+      "to_employee": "1003",
+      "relationship_type": "COLLABORATES"
+    }
+  ]
+}

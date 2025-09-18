@@ -9,16 +9,12 @@ import {
   Timeline,
   Tag,
   Alert,
-  Spin,
   Progress,
   Space,
   Divider,
   Input,
-  Select,
   Switch,
-  Tooltip,
   Modal,
-  List,
   Avatar
 } from 'antd';
 import {
@@ -37,9 +33,6 @@ import {
 import { apiService } from '../services/apiService';
 
 const { Title, Text, Paragraph } = Typography;
-const { Step } = Steps;
-const { TextArea } = Input;
-const { Option } = Select;
 
 // 타이핑 애니메이션 컴포넌트
 const TypingText = ({ text, speed = 50, onComplete }) => {
@@ -473,24 +466,21 @@ const SupervisorWorkflow = ({
         <Col xs={24} lg={12}>
           <Card title="워크플로우 로그" style={{ height: '400px' }}>
             <div style={{ height: '320px', overflowY: 'auto' }}>
-              <Timeline>
-                {workflowLogs.map(log => (
-                  <Timeline.Item
-                    key={log.id}
-                    color={
-                      log.type === 'error' ? 'red' :
-                      log.type === 'warning' ? 'orange' :
-                      log.type === 'success' ? 'green' : 'blue'
-                    }
-                  >
+              <Timeline
+                items={workflowLogs.map(log => ({
+                  key: log.id,
+                  color: log.type === 'error' ? 'red' :
+                         log.type === 'warning' ? 'orange' :
+                         log.type === 'success' ? 'green' : 'blue',
+                  children: (
                     <div>
                       <Text strong>{log.timestamp.toLocaleTimeString()}</Text>
                       <br />
                       <Text>{log.message}</Text>
                     </div>
-                  </Timeline.Item>
-                ))}
-              </Timeline>
+                  )
+                }))}
+              />
             </div>
           </Card>
         </Col>

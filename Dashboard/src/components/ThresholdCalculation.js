@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Card, 
   Button, 
@@ -12,7 +12,8 @@ import {
   Tag,
   Divider,
   Tooltip,
-  Space
+  Space,
+  message
 } from 'antd';
 import {
   CalculatorOutlined,
@@ -34,7 +35,7 @@ const ThresholdCalculation = ({
   setLoading 
 }) => {
   const [calculating, setCalculating] = useState(false);
-  const [selectedScore, setSelectedScore] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [detailResults, setDetailResults] = useState(null);
 
   // 임계값 계산 실행
