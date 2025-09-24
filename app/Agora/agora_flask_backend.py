@@ -63,25 +63,37 @@ JOBSPY_CONFIG = {
     'cache_ttl': 3600
 }
 
-# 데이터 경로 설정
-DATA_PATH = {
-    'hr_data': 'data/IBM_HR.csv',
-    'market_cache': 'data/market_cache.json'
-}
+# 데이터 경로 설정 - uploads 디렉토리에서 찾기
+def get_agora_data_paths(analysis_type='batch'):
+    """uploads 디렉토리에서 Agora 데이터 파일 찾기"""
+    uploads_dir = f"../uploads/agora/{analysis_type}"
+    data_paths = {
+        'hr_data': None,
+        'market_cache': 'data/market_cache.json'
+    }
+    
+    if os.path.exists(uploads_dir):
+        files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
+        if files:
+            # 가장 최근 파일 사용 (타임스탬프 기준)
+            files.sort(reverse=True)
+            data_paths['hr_data'] = os.path.join(uploads_dir, files[0])
+    
+    # batch에 파일이 없으면 post 디렉토리 확인
+    if analysis_type == 'batch' and data_paths['hr_data'] is None:
+        post_paths = get_agora_data_paths('post')
+        data_paths['hr_data'] = post_paths['hr_data']
+    
+    # 기본값으로 fallback
+    if data_paths['hr_data'] is None:
+        data_paths['hr_data'] = 'data/IBM_HR.csv'
+        
+    return data_paths
+
+DATA_PATH = get_agora_data_paths()
 
 def get_structura_data_path():
-    """Structura에서 업로드된 데이터 경로 확인"""
-    # app/uploads/Structura 경로 우선 확인
-    upload_path = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'Structura', 'latest_hr_data.csv')
-    if os.path.exists(upload_path):
-        return upload_path
-    
-    # 기존 data 폴더 경로 확인
-    data_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'IBM_HR.csv')
-    if os.path.exists(data_path):
-        return data_path
-    
-    # 기본 경로 반환
+    """Structura에서 업로드된 데이터 경로 확인 (하위 호환성)"""
     return DATA_PATH['hr_data']
 
 @dataclass
@@ -123,6 +135,10 @@ def initialize_system():
     
     try:
         logger.info("Agora 시스템 초기화 시작...")
+        
+        if not AGORA_AVAILABLE:
+            logger.error("❌ Agora 모듈을 import할 수 없습니다. 시스템 초기화 실패")
+            return False
         
         # JobSpy 통합 설정으로 시장 데이터 프로세서 초기화
         market_processor = AgoraMarketProcessor(config=JOBSPY_CONFIG)
@@ -482,6 +498,8 @@ def handle_general_exception(e):
 @app.route('/api/agora/comprehensive-analysis', methods=['POST'])
 def comprehensive_market_analysis():
     """JobSpy + LLM 기반 종합 시장 분석"""
+    global DATA_PATH, market_processor
+    
     try:
         if not market_processor:
             return jsonify({
@@ -495,6 +513,33 @@ def comprehensive_market_analysis():
                 'success': False,
                 'error': '요청 데이터가 없습니다'
             }), 400
+        
+        analysis_type = data.get('analysis_type', 'batch')
+        
+        # 배치/사후 분석에서는 LLM 사용 안함 (API 비용 절약)
+        use_llm = analysis_type not in ['batch', 'post']
+        
+        # 분석 타입에 따른 데이터 경로 확인 및 재로드
+        new_data_paths = get_agora_data_paths(analysis_type)
+        current_data_paths = get_agora_data_paths()
+        
+        if new_data_paths != current_data_paths:
+            print(f"🔄 Agora: {analysis_type} 분석을 위한 데이터 재로드")
+            DATA_PATH = new_data_paths
+            
+            # 마켓 프로세서 재초기화
+            try:
+                if new_data_paths['hr_data'] and os.path.exists(new_data_paths['hr_data']):
+                    if AGORA_AVAILABLE:
+                        market_processor = AgoraMarketProcessor(
+                            hr_data_path=new_data_paths['hr_data'],
+                            **JOBSPY_CONFIG
+                        )
+                        print(f"✅ Agora {analysis_type} 데이터 재로드 완료")
+            except Exception as e:
+                print(f"⚠️ Agora 데이터 재로드 실패: {e}")
+        
+        print(f"📊 Agora {analysis_type} 분석 시작")
         
         # 필수 필드 검증
         required_fields = ['JobRole', 'MonthlyIncome']
@@ -510,8 +555,8 @@ def comprehensive_market_analysis():
         # JobSpy 기반 종합 분석 수행
         analysis_result = market_processor.comprehensive_market_analysis(data)
         
-        # LLM 기반 해석 생성
-        if llm_generator:
+        # LLM 기반 해석 생성 (배치/사후 분석에서는 API 비용 절약을 위해 생략)
+        if llm_generator and use_llm:
             # 분석 결과를 LLM 생성기 형식에 맞게 변환
             llm_input = {
                 'employee_id': data.get('EmployeeNumber', 'Unknown'),
@@ -528,6 +573,10 @@ def comprehensive_market_analysis():
             
             llm_interpretation = llm_generator.generate_market_interpretation(llm_input)
             analysis_result['llm_interpretation'] = llm_interpretation
+        else:
+            # 배치/사후 분석에서는 간단한 메시지만 제공
+            if not use_llm:
+                analysis_result['llm_interpretation'] = f"시장 분석 완료 (분석 타입: {analysis_type}, LLM 해석 생략)"
         
         return jsonify({
             'success': True,
@@ -581,6 +630,13 @@ def get_jobspy_status():
             'success': False,
             'error': str(e)
         }), 500
+
+# 앱 import 시 자동 초기화
+try:
+    logger.info("Agora 시스템 자동 초기화 시작...")
+    initialize_system()
+except Exception as e:
+    logger.error(f"Agora 시스템 자동 초기화 실패: {e}")
 
 if __name__ == '__main__':
     print("🏢 Agora HR Market Analysis API 시작 (JobSpy + LLM 통합)")

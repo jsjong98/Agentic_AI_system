@@ -78,6 +78,9 @@ const BatchAnalysis = ({
     username: 'neo4j',
     password: 'legs-augmentations-cradle'
   });
+  
+  // 사후 분석에서 저장된 최종 설정 상태
+  const [finalRiskSettings, setFinalRiskSettings] = useState(null);
   const [neo4jConnected, setNeo4jConnected] = useState(false);
   const [neo4jTesting, setNeo4jTesting] = useState(false);
   
@@ -101,6 +104,20 @@ const BatchAnalysis = ({
   // 컴포넌트 로드 시 캐시 확인
   useEffect(() => {
     loadCachedResults();
+  }, []);
+
+  // 사후 분석 최종 설정 로드
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('finalRiskSettings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setFinalRiskSettings(settings);
+        console.log('📋 사후 분석 최종 설정 로드됨:', settings);
+      } catch (error) {
+        console.error('최종 설정 파싱 오류:', error);
+      }
+    }
   }, []);
 
   // 캐시된 결과 로드
@@ -153,15 +170,46 @@ const BatchAnalysis = ({
     message.info('새로운 분석을 시작합니다. 파일을 업로드해주세요.');
   };
 
-  // LLM을 통한 분석 결과 해석
+  // 최적화된 설정을 적용한 분석 결과 해석
   const generateAnalysisInsights = (results) => {
     // analysisResults.results 배열을 사용하여 분석
     const employeeResults = results.results || results;
     const totalEmployees = employeeResults.length;
     
+    // 사후 분석의 최적화된 설정 로드
+    const finalSettings = finalRiskSettings || {};
+    const optimizedThresholds = finalSettings.risk_thresholds || {};
+    const optimizedWeights = finalSettings.integration_config || {};
+    
+    console.log('📊 배치 분석에 적용된 최적화 설정:', {
+      thresholds: optimizedThresholds,
+      weights: optimizedWeights,
+      prediction_mode: finalSettings.attrition_prediction_mode
+    });
+    
     // 각 직원의 위험도 계산 및 부서 정보 추출
     const processedEmployees = employeeResults.map(emp => {
-      const riskScore = emp.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+      // 최적화된 가중치가 있으면 적용, 없으면 기본 통합 점수 사용
+      let riskScore = emp.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+      
+      // 최적화된 가중치로 재계산 (가능한 경우)
+      if (optimizedWeights && Object.keys(optimizedWeights).length > 0) {
+        const structuraScore = emp.analysis_result?.structura_result?.prediction?.attrition_probability || 0;
+        const cognitaScore = emp.analysis_result?.cognita_result?.risk_analysis?.overall_risk_score || 0;
+        const chronosScore = emp.analysis_result?.chronos_result?.prediction?.risk_score || 0;
+        const sentioScore = emp.analysis_result?.sentio_result?.sentiment_analysis?.risk_score || 0;
+        const agoraScore = emp.analysis_result?.agora_result?.market_analysis?.risk_score || 0;
+        
+        riskScore = (
+          (structuraScore * (optimizedWeights.structura_weight || 0.3)) +
+          (cognitaScore * (optimizedWeights.cognita_weight || 0.2)) +
+          (chronosScore * (optimizedWeights.chronos_weight || 0.2)) +
+          (sentioScore * (optimizedWeights.sentio_weight || 0.15)) +
+          (agoraScore * (optimizedWeights.agora_weight || 0.15))
+        );
+      }
+      
+      // 최적화된 임계값으로 위험도 분류
       const riskLevel = riskScore ? calculateRiskLevel(riskScore) : 'UNKNOWN';
       
       // 부서 정보 추출 (다양한 소스에서 시도, 부서 분류 문제 해결)
@@ -220,9 +268,29 @@ const BatchAnalysis = ({
       };
     });
 
+    // 최적화된 위험도 분류 통계 (사후 분석 기준 적용)
     const highRisk = processedEmployees.filter(emp => emp.risk_level === 'high').length;
     const mediumRisk = processedEmployees.filter(emp => emp.risk_level === 'medium').length;
     const lowRisk = processedEmployees.filter(emp => emp.risk_level === 'low').length;
+    
+    // 최적화된 퇴사 예측 (사후 분석 설정 적용)
+    const predictionMode = finalSettings.attrition_prediction_mode || 'high_risk_only';
+    let predictedAttrition = 0;
+    
+    if (predictionMode === 'high_risk_only') {
+      predictedAttrition = highRisk; // 고위험군만 퇴사 예측
+    } else if (predictionMode === 'medium_high_risk') {
+      predictedAttrition = highRisk + mediumRisk; // 주의군 + 고위험군 퇴사 예측
+    }
+    
+    console.log('📊 최적화된 위험도 분류 결과:', {
+      안전군: lowRisk,
+      주의군: mediumRisk, 
+      고위험군: highRisk,
+      퇴사예측모드: predictionMode,
+      예측퇴사자수: predictedAttrition,
+      임계값: optimizedThresholds
+    });
 
     // 부서별 통계
     const departmentStats = {};
@@ -746,19 +814,38 @@ const BatchAnalysis = ({
         return false;
       }
 
-      // 파일 저장
+      // 1. 먼저 파일을 Supervisor에 업로드
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('agent_type', agentType);
+      formData.append('analysis_type', 'batch'); // 배치 분석용
+      
+      const uploadResponse = await fetch('http://localhost:5006/upload_file', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || '파일 업로드 실패');
+      }
+      
+      const uploadResult = await uploadResponse.json();
+      console.log(`${agentType} 파일 업로드 성공:`, uploadResult);
+
+      // 2. 파일 저장
       setAgentFiles(prev => ({
         ...prev,
         [agentType]: file
       }));
 
-      // Structura 파일인 경우 직원 데이터도 파싱
+      // 3. Structura 파일인 경우 직원 데이터도 파싱
       if (agentType === 'structura') {
         const employees = parseEmployeeData(lines, headers);
         setEmployeeData(employees);
       }
 
-      message.success(`${agentType} 데이터를 로드했습니다.`);
+      message.success(`${agentType} 데이터를 업로드하고 로드했습니다.`);
       return false; // Ant Design Upload 컴포넌트의 자동 업로드 방지
       
     } catch (error) {
@@ -1002,6 +1089,7 @@ const BatchAnalysis = ({
         },
         body: JSON.stringify({
           employees: employeeData,
+          analysis_type: 'batch', // 배치 분석 타입 전달
           ...agentConfig,
           integration_config: integrationConfig,
           neo4j_config: neo4jConnected ? neo4jConfig : null,
@@ -1103,6 +1191,46 @@ const BatchAnalysis = ({
         console.error('예측 히스토리 저장 실패:', error);
         // 에러가 발생해도 메인 분석 프로세스는 계속 진행
       }
+
+      // 부서별 결과 저장 (XAI 포함)
+      try {
+        console.log('💾 부서별 배치 분석 결과 저장 시작...');
+        
+        const saveResponse = await fetch('http://localhost:5007/api/batch-analysis/save-results', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            results: finalResults.results || [],
+            applied_settings: finalRiskSettings || {},
+            analysis_metadata: {
+              total_employees: finalResults.total_employees,
+              completed_employees: finalResults.completed_employees,
+              analysis_timestamp: new Date().toISOString(),
+              agents_used: Object.keys(agentConfig).filter(key => agentConfig[key] && key.startsWith('use_')),
+              integration_config: integrationConfig
+            }
+          })
+        });
+
+        if (saveResponse.ok) {
+          const saveResult = await saveResponse.json();
+          console.log('✅ 부서별 결과 저장 완료:', saveResult);
+          
+          message.success(
+            `부서별 분석 결과 저장 완료! ` +
+            `${saveResult.statistics?.total_departments || 0}개 부서, ` +
+            `${saveResult.statistics?.total_employees || 0}명 직원 (XAI PNG 시각화 포함)`
+          );
+        } else {
+          const errorResult = await saveResponse.json();
+          console.error('❌ 부서별 결과 저장 실패:', errorResult);
+        }
+      } catch (error) {
+        console.error('부서별 결과 저장 중 오류:', error);
+        // 에러가 발생해도 메인 분석 프로세스는 계속 진행
+      }
       
       setAnalysisProgress(prev => ({ ...prev, overall: 100 }));
 
@@ -1138,9 +1266,73 @@ const BatchAnalysis = ({
 
   // 위험도 레벨 계산 함수
   const calculateRiskLevel = (score) => {
-    if (score >= 0.7) return 'HIGH';
-    if (score >= 0.4) return 'MEDIUM';
+    // 사후 분석에서 저장된 최종 설정 사용
+    const finalSettings = JSON.parse(localStorage.getItem('finalRiskSettings') || '{}');
+    const highThreshold = finalSettings.risk_thresholds?.high_risk_threshold || 0.7;
+    const lowThreshold = finalSettings.risk_thresholds?.low_risk_threshold || 0.3;
+    
+    if (score >= highThreshold) return 'HIGH';
+    if (score >= lowThreshold) return 'MEDIUM';
     return 'LOW';
+  };
+
+  // 저장된 결과 파일 정보 표시
+  const showSavedResultsInfo = () => {
+    Modal.info({
+      title: '💾 저장된 배치 분석 결과',
+      width: 600,
+      content: (
+        <div>
+          <Alert
+            message="부서별 분석 결과 저장 위치"
+            description={
+              <div>
+                <Text strong>저장 경로:</Text> <Text code>app/results/batch_analysis/</Text><br />
+                <Text strong>파일 형식:</Text><br />
+                • <Text code>department_summary_[timestamp].json</Text> - 부서별 요약 통계<br />
+                • <Text code>individual_results_[timestamp].json</Text> - 개별 직원 상세 결과 (XAI 포함)<br />
+                <br />
+                <Text strong>포함 내용:</Text><br />
+                • 각 부서별 위험도 분포 (안전군/주의군/고위험군)<br />
+                • 개별 직원별 5개 에이전트 분석 결과<br />
+                • Structura & Chronos XAI 설명 (SHAP, LIME, Attention)<br />
+                • <Text strong style={{color: '#1890ff'}}>XAI PNG 시각화 파일들</Text> (각 직원별 visualizations 폴더)<br />
+                • 적용된 최적화 설정 (임계값, 가중치, 예측 모드)<br />
+                <br />
+                <Text type="secondary">
+                  💡 파일은 배치 분석 완료 시 자동으로 저장되며, 
+                  타임스탬프를 포함한 파일명으로 구분됩니다.
+                </Text>
+              </div>
+            }
+            type="info"
+            showIcon
+          />
+          
+          <div style={{ marginTop: 16 }}>
+            <Text strong>저장되는 XAI 정보:</Text>
+            <ul>
+              <li><Text strong>Structura:</Text> SHAP values, LIME explanation, Feature importance</li>
+              <li><Text strong>Chronos:</Text> Attention weights, Sequence importance, Trend analysis</li>
+              <li><Text strong>Cognita:</Text> Network centrality, Relationship strength, Influence score</li>
+              <li><Text strong>Sentio:</Text> Sentiment analysis, Keyword analysis, Emotion distribution</li>
+              <li><Text strong>Agora:</Text> Market analysis, Industry trends, External factors</li>
+            </ul>
+            
+            <Text strong style={{color: '#1890ff'}}>생성되는 PNG 시각화 파일들:</Text>
+            <ul>
+              <li><Text code>structura_feature_importance.png</Text> - 특성 중요도 막대 그래프</li>
+              <li><Text code>structura_shap_values.png</Text> - SHAP 값 시각화</li>
+              <li><Text code>chronos_attention_weights.png</Text> - 어텐션 가중치 시계열</li>
+              <li><Text code>chronos_sequence_importance.png</Text> - 시퀀스 중요도 막대 그래프</li>
+              <li><Text code>agent_scores_comparison.png</Text> - 에이전트별 위험도 점수 비교</li>
+              <li><Text code>sentio_emotion_distribution.png</Text> - 감정 분포 파이 차트</li>
+            </ul>
+          </div>
+        </div>
+      ),
+      onOk() {},
+    });
   };
 
   // 결과 내보내기 함수
@@ -1923,6 +2115,31 @@ const BatchAnalysis = ({
         style={{ marginBottom: 16 }}
       />
 
+      {/* 사후 분석 최종 설정 정보 표시 */}
+      {finalRiskSettings && (
+        <Alert
+          message="📊 사후 분석 최적화 설정 적용됨"
+          description={
+            <div>
+              <Text strong>위험도 분류 기준:</Text> 안전군 &lt; {finalRiskSettings.risk_thresholds?.low_risk_threshold || 0.3}, 
+              주의군 {finalRiskSettings.risk_thresholds?.low_risk_threshold || 0.3} ~ {finalRiskSettings.risk_thresholds?.high_risk_threshold || 0.7}, 
+              고위험군 ≥ {finalRiskSettings.risk_thresholds?.high_risk_threshold || 0.7}
+              <br />
+              <Text strong>퇴사 예측 기준:</Text> {finalRiskSettings.attrition_prediction_mode === 'high_risk_only' ? '고위험군만 퇴사 예측' : '주의군 + 고위험군 퇴사 예측'}
+              {finalRiskSettings.performance_metrics?.f1_score && (
+                <>
+                  <br />
+                  <Text strong>최적화된 F1-Score:</Text> {finalRiskSettings.performance_metrics.f1_score.toFixed(4)}
+                </>
+              )}
+            </div>
+          }
+          type="success"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       <Alert
         message="🔍 디버깅 정보"
         description={
@@ -2020,8 +2237,7 @@ const BatchAnalysis = ({
                 <br />
                 <Text type="secondary">
                   📅 {new Date(cachedResults[0].timestamp).toLocaleString('ko-KR')} | 
-                  👥 {cachedResults[0].totalEmployees}명 분석 | 
-                  🎯 정확도 {cachedResults[0].accuracy}%
+                  👥 {cachedResults[0].totalEmployees}명 분석
                 </Text>
               </div>
             )}
@@ -2334,18 +2550,82 @@ const BatchAnalysis = ({
           <Col span={24}>
             <Card title="3단계: 분석 결과" extra={<BarChartOutlined />}>
               <Space direction="vertical" style={{ width: '100%' }}>
-                {/* 요약 통계 */}
+                
+                {/* 최적화된 설정 적용 정보 */}
+                {finalRiskSettings && (
+                  <Alert
+                    message="🎯 사후 분석 최적화 설정 적용됨"
+                    description={
+                      <div>
+                        <Row gutter={16}>
+                          <Col span={8}>
+                            <Text strong>위험도 임계값:</Text><br />
+                            <Text>• 안전군: &lt; {finalRiskSettings.risk_thresholds?.low_risk_threshold || 0.3}</Text><br />
+                            <Text>• 주의군: {finalRiskSettings.risk_thresholds?.low_risk_threshold || 0.3} ~ {finalRiskSettings.risk_thresholds?.high_risk_threshold || 0.7}</Text><br />
+                            <Text>• 고위험군: ≥ {finalRiskSettings.risk_thresholds?.high_risk_threshold || 0.7}</Text>
+                          </Col>
+                          <Col span={8}>
+                            <Text strong>퇴사 예측 기준:</Text><br />
+                            <Text>{finalRiskSettings.attrition_prediction_mode === 'high_risk_only' ? '고위험군만 퇴사 예측' : '주의군 + 고위험군 퇴사 예측'}</Text><br />
+                            {finalRiskSettings.performance_metrics?.f1_score && (
+                              <>
+                                <Text strong>최적화된 F1-Score:</Text><br />
+                                <Text>{finalRiskSettings.performance_metrics.f1_score.toFixed(4)}</Text>
+                              </>
+                            )}
+                          </Col>
+                          <Col span={8}>
+                            {finalRiskSettings.performance_metrics && (
+                              <>
+                                <Text strong>성능 지표:</Text><br />
+                                <Text>• Precision: {finalRiskSettings.performance_metrics.precision?.toFixed(4) || 'N/A'}</Text><br />
+                                <Text>• Recall: {finalRiskSettings.performance_metrics.recall?.toFixed(4) || 'N/A'}</Text><br />
+                                <Text>• F1-Score: {finalRiskSettings.performance_metrics.f1_score?.toFixed(4) || 'N/A'}</Text>
+                              </>
+                            )}
+                          </Col>
+                        </Row>
+                      </div>
+                    }
+                    type="success"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )}
+                {/* 최적화된 위험도 분류 통계 */}
                 <Row gutter={16}>
-                  <Col span={6}>
+                  <Col span={4}>
                     <Statistic
                       title="총 직원 수"
                       value={analysisResults.total_employees}
                       prefix={<CheckCircleOutlined />}
                     />
                   </Col>
-                  <Col span={6}>
+                  <Col span={5}>
                     <Statistic
-                      title="고위험군"
+                      title={`안전군 (< ${finalRiskSettings?.risk_thresholds?.low_risk_threshold || 0.3})`}
+                      value={analysisResults.results?.filter(r => {
+                        const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                        return score && calculateRiskLevel(score) === 'LOW';
+                      }).length || 0}
+                      valueStyle={{ color: '#52c41a' }}
+                      prefix={<CheckCircleOutlined />}
+                    />
+                  </Col>
+                  <Col span={5}>
+                    <Statistic
+                      title={`주의군 (${finalRiskSettings?.risk_thresholds?.low_risk_threshold || 0.3} ~ ${finalRiskSettings?.risk_thresholds?.high_risk_threshold || 0.7})`}
+                      value={analysisResults.results?.filter(r => {
+                        const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                        return score && calculateRiskLevel(score) === 'MEDIUM';
+                      }).length || 0}
+                      valueStyle={{ color: '#fa8c16' }}
+                      prefix={<ExclamationCircleOutlined />}
+                    />
+                  </Col>
+                  <Col span={5}>
+                    <Statistic
+                      title={`고위험군 (≥ ${finalRiskSettings?.risk_thresholds?.high_risk_threshold || 0.7})`}
                       value={analysisResults.results?.filter(r => {
                         const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
                         return score && calculateRiskLevel(score) === 'HIGH';
@@ -2354,24 +2634,25 @@ const BatchAnalysis = ({
                       prefix={<ExclamationCircleOutlined />}
                     />
                   </Col>
-                  <Col span={6}>
+                  <Col span={5}>
                     <Statistic
-                      title="중위험군"
-                      value={analysisResults.results?.filter(r => {
-                        const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-                        return score && calculateRiskLevel(score) === 'MEDIUM';
-                      }).length || 0}
-                      valueStyle={{ color: '#fa8c16' }}
-                    />
-                  </Col>
-                  <Col span={6}>
-                    <Statistic
-                      title="저위험군"
-                      value={analysisResults.results?.filter(r => {
-                        const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-                        return score && calculateRiskLevel(score) === 'LOW';
-                      }).length || 0}
-                      valueStyle={{ color: '#52c41a' }}
+                      title={`예측 퇴사자 (${finalRiskSettings?.attrition_prediction_mode === 'high_risk_only' ? '고위험군만' : '주의군+고위험군'})`}
+                      value={(() => {
+                        const highRisk = analysisResults.results?.filter(r => {
+                          const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                          return score && calculateRiskLevel(score) === 'HIGH';
+                        }).length || 0;
+                        const mediumRisk = analysisResults.results?.filter(r => {
+                          const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                          return score && calculateRiskLevel(score) === 'MEDIUM';
+                        }).length || 0;
+                        
+                        return finalRiskSettings?.attrition_prediction_mode === 'medium_high_risk' 
+                          ? highRisk + mediumRisk 
+                          : highRisk;
+                      })()}
+                      valueStyle={{ color: '#722ed1' }}
+                      prefix={<TeamOutlined />}
                     />
                   </Col>
                 </Row>
@@ -2434,6 +2715,15 @@ const BatchAnalysis = ({
                       }}
                     >
                       단체 통계
+                    </Button>
+                  </Col>
+                  <Col>
+                    <Button 
+                      icon={<FileTextOutlined />}
+                      onClick={() => showSavedResultsInfo()}
+                      type="dashed"
+                    >
+                      저장된 결과 확인
                     </Button>
                   </Col>
                   <Col>

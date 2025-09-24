@@ -451,6 +451,10 @@ def batch_analyze():
                 'error': 'employee_ids list is required'
             }), 400
         
+        # 분석 타입 추출 (기본값: batch)
+        analysis_type = data.get('analysis_type', 'batch')
+        logger.info(f"Analysis type: {analysis_type}")
+        
         max_batch_size = int(os.getenv('MAX_BATCH_SIZE', '10'))
         if len(employee_ids) > max_batch_size:
             return jsonify({
@@ -468,7 +472,7 @@ def batch_analyze():
             # 병렬 분석 실행
             tasks = []
             for employee_id in employee_ids:
-                task = supervisor_workflow.analyze_employee(employee_id)
+                task = supervisor_workflow.analyze_employee(employee_id, analysis_type=analysis_type)
                 tasks.append(task)
             
             results = loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
@@ -786,6 +790,248 @@ HR 데이터 분석과 이직 예측 분석을 도와드리는 전문 AI 어시�
 # 파일 업로드 및 관리 기능
 # ------------------------------------------------------
 
+# 에이전트별 파일 업로드 기능 (새로운 체계적 관리)
+@app.route('/api/upload/agent', methods=['POST'])
+def upload_agent_file():
+    """에이전트별 파일 업로드 (batch/post 분석용)"""
+    try:
+        # 파일 확인
+        if 'file' not in request.files:
+            return jsonify({
+                "success": False,
+                "error": "파일이 업로드되지 않았습니다."
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                "success": False,
+                "error": "파일이 선택되지 않았습니다."
+            }), 400
+        
+        # 파라미터 검증
+        agent_type = request.form.get('agent_type')  # structura, chronos, sentio, agora
+        analysis_type = request.form.get('analysis_type')  # batch, post
+        
+        if not agent_type or not analysis_type:
+            return jsonify({
+                "success": False,
+                "error": "agent_type과 analysis_type이 필요합니다."
+            }), 400
+        
+        if agent_type not in ['structura', 'chronos', 'sentio', 'agora']:
+            return jsonify({
+                "success": False,
+                "error": "유효하지 않은 agent_type입니다. (structura, chronos, sentio, agora)"
+            }), 400
+        
+        if analysis_type not in ['batch', 'post']:
+            return jsonify({
+                "success": False,
+                "error": "유효하지 않은 analysis_type입니다. (batch, post)"
+            }), 400
+        
+        # 파일 확장자 확인
+        allowed_extensions = ['.csv', '.json']
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                "success": False,
+                "error": "CSV 또는 JSON 파일만 업로드 가능합니다."
+            }), 400
+        
+        # 파일 저장 경로 생성
+        filename = secure_filename(file.filename)
+        upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', agent_type, analysis_type)
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # 타임스탬프를 포함한 파일명으로 저장
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = os.path.splitext(filename)[0]
+        new_filename = f"{base_name}_{timestamp}{file_ext}"
+        file_path = os.path.join(upload_dir, new_filename)
+        
+        # 파일 저장
+        file.save(file_path)
+        
+        # 파일 정보 검증 및 메타데이터 생성
+        try:
+            file_info = {
+                "original_filename": filename,
+                "saved_filename": new_filename,
+                "agent_type": agent_type,
+                "analysis_type": analysis_type,
+                "file_path": file_path,
+                "relative_path": os.path.join('uploads', agent_type, analysis_type, new_filename),
+                "upload_time": datetime.now().isoformat(),
+                "file_size": os.path.getsize(file_path),
+                "file_extension": file_ext
+            }
+            
+            # CSV 파일인 경우 추가 정보
+            if file_ext == '.csv':
+                df = pd.read_csv(file_path)
+                file_info.update({
+                    "rows": len(df),
+                    "columns": len(df.columns),
+                    "column_names": df.columns.tolist()
+                })
+                
+                # Structura의 경우 Attrition 컬럼 확인
+                if agent_type == 'structura' and 'Attrition' not in df.columns:
+                    logger.warning(f"Structura 파일에 Attrition 컬럼이 없습니다: {new_filename}")
+                    file_info["warning"] = "Attrition 컬럼이 없습니다. 예측 성능에 영향을 줄 수 있습니다."
+            
+            # JSON 파일인 경우
+            elif file_ext == '.json':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    json_data = json.load(f)
+                file_info.update({
+                    "json_keys": list(json_data.keys()) if isinstance(json_data, dict) else None,
+                    "json_type": type(json_data).__name__
+                })
+            
+        except Exception as e:
+            # 파일 삭제
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return jsonify({
+                "success": False,
+                "error": f"파일 형식이 올바르지 않습니다: {str(e)}"
+            }), 400
+        
+        # 메타데이터 파일 저장
+        metadata_path = os.path.join(upload_dir, f"{base_name}_{timestamp}.json")
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(file_info, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Agent file uploaded successfully: {agent_type}/{analysis_type}/{new_filename}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"{agent_type} {analysis_type} 파일이 성공적으로 업로드되었습니다.",
+            "file_info": file_info
+        })
+        
+    except Exception as e:
+        logger.error(f"Agent file upload error: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"파일 업로드 중 오류가 발생했습니다: {str(e)}"
+        }), 500
+
+
+@app.route('/api/files/<agent_type>/<analysis_type>', methods=['GET'])
+def list_agent_files(agent_type, analysis_type):
+    """특정 에이전트/분석 타입의 파일 목록 조회"""
+    try:
+        if agent_type not in ['structura', 'chronos', 'sentio', 'agora']:
+            return jsonify({
+                "success": False,
+                "error": "유효하지 않은 agent_type입니다."
+            }), 400
+        
+        if analysis_type not in ['batch', 'post']:
+            return jsonify({
+                "success": False,
+                "error": "유효하지 않은 analysis_type입니다."
+            }), 400
+        
+        upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', agent_type, analysis_type)
+        
+        if not os.path.exists(upload_dir):
+            return jsonify({
+                "success": True,
+                "files": [],
+                "message": f"{agent_type}/{analysis_type} 디렉토리가 없습니다."
+            })
+        
+        files = []
+        for filename in os.listdir(upload_dir):
+            if filename.endswith('.json'):  # 메타데이터 파일
+                metadata_path = os.path.join(upload_dir, filename)
+                try:
+                    with open(metadata_path, 'r', encoding='utf-8') as f:
+                        file_info = json.load(f)
+                    files.append(file_info)
+                except Exception as e:
+                    logger.warning(f"메타데이터 파일 읽기 실패: {filename}, {str(e)}")
+        
+        # 업로드 시간 순으로 정렬 (최신순)
+        files.sort(key=lambda x: x.get('upload_time', ''), reverse=True)
+        
+        return jsonify({
+            "success": True,
+            "files": files,
+            "agent_type": agent_type,
+            "analysis_type": analysis_type,
+            "total_files": len(files)
+        })
+        
+    except Exception as e:
+        logger.error(f"List agent files error: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"파일 목록 조회 중 오류가 발생했습니다: {str(e)}"
+        }), 500
+
+
+@app.route('/api/files/<agent_type>/<analysis_type>/<filename>', methods=['DELETE'])
+def delete_agent_file(agent_type, analysis_type, filename):
+    """에이전트 파일 삭제"""
+    try:
+        if agent_type not in ['structura', 'chronos', 'sentio', 'agora']:
+            return jsonify({
+                "success": False,
+                "error": "유효하지 않은 agent_type입니다."
+            }), 400
+        
+        if analysis_type not in ['batch', 'post']:
+            return jsonify({
+                "success": False,
+                "error": "유효하지 않은 analysis_type입니다."
+            }), 400
+        
+        upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', agent_type, analysis_type)
+        file_path = os.path.join(upload_dir, filename)
+        
+        # 메타데이터 파일 경로
+        base_name = os.path.splitext(filename)[0]
+        metadata_path = os.path.join(upload_dir, f"{base_name}.json")
+        
+        deleted_files = []
+        
+        # 실제 파일 삭제
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            deleted_files.append(filename)
+        
+        # 메타데이터 파일 삭제
+        if os.path.exists(metadata_path):
+            os.remove(metadata_path)
+            deleted_files.append(f"{base_name}.json")
+        
+        if not deleted_files:
+            return jsonify({
+                "success": False,
+                "error": "파일을 찾을 수 없습니다."
+            }), 404
+        
+        logger.info(f"Agent files deleted: {agent_type}/{analysis_type}/{deleted_files}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"파일이 성공적으로 삭제되었습니다.",
+            "deleted_files": deleted_files
+        })
+        
+    except Exception as e:
+        logger.error(f"Delete agent file error: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"파일 삭제 중 오류가 발생했습니다: {str(e)}"
+        }), 500
+
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
     """파일 업로드"""
@@ -811,9 +1057,19 @@ def upload_file():
                 "error": "CSV 파일만 업로드 가능합니다."
             }), 400
         
-        # 파일 저장
+        # 파일 저장 - 에이전트별/분석타입별 폴더 지원
         filename = secure_filename(file.filename)
-        upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'supervisor')
+        
+        # 에이전트 타입과 분석 타입 확인 (폼 데이터에서)
+        agent_type = request.form.get('agent_type', 'supervisor')
+        analysis_type = request.form.get('analysis_type', 'general')
+        
+        # 에이전트별 폴더 구조 생성
+        if agent_type in ['structura', 'chronos', 'sentio', 'agora'] and analysis_type in ['batch', 'post']:
+            upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', agent_type, analysis_type)
+        else:
+            upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'supervisor')
+        
         os.makedirs(upload_dir, exist_ok=True)
         
         # 타임스탬프를 포함한 파일명으로 저장
@@ -831,6 +1087,9 @@ def upload_file():
                 "original_filename": filename,
                 "saved_filename": new_filename,
                 "file_path": file_path,
+                "relative_path": os.path.join('uploads', agent_type, analysis_type, new_filename) if agent_type in ['structura', 'chronos', 'sentio', 'agora'] else os.path.join('uploads', 'supervisor', new_filename),
+                "agent_type": agent_type,
+                "analysis_type": analysis_type,
                 "upload_time": datetime.now().isoformat(),
                 "file_size": os.path.getsize(file_path),
                 "rows": len(df),

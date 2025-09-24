@@ -76,7 +76,7 @@ python cognita_flask_backend.py
 ## 📡 API 엔드포인트
 
 ### 기본 정보
-- **서버 주소**: `http://localhost:5000`
+- **서버 주소**: `http://localhost:5002`
 - **Content-Type**: `application/json`
 - **CORS**: React 개발 서버 지원
 
@@ -239,7 +239,7 @@ python test_cognita_api.py
 // 1. 헬스체크
 const checkHealth = async () => {
   try {
-    const response = await fetch('http://localhost:5000/api/health');
+    const response = await fetch('http://localhost:5002/api/health');
     const data = await response.json();
     console.log('서버 상태:', data);
     console.log('Neo4j 연결:', data.neo4j_connected);
@@ -251,7 +251,7 @@ const checkHealth = async () => {
 // 2. 직원 분석
 const analyzeEmployee = async (employeeId) => {
   try {
-    const response = await fetch(`http://localhost:5000/api/analyze/employee/${employeeId}`);
+    const response = await fetch(`http://localhost:5002/api/analyze/employee/${employeeId}`);
     const data = await response.json();
     console.log('위험도:', data.overall_risk_score);
     console.log('위험 범주:', data.risk_category);
@@ -265,7 +265,7 @@ const analyzeEmployee = async (employeeId) => {
 // 3. 부서 분석
 const analyzeDepartment = async (departmentName, sampleSize = 20) => {
   try {
-    const response = await fetch('http://localhost:5000/api/analyze/department', {
+    const response = await fetch('http://localhost:5002/api/analyze/department', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -287,7 +287,7 @@ const analyzeDepartment = async (departmentName, sampleSize = 20) => {
 const getEmployees = async (params = {}) => {
   try {
     const query = new URLSearchParams(params).toString();
-    const response = await fetch(`http://localhost:5000/api/employees?${query}`);
+    const response = await fetch(`http://localhost:5002/api/employees?${query}`);
     const data = await response.json();
     return data.employees;
   } catch (error) {
@@ -306,7 +306,7 @@ const useCognitaAPI = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  const baseURL = 'http://localhost:5000/api';
+  const baseURL = 'http://localhost:5002/api';
   
   const checkHealth = async () => {
     try {

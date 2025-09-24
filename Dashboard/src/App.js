@@ -5,14 +5,14 @@ import {
   ApiOutlined,
   RobotOutlined,
   BarChartOutlined,
-  FileTextOutlined,
-  TeamOutlined
+  TeamOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 
 import Home from './components/Home';
-import ExportResults from './components/ExportResults';
 import BatchAnalysis from './components/BatchAnalysis';
 import PostAnalysis from './components/PostAnalysis';
+import ReportGeneration from './components/ReportGeneration';
 import RelationshipAnalysis from './components/RelationshipAnalysis';
 import GroupStatistics from './components/GroupStatistics';
 import { apiService } from './services/apiService';
@@ -121,9 +121,9 @@ const App = () => {
       label: '📈 사후 분석',
     },
     {
-      key: 'export',
+      key: 'report-generation',
       icon: <FileTextOutlined />,
-      label: '📋 결과 내보내기',
+      label: '📄 보고서 출력',
     },
   ];
 
@@ -225,13 +225,13 @@ const App = () => {
         );
       case 'post-analysis':
         return (
-          <PostAnalysis
+          <PostAnalysis 
             {...commonProps}
           />
         );
-      case 'export':
+      case 'report-generation':
         return (
-          <ExportResults
+          <ReportGeneration 
             {...commonProps}
           />
         );

@@ -69,6 +69,7 @@ class AgentState(BaseModel):
     # === 기본 정보 ===
     employee_id: str = Field(..., description="분석 대상 직원의 고유 식별자")
     session_id: str = Field(..., description="분석 세션 고유 식별자")
+    analysis_type: str = Field(default="batch", description="분석 타입 (batch/post)")
     started_at: datetime = Field(default_factory=datetime.now)
     
     # === 분석 체크리스트 ===

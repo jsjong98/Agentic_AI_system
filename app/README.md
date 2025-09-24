@@ -121,7 +121,7 @@ app/
   - 모델 설명 및 해석
 
 ### 🕸️ Cognita - 관계형 위험도 분석 시스템
-**포트**: `5000` | **기술**: Neo4j + Graph Analytics
+**포트**: `5002` | **기술**: Neo4j + Graph Analytics
 
 - **목적**: 직원 간 관계 네트워크 기반 이직 위험도 분석
 - **특징**:
@@ -136,7 +136,7 @@ app/
   - 부서별 위험도 분석
 
 ### ⏰ Chronos - 시계열 데이터 분석 시스템
-**포트**: `5002` | **기술**: GRU+CNN+Attention 하이브리드 딥러닝
+**포트**: `5003` | **기술**: GRU+CNN+Attention 하이브리드 딥러닝
 
 - **목적**: 직원 행동 패턴의 시간적 변화 추적 및 예측
 - **특징**:
@@ -151,7 +151,7 @@ app/
   - 인터랙티브 차트 제공
 
 ### 📝 Sentio - 텍스트 감정 분석 시스템
-**포트**: `5003` | **기술**: NLP + 키워드 분석 + GPT-5-nano
+**포트**: `5004` | **기술**: NLP + 키워드 분석 + GPT-5-nano
 
 - **목적**: HR 텍스트의 감정 분석 및 퇴직 위험 신호 탐지
 - **특징**:
@@ -167,7 +167,7 @@ app/
   - client.responses.create() API 호출
 
 ### 🌍 Agora - 외부 시장 분석 시스템
-**포트**: `5004` | **기술**: 시장 데이터 분석 + GPT-5-nano LLM 해석
+**포트**: `5005` | **기술**: 시장 데이터 분석 + GPT-5-nano LLM 해석
 
 - **목적**: 외부 시장 상황을 고려한 이직 위험도 분석
 - **특징**:
@@ -183,9 +183,9 @@ app/
   - LLM 기반 해석 제공
 
 ### 🎯 Supervisor - 워커 통합 관리 시스템
-**포트**: `5005` | **기술**: LangGraph + GPT-5-nano 워크플로우
+**포트**: `5006` | **기술**: LangGraph + GPT-5-nano 워크플로우
 
-- **목적**: 6개 워커 에이전트의 결과를 종합 분석 및 관리
+- **목적**: 7개 워커 에이전트의 결과를 종합 분석 및 관리
 - **특징**:
   - LangGraph 기반 워크플로우 자동화
   - GPT-5-nano 기반 지능형 의사결정
@@ -313,7 +313,7 @@ python run_structura_server.py  # 포트: 5001
 ```bash
 cd app/Cognita
 pip install -r requirements.txt
-python run_cognita_server.py    # 포트: 5000
+python run_cognita_server.py    # 포트: 5002
 ```
 
 ## 🌐 React 연동 가이드 (통합 에이전틱 시스템)
@@ -447,7 +447,7 @@ const useAgenticAI = () => {
 - `POST /api/explain` - 예측 설명 (xAI)
 - `GET /api/feature-importance` - 피처 중요도
 
-#### Cognita 워커 (포트 5000)
+#### Cognita 워커 (포트 5002)
 - `GET /api/health` - 서버 상태 확인
 - `GET /api/employees` - 직원 목록
 - `GET /api/departments` - 부서 목록
@@ -479,7 +479,7 @@ cd app/Cognita && python test_cognita_api.py
 ```bash
 # 헬스체크
 curl http://localhost:5001/api/health  # Structura
-curl http://localhost:5000/api/health  # Cognita
+curl http://localhost:5002/api/health  # Cognita
 
 # 간단한 예측 테스트 (Structura)
 curl -X POST http://localhost:5001/api/predict \
@@ -487,7 +487,7 @@ curl -X POST http://localhost:5001/api/predict \
   -d '{"Age": 35, "JobSatisfaction": 3, "OverTime": "Yes"}'
 
 # 직원 분석 테스트 (Cognita)
-curl http://localhost:5000/api/analyze/employee/1
+curl http://localhost:5002/api/analyze/employee/1
 ```
 
 ## 📈 성능 특성
@@ -511,12 +511,12 @@ curl http://localhost:5000/api/analyze/employee/1
 1. **포트 충돌**
    ```bash
    # 포트 사용 확인
-   netstat -an | grep :5000
    netstat -an | grep :5001
+   netstat -an | grep :5002
    
    # 프로세스 종료
-   kill -9 $(lsof -ti:5000)
    kill -9 $(lsof -ti:5001)
+   kill -9 $(lsof -ti:5002)
    ```
 
 2. **의존성 설치 오류**

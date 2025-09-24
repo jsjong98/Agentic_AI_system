@@ -1,0 +1,202 @@
+{
+  "Sales Executive_서울_20250924": {
+    "data": {
+      "job_postings": 222,
+      "avg_salary": 5297114,
+      "salary_range": {
+        "min": 3500000,
+        "max": 8000000
+      },
+      "market_trend": "GROWING",
+      "competition_level": "HIGH",
+      "key_skills": [
+        "영업관리",
+        "고객관리",
+        "팀리더십",
+        "성과관리"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-24T21:37:36.419165"
+  },
+  "Sales Executive_서울_20250925": {
+    "data": {
+      "job_postings": 168,
+      "avg_salary": 5484410,
+      "salary_range": {
+        "min": 3500000,
+        "max": 8000000
+      },
+      "market_trend": "GROWING",
+      "competition_level": "HIGH",
+      "key_skills": [
+        "영업관리",
+        "고객관리",
+        "팀리더십",
+        "성과관리"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:12:22.619586"
+  },
+  "Research Scientist_서울_20250925": {
+    "data": {
+      "job_postings": 245,
+      "avg_salary": 5895018,
+      "salary_range": {
+        "min": 4000000,
+        "max": 9500000
+      },
+      "market_trend": "HOT",
+      "competition_level": "VERY_HIGH",
+      "key_skills": [
+        "Python",
+        "Machine Learning",
+        "SQL",
+        "Statistics"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:13:00.890592"
+  },
+  "Laboratory Technician_서울_20250925": {
+    "data": {
+      "job_postings": 100,
+      "avg_salary": 3349100,
+      "salary_range": {
+        "min": 2500000,
+        "max": 4500000
+      },
+      "market_trend": "STABLE",
+      "competition_level": "MEDIUM",
+      "key_skills": [
+        "실험기술",
+        "품질관리",
+        "데이터분석",
+        "안전관리"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:13:14.129369"
+  },
+  "Manufacturing Director_서울_20250925": {
+    "data": {
+      "job_postings": 179,
+      "avg_salary": 5550656,
+      "salary_range": {
+        "min": 4200000,
+        "max": 8500000
+      },
+      "market_trend": "GROWING",
+      "competition_level": "HIGH",
+      "key_skills": [
+        "운영관리",
+        "프로세스개선",
+        "팀관리",
+        "비용관리"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:13:41.761113"
+  },
+  "Healthcare Representative_서울_20250925": {
+    "data": {
+      "job_postings": 331,
+      "avg_salary": 3957268,
+      "salary_range": {
+        "min": 2800000,
+        "max": 5500000
+      },
+      "market_trend": "STABLE",
+      "competition_level": "MEDIUM",
+      "key_skills": [
+        "영업",
+        "고객응대",
+        "제품지식",
+        "협상"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:14:00.564557"
+  },
+  "Manager_서울_20250925": {
+    "data": {
+      "job_postings": 335,
+      "avg_salary": 5215833,
+      "salary_range": {
+        "min": 3800000,
+        "max": 7500000
+      },
+      "market_trend": "STABLE",
+      "competition_level": "MEDIUM",
+      "key_skills": [
+        "팀관리",
+        "전략기획",
+        "의사결정",
+        "커뮤니케이션"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:14:37.088915"
+  },
+  "Sales Representative_서울_20250925": {
+    "data": {
+      "job_postings": 261,
+      "avg_salary": 3906804,
+      "salary_range": {
+        "min": 2800000,
+        "max": 5500000
+      },
+      "market_trend": "STABLE",
+      "competition_level": "MEDIUM",
+      "key_skills": [
+        "영업",
+        "고객응대",
+        "제품지식",
+        "협상"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:14:54.037851"
+  },
+  "Research Director_서울_20250925": {
+    "data": {
+      "job_postings": 68,
+      "avg_salary": 7469670,
+      "salary_range": {
+        "min": 5500000,
+        "max": 10000000
+      },
+      "market_trend": "GROWING",
+      "competition_level": "HIGH",
+      "key_skills": [
+        "연구기획",
+        "프로젝트관리",
+        "팀리더십",
+        "기술분석"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:15:12.149358"
+  },
+  "Human Resources_서울_20250925": {
+    "data": {
+      "job_postings": 159,
+      "avg_salary": 4384828,
+      "salary_range": {
+        "min": 3200000,
+        "max": 6000000
+      },
+      "market_trend": "STABLE",
+      "competition_level": "MEDIUM",
+      "key_skills": [
+        "인사관리",
+        "채용",
+        "교육기획",
+        "노무관리"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-09-25T00:15:44.693178"
+  }
+}
