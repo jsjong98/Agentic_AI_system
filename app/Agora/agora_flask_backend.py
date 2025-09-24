@@ -52,6 +52,17 @@ market_processor = None
 market_analyzer = None
 llm_generator = None
 
+# JobSpy 통합 설정
+JOBSPY_CONFIG = {
+    'use_jobspy': True,
+    'use_selenium': True,
+    'jobspy_results_wanted': 50,
+    'jobspy_hours_old': 72,
+    'api_rate_limit': 1.0,
+    'max_retries': 3,
+    'cache_ttl': 3600
+}
+
 # 데이터 경로 설정
 DATA_PATH = {
     'hr_data': 'data/IBM_HR.csv',
@@ -113,9 +124,9 @@ def initialize_system():
     try:
         logger.info("Agora 시스템 초기화 시작...")
         
-        # 시장 데이터 프로세서 초기화
-        market_processor = AgoraMarketProcessor()
-        logger.info("✅ 시장 데이터 프로세서 초기화 완료")
+        # JobSpy 통합 설정으로 시장 데이터 프로세서 초기화
+        market_processor = AgoraMarketProcessor(config=JOBSPY_CONFIG)
+        logger.info("✅ 시장 데이터 프로세서 초기화 완료 (JobSpy 통합)")
         
         # 시장 분석기 초기화 (Structura 업로드 데이터 우선 사용)
         hr_data_path = get_structura_data_path()
@@ -125,15 +136,14 @@ def initialize_system():
         else:
             logger.warning("⚠️ HR 데이터 파일을 찾을 수 없습니다.")
         
-        # LLM 생성기 초기화 (API 키는 환경변수에서 가져오기)
-        api_key = os.environ.get('OPENAI_API_KEY')
-        if api_key:
-            llm_generator = AgoraLLMGenerator(api_key)
-            logger.info("✅ LLM 생성기 초기화 완료")
+        # LLM 생성기 초기화 (환경변수에서 자동으로 API 키 로드)
+        llm_generator = AgoraLLMGenerator()
+        if llm_generator.llm_available:
+            logger.info("✅ LLM 생성기 초기화 완료 (OpenAI API 연동)")
         else:
-            logger.warning("⚠️ OpenAI API 키가 없어 LLM 생성기를 초기화하지 않습니다.")
+            logger.warning("⚠️ OpenAI API 키가 없어 규칙 기반 해석만 사용됩니다")
         
-        logger.info("🎉 Agora 시스템 초기화 완료!")
+        logger.info("🎉 Agora 시스템 초기화 완료! (JobSpy + LLM 통합)")
         return True
         
     except Exception as e:
@@ -465,8 +475,115 @@ def handle_general_exception(e):
 # 앱 실행
 # ============================================================================
 
+# ============================================================================
+# 새로운 JobSpy 통합 API 엔드포인트
+# ============================================================================
+
+@app.route('/api/agora/comprehensive-analysis', methods=['POST'])
+def comprehensive_market_analysis():
+    """JobSpy + LLM 기반 종합 시장 분석"""
+    try:
+        if not market_processor:
+            return jsonify({
+                'success': False,
+                'error': 'Agora 시스템이 초기화되지 않았습니다'
+            }), 500
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': '요청 데이터가 없습니다'
+            }), 400
+        
+        # 필수 필드 검증
+        required_fields = ['JobRole', 'MonthlyIncome']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'error': f'필수 필드가 누락되었습니다: {field}'
+                }), 400
+        
+        logger.info(f"종합 시장 분석 요청: {data.get('JobRole', 'Unknown')}")
+        
+        # JobSpy 기반 종합 분석 수행
+        analysis_result = market_processor.comprehensive_market_analysis(data)
+        
+        # LLM 기반 해석 생성
+        if llm_generator:
+            # 분석 결과를 LLM 생성기 형식에 맞게 변환
+            llm_input = {
+                'employee_id': data.get('EmployeeNumber', 'Unknown'),
+                'job_role': data.get('JobRole', ''),
+                'department': data.get('Department', ''),
+                'job_level': data.get('JobLevel', 1),
+                'current_salary': data.get('MonthlyIncome', 0),
+                'years_at_company': data.get('YearsAtCompany', 0),
+                'market_pressure_index': analysis_result['market_pressure_index'],
+                'compensation_gap': analysis_result['compensation_gap'],
+                'job_postings_count': analysis_result['raw_market_data']['job_postings'],
+                'market_data': analysis_result['raw_market_data']
+            }
+            
+            llm_interpretation = llm_generator.generate_market_interpretation(llm_input)
+            analysis_result['llm_interpretation'] = llm_interpretation
+        
+        return jsonify({
+            'success': True,
+            'data': analysis_result,
+            'message': 'JobSpy 기반 종합 시장 분석 완료'
+        })
+        
+    except Exception as e:
+        logger.error(f"종합 시장 분석 실패: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'분석 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+@app.route('/api/agora/jobspy-status', methods=['GET'])
+def get_jobspy_status():
+    """JobSpy 및 시스템 상태 확인"""
+    try:
+        # JobSpy 가용성 확인
+        try:
+            from jobspy import scrape_jobs
+            jobspy_available = True
+        except ImportError:
+            jobspy_available = False
+        
+        # Selenium 가용성 확인
+        try:
+            from selenium import webdriver
+            selenium_available = True
+        except ImportError:
+            selenium_available = False
+        
+        status = {
+            'system_initialized': market_processor is not None,
+            'jobspy_available': jobspy_available,
+            'selenium_available': selenium_available,
+            'llm_available': llm_generator.llm_available if llm_generator else False,
+            'config': JOBSPY_CONFIG,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': status
+        })
+        
+    except Exception as e:
+        logger.error(f"상태 확인 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
-    print("🚀 Agora HR Market Analysis API 서버 시작...")
+    print("🏢 Agora HR Market Analysis API 시작 (JobSpy + LLM 통합)")
     print("=" * 60)
     
     # 시스템 초기화
@@ -474,6 +591,9 @@ if __name__ == '__main__':
         print("✅ 시스템 초기화 완료")
         print("🌐 서버 주소: http://localhost:5005")
         print("📚 API 문서: http://localhost:5005/")
+        print("🔧 새로운 엔드포인트:")
+        print("   - POST /api/agora/comprehensive-analysis")
+        print("   - GET  /api/agora/jobspy-status")
         print("=" * 60)
         
         app.run(

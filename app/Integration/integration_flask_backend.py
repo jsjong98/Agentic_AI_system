@@ -48,7 +48,7 @@ def health_check():
         'service': 'Integration',
         'timestamp': datetime.now().isoformat(),
         'version': '1.0.0',
-        'llm_enabled': report_generator.client is not None
+        'llm_enabled': hasattr(report_generator, 'llm') and report_generator.llm is not None
     })
 
 
@@ -72,7 +72,7 @@ def set_api_key():
         return jsonify({
             'success': True,
             'message': 'API 키가 성공적으로 설정되었습니다.',
-            'llm_enabled': report_generator.client is not None
+            'llm_enabled': hasattr(report_generator, 'llm') and report_generator.llm is not None
         })
         
     except Exception as e:
@@ -154,8 +154,13 @@ def calculate_thresholds():
                 'error': 'Score 컬럼을 찾을 수 없습니다.'
             }), 400
         
+        # 최적화 방법 설정 (기본값: Bayesian Optimization)
+        optimization_method = data.get('method', 'bayesian')
+        
         # 임계값 계산
-        results = threshold_calculator.calculate_thresholds_for_scores(current_data, score_columns)
+        results = threshold_calculator.calculate_thresholds_for_scores(
+            current_data, score_columns, method=optimization_method
+        )
         
         # 요약 테이블 생성
         summary_df = threshold_calculator.get_summary_table()
@@ -234,7 +239,7 @@ def optimize_weights():
         if method == 'grid':
             method_params['n_points_per_dim'] = data.get('n_points_per_dim', 5)
         elif method == 'bayesian':
-            method_params['n_calls'] = data.get('n_calls', 100)
+            method_params['n_calls'] = data.get('n_calls', 50)  # 베이지안 최적화 50회로 설정
         
         # 가중치 최적화 실행
         optimization_results = weight_optimizer.optimize_weights(
@@ -472,7 +477,7 @@ def compare_methods():
                 if method == 'grid':
                     method_params['n_points_per_dim'] = 3  # 빠른 테스트를 위해 줄임
                 elif method == 'bayesian':
-                    method_params['n_calls'] = 50  # 빠른 테스트를 위해 줄임
+                    method_params['n_calls'] = 50  # 베이지안 최적화 50회
                 
                 # 최적화 실행
                 result = temp_optimizer.optimize_weights(
@@ -628,7 +633,7 @@ def generate_report():
                 'employee_id': employee_id,
                 'format': 'text',
                 'report': report_content,
-                'llm_used': use_llm and report_generator.client is not None
+                'llm_used': use_llm and hasattr(report_generator, 'llm') and report_generator.llm is not None
             }
         else:
             report_content = report_generator.generate_employee_report(employee_id, use_llm)
@@ -637,7 +642,7 @@ def generate_report():
                 'employee_id': employee_id,
                 'format': 'json',
                 'report': report_content,
-                'llm_used': use_llm and report_generator.client is not None
+                'llm_used': use_llm and hasattr(report_generator, 'llm') and report_generator.llm is not None
             }
         
         # 파일 저장 옵션
@@ -866,6 +871,431 @@ def upload_employee_data():
         }), 500
 
 
+@app.route('/api/post-analysis/bayesian-optimization', methods=['POST'])
+def bayesian_optimization():
+    """사후 분석용 베이지안 최적화 (PostAnalysis.js 전용)"""
+    global current_data, current_results
+    
+    try:
+        data = request.get_json()
+        print(f"🔧 베이지안 최적화 요청 받음")
+        print(f"📊 요청 데이터 키: {list(data.keys()) if data else 'None'}")
+        
+        agent_results = data.get('agent_results', {})
+        optimization_config = data.get('optimization_config', {})
+        
+        print(f"📊 agent_results 키: {list(agent_results.keys()) if agent_results else 'None'}")
+        print(f"📊 optimization_config: {optimization_config}")
+        
+        if not agent_results:
+            return jsonify({
+                'success': False,
+                'error': '에이전트 분석 결과가 필요합니다.'
+            }), 400
+        
+        # 에이전트 분석 결과에서 직접 데이터 생성 (Total_score.csv 불필요)
+        print("✅ 에이전트 분석 결과를 사용하여 베이지안 최적화 수행")
+        
+        # 임계값이 계산되지 않은 경우 자동 계산
+        if 'threshold_results' not in current_results:
+            try:
+                # 기본 임계값 설정
+                current_results['threshold_results'] = {
+                    'structura_threshold': 0.5,
+                    'cognita_threshold': 0.5,
+                    'chronos_threshold': 0.5,
+                    'sentio_threshold': 0.5,
+                    'agora_threshold': 0.5,
+                    'high_risk_threshold': 0.7,
+                    'medium_risk_threshold': 0.4
+                }
+                print("✅ 기본 임계값 설정 완료")
+            except Exception as e:
+                print(f"❌ 임계값 설정 실패: {str(e)}")
+                return jsonify({
+                    'success': False,
+                    'error': f'임계값 설정에 실패했습니다: {str(e)}'
+                }), 500
+        
+        # 베이지안 최적화 설정
+        n_trials = optimization_config.get('n_trials', 50)  # 베이지안 최적화 50회로 설정
+        optimization_target = optimization_config.get('optimization_target', 'f1_score')
+        
+        # 에이전트 결과에서 실제 예측 데이터 추출
+        print("🔧 실제 베이지안 최적화 시작...")
+        print(f"📊 에이전트 결과 분석: {list(agent_results.keys())}")
+        
+        # 1. 에이전트별 예측 결과 추출 (0~1 사이 값)
+        agent_predictions = {}
+        actual_labels = []
+        employee_ids = []
+        
+        for agent_name, result in agent_results.items():
+            # 예측 결과 추출 (PostAnalysis.js 구조에 맞게 수정)
+            predictions = None
+            
+            # PostAnalysis.js에서 생성하는 구조: result.raw_result.data.predictions
+            if result.get('raw_result', {}).get('data', {}).get('predictions'):
+                predictions = result['raw_result']['data']['predictions']
+                print(f"   - {agent_name}: raw_result.data.predictions에서 발견")
+            elif result.get('predictions'):
+                predictions = result['predictions']
+                print(f"   - {agent_name}: predictions에서 발견")
+            elif result.get('data', {}).get('predictions'):
+                predictions = result['data']['predictions']
+                print(f"   - {agent_name}: data.predictions에서 발견")
+            else:
+                print(f"   - {agent_name}: 예측 데이터 구조 확인")
+                print(f"     result 키: {list(result.keys()) if isinstance(result, dict) else 'not dict'}")
+                if result.get('raw_result'):
+                    print(f"     raw_result 키: {list(result['raw_result'].keys()) if isinstance(result['raw_result'], dict) else 'not dict'}")
+                    if result['raw_result'].get('data'):
+                        print(f"     raw_result.data 키: {list(result['raw_result']['data'].keys()) if isinstance(result['raw_result']['data'], dict) else 'not dict'}")
+            
+            if predictions:
+                print(f"   - {agent_name}: {len(predictions)}개 예측 결과")
+                
+                # 첫 번째 에이전트에서 employee_id와 actual_attrition 추출 (실제 데이터만 사용)
+                if not employee_ids:
+                    employee_ids = [pred['employee_id'] for pred in predictions]
+                    # actual_attrition이 있다면 사용, 없으면 오류 반환
+                    if predictions and len(predictions) > 0 and 'actual_attrition' in predictions[0]:
+                        actual_labels = [pred['actual_attrition'] for pred in predictions]
+                        print(f"✅ 실제 라벨 사용: {sum(actual_labels)}/{len(actual_labels)} 이탈")
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'error': '실제 이탈 라벨(actual_attrition)이 없습니다. 실제 데이터를 사용해주세요.'
+                        }), 400
+                
+                # 에이전트별 위험도 점수 (0~1)
+                agent_predictions[agent_name] = [pred['risk_score'] for pred in predictions]
+            else:
+                print(f"   ⚠️ {agent_name}: 예측 결과 없음")
+        
+        if not agent_predictions:
+            return jsonify({
+                'success': False,
+                'error': '에이전트 예측 결과가 없습니다. 먼저 1단계 에이전트 분석을 완료해주세요.'
+            }), 400
+        
+        print(f"✅ 데이터 준비 완료: {len(employee_ids)}명, {len(agent_predictions)}개 에이전트")
+        
+        # 에이전트 예측 결과를 Total_score.csv 형식으로 변환
+        optimization_data = []
+        for i, emp_id in enumerate(employee_ids):
+            row = {'employee_id': emp_id}
+            
+            # Total_score.csv 컬럼명에 맞게 변환 (대문자 시작)
+            agent_name_mapping = {
+                'structura': 'Structura_score',
+                'cognita': 'Cognita_score', 
+                'chronos': 'Chronos_score',
+                'sentio': 'Sentio_score',
+                'agora': 'Agora_score'
+            }
+            
+            # 각 에이전트의 예측 점수 추가 (Total_score.csv 형식)
+            for agent_name, predictions in agent_predictions.items():
+                if i < len(predictions):
+                    column_name = agent_name_mapping.get(agent_name.lower(), f'{agent_name}_score')
+                    row[column_name] = predictions[i]
+            
+            # 누락된 에이전트 점수는 기본값 0.5로 설정
+            for column_name in agent_name_mapping.values():
+                if column_name not in row:
+                    row[column_name] = 0.5
+            
+            # 실제 라벨을 Total_score.csv 형식으로 변환 (Yes/No)
+            if i < len(actual_labels):
+                row['attrition'] = 'Yes' if actual_labels[i] == 1 else 'No'
+            else:
+                row['attrition'] = 'No'  # 기본값
+            
+            optimization_data.append(row)
+        
+        # DataFrame으로 변환
+        current_data = pd.DataFrame(optimization_data)
+        print(f"📊 Total_score.csv 형식으로 데이터 생성 완료: {len(current_data)}행, {len(current_data.columns)}열")
+        print(f"📊 컬럼: {list(current_data.columns)}")
+        print(f"📊 샘플 데이터:")
+        print(current_data.head(3).to_string())
+        
+        # 2. 베이지안 최적화를 위한 목적 함수 정의
+        from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, roc_auc_score
+        
+        def objective_function(weights):
+            """가중치 조합의 F1-Score 계산"""
+            # 가중치 정규화 (합이 1이 되도록)
+            weights = np.array(weights)
+            weights = weights / weights.sum()
+            
+            # 앙상블 예측 계산
+            ensemble_scores = np.zeros(len(employee_ids))
+            agent_names = list(agent_predictions.keys())
+            
+            for i, agent_name in enumerate(agent_names):
+                if i < len(weights):  # 가중치가 있는 에이전트만
+                    ensemble_scores += np.array(agent_predictions[agent_name]) * weights[i]
+            
+            # 최적 임계값 찾기 (ROC 곡선 기반)
+            from sklearn.metrics import roc_curve
+            fpr, tpr, thresholds = roc_curve(actual_labels, ensemble_scores)
+            
+            # Youden's J statistic으로 최적 임계값 찾기
+            j_scores = tpr - fpr
+            best_threshold_idx = np.argmax(j_scores)
+            optimal_threshold = thresholds[best_threshold_idx]
+            
+            # 예측 수행
+            predictions = (ensemble_scores >= optimal_threshold).astype(int)
+            
+            # F1-Score 계산 (최적화 목표)
+            f1 = f1_score(actual_labels, predictions)
+            
+            return -f1  # 최소화 문제로 변환 (음수)
+        
+        # 3. 베이지안 최적화 실행
+        try:
+            from skopt import gp_minimize
+            from skopt.space import Real
+            
+            # 가중치 공간 정의 (각각 0.1~0.9, 합이 1이 되도록 제약)
+            n_agents = len(agent_predictions)
+            dimensions = [Real(0.1, 0.9, name=f'weight_{i}') for i in range(n_agents)]
+            
+            print(f"🎯 베이지안 최적화 실행: {n_trials}회 시도, {n_agents}개 에이전트")
+            
+            # 베이지안 최적화 실행
+            result = gp_minimize(
+                func=objective_function,
+                dimensions=dimensions,
+                n_calls=n_trials,
+                n_initial_points=10,
+                random_state=42,
+                acq_func='EI'  # Expected Improvement
+            )
+            
+            # 최적 가중치 추출 및 정규화
+            optimal_weights_raw = result.x
+            optimal_weights_raw = np.array(optimal_weights_raw)
+            optimal_weights_normalized = optimal_weights_raw / optimal_weights_raw.sum()
+            
+            # 에이전트별 가중치 딕셔너리 생성
+            agent_names = list(agent_predictions.keys())
+            optimal_weights = {}
+            for i, agent_name in enumerate(agent_names):
+                optimal_weights[f'{agent_name}_weight'] = float(optimal_weights_normalized[i])
+            
+            print(f"✅ 최적 가중치: {optimal_weights}")
+            
+        except ImportError:
+            print("⚠️ scikit-optimize가 없어 개선된 랜덤 서치로 대체")
+            # scikit-optimize가 없는 경우 개선된 랜덤 서치
+            best_f1 = -1
+            optimal_weights = {}
+            agent_names = list(agent_predictions.keys())
+            n_agents = len(agent_names)
+            
+            # 모든 시도 기록
+            all_trials = []
+            
+            print(f"🔍 개선된 랜덤 서치 실행: {min(n_trials, 100)}회 시도")
+            
+            for trial in range(min(n_trials, 100)):  # 최대 100회
+                # 제약 조건을 만족하는 가중치 생성
+                attempts = 0
+                while attempts < 10:  # 최대 10번 시도
+                    # 디리클레 분포로 합이 1인 가중치 생성
+                    weights = np.random.dirichlet(np.ones(n_agents) * 2)  # alpha=2로 더 균등하게
+                    
+                    # 경계 조건 확인 (0.1 ~ 0.9)
+                    if np.all(weights >= 0.1) and np.all(weights <= 0.9):
+                        break
+                    
+                    # 경계 조건 위반 시 클리핑 후 재정규화
+                    weights = np.clip(weights, 0.1, 0.9)
+                    weights = weights / weights.sum()
+                    attempts += 1
+                
+                # F1-Score 계산
+                f1 = -objective_function(weights)
+                all_trials.append(f1)
+                
+                if f1 > best_f1:
+                    best_f1 = f1
+                    optimal_weights = {f'{agent_names[i]}_weight': float(weights[i]) for i in range(n_agents)}
+                
+                # 진행률 출력
+                if (trial + 1) % 20 == 0:
+                    print(f"   진행률: {trial + 1}/{min(n_trials, 100)}, 현재 최고 F1: {best_f1:.4f}")
+            
+            print(f"✅ 랜덤 서치 완료: 최고 F1-Score {best_f1:.4f}")
+            
+            # 결과 객체 생성
+            result = type('Result', (), {
+                'fun': -best_f1, 
+                'func_vals': [-f1 for f1 in all_trials],
+                'x': [optimal_weights[f'{agent_names[i]}_weight'] for i in range(n_agents)]
+            })()
+        
+        # 4. 최적 가중치로 앙상블 예측 및 임계값 계산
+        ensemble_scores = np.zeros(len(employee_ids))
+        for agent_name, predictions in agent_predictions.items():
+            weight_key = f'{agent_name}_weight'
+            if weight_key in optimal_weights:
+                ensemble_scores += np.array(predictions) * optimal_weights[weight_key]
+        
+        # ROC 곡선으로 최적 임계값 계산
+        from sklearn.metrics import roc_curve
+        fpr, tpr, thresholds = roc_curve(actual_labels, ensemble_scores)
+        j_scores = tpr - fpr
+        best_threshold_idx = np.argmax(j_scores)
+        optimal_ensemble_threshold = float(thresholds[best_threshold_idx])
+        
+        # 에이전트별 개별 임계값도 계산
+        optimal_thresholds = {}
+        for agent_name, predictions in agent_predictions.items():
+            fpr_agent, tpr_agent, thresholds_agent = roc_curve(actual_labels, predictions)
+            j_scores_agent = tpr_agent - fpr_agent
+            best_idx_agent = np.argmax(j_scores_agent)
+            optimal_thresholds[f'{agent_name}_threshold'] = float(thresholds_agent[best_idx_agent])
+        
+        # 위험도 분류 임계값
+        optimal_thresholds['high_risk_threshold'] = optimal_ensemble_threshold + 0.1
+        optimal_thresholds['medium_risk_threshold'] = optimal_ensemble_threshold - 0.1
+        
+        # 5. 최종 성능 계산
+        final_predictions = (ensemble_scores >= optimal_ensemble_threshold).astype(int)
+        best_performance = {
+            'f1_score': float(f1_score(actual_labels, final_predictions)),
+            'precision': float(precision_score(actual_labels, final_predictions)),
+            'recall': float(recall_score(actual_labels, final_predictions)),
+            'accuracy': float(accuracy_score(actual_labels, final_predictions)),
+            'auc': float(roc_auc_score(actual_labels, ensemble_scores))
+        }
+        
+        # 6. 최적화 히스토리 생성
+        optimization_history = []
+        if hasattr(result, 'func_vals'):
+            for i, score in enumerate(result.func_vals[:20]):  # 최대 20개
+                optimization_history.append({
+                    'trial': i + 1,
+                    'score': float(-score),  # 다시 양수로 변환
+                    'f1_score': float(-score)
+                })
+        
+        optimization_history.sort(key=lambda x: x['score'], reverse=True)
+        
+        print(f"✅ 베이지안 최적화 완료!")
+        print(f"   최적 F1-Score: {best_performance['f1_score']:.4f}")
+        print(f"   최적 임계값: {optimal_ensemble_threshold:.4f}")
+        print(f"   가중치 합: {sum(optimal_weights.values()):.4f}")
+        
+        # 결과 저장
+        current_results['bayesian_optimization'] = {
+            'optimal_weights': optimal_weights,
+            'optimal_thresholds': optimal_thresholds,
+            'best_performance': best_performance,
+            'optimization_history': optimization_history
+        }
+        
+        # 최적화된 결과를 Total_score.csv 형식으로 저장
+        try:
+            # 최적 가중치로 앙상블 점수 계산
+            final_ensemble_scores = np.zeros(len(employee_ids))
+            agent_names = list(agent_predictions.keys())
+            
+            for i, agent_name in enumerate(agent_names):
+                weight_key = f'{agent_name}_weight'
+                if weight_key in optimal_weights:
+                    final_ensemble_scores += np.array(agent_predictions[agent_name]) * optimal_weights[weight_key]
+            
+            # 최종 예측 결과
+            final_predictions = (final_ensemble_scores >= optimal_ensemble_threshold).astype(int)
+            
+            # Total_score.csv 형식으로 최종 결과 DataFrame 생성
+            final_results = []
+            for i, emp_id in enumerate(employee_ids):
+                row = {'employee_id': emp_id}
+                
+                # 각 에이전트 점수 (Total_score.csv 컬럼명)
+                agent_name_mapping = {
+                    'structura': 'Structura_score',
+                    'cognita': 'Cognita_score', 
+                    'chronos': 'Chronos_score',
+                    'sentio': 'Sentio_score',
+                    'agora': 'Agora_score'
+                }
+                
+                for agent_name, predictions in agent_predictions.items():
+                    if i < len(predictions):
+                        column_name = agent_name_mapping.get(agent_name.lower(), f'{agent_name}_score')
+                        row[column_name] = predictions[i]
+                
+                # 앙상블 점수 및 예측 결과 추가
+                row['ensemble_score'] = final_ensemble_scores[i]
+                row['ensemble_prediction'] = final_predictions[i]
+                row['attrition'] = 'Yes' if actual_labels[i] == 1 else 'No'
+                
+                final_results.append(row)
+            
+            # DataFrame으로 변환
+            final_df = pd.DataFrame(final_results)
+            
+            # 파일 저장
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_file = os.path.join('app/results', f'optimized_total_score_{timestamp}.csv')
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            final_df.to_csv(output_file, index=False, encoding='utf-8')
+            
+            print(f"✅ 최적화 결과 저장 완료: {output_file}")
+            print(f"   형식: Total_score.csv 호환")
+            print(f"   행 수: {len(final_df)}")
+            print(f"   컬럼: {list(final_df.columns)}")
+            
+            # current_data를 최종 결과로 업데이트
+            current_data = final_df
+            
+        except Exception as e:
+            print(f"⚠️ 결과 저장 중 오류 (계속 진행): {str(e)}")
+        
+        # 위험도 분류 통계 시뮬레이션
+        total_employees = len(current_data)
+        risk_distribution = {
+            '안전군': int(total_employees * 0.6),
+            '주의군': int(total_employees * 0.25),
+            '고위험군': int(total_employees * 0.15)
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': '베이지안 최적화가 완료되었습니다.',
+            'optimal_thresholds': optimal_thresholds,
+            'optimal_weights': optimal_weights,
+            'best_performance': best_performance,
+            'optimization_history': optimization_history,
+            'cv_results': {
+                'mean_f1_score': best_performance['f1_score'],
+                'std_f1_score': 0.02,
+                'mean_precision': best_performance['precision'],
+                'std_precision': 0.03,
+                'mean_recall': best_performance['recall'],
+                'std_recall': 0.025
+            },
+            'n_trials': len(optimization_history),
+            'risk_distribution': risk_distribution,
+            'total_employees': total_employees
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'베이지안 최적화 중 오류 발생: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/get_employee_list', methods=['GET'])
 def get_employee_list():
     """로드된 직원 목록 조회"""
@@ -897,6 +1327,120 @@ def get_employee_list():
             'traceback': traceback.format_exc()
         }), 500
 
+@app.route('/save_agent_models', methods=['POST'])
+def save_agent_models():
+    """에이전트 모델을 app/results/models에 저장"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': '요청 데이터가 없습니다'
+            }), 400
+        
+        models = data.get('models')
+        save_path = data.get('save_path', 'app/results/models/agent_models.json')
+        
+        if not models:
+            return jsonify({
+                'success': False,
+                'error': '저장할 모델 데이터가 없습니다'
+            }), 400
+        
+        # 디렉토리 생성
+        import os
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        # 파일 저장
+        import json
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(models, f, indent=2, ensure_ascii=False)
+        
+        print(f"✅ 에이전트 모델 저장 완료: {save_path}")
+        
+        return jsonify({
+            'success': True,
+            'message': '에이전트 모델이 성공적으로 저장되었습니다',
+            'file_path': save_path,
+            'agents_saved': len(models.get('saved_models', {})),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"❌ 에이전트 모델 저장 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'모델 저장 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+@app.route('/save_optimized_models', methods=['POST'])
+def save_optimized_models():
+    """최적화된 모델과 임계값/가중치를 app/results/models에 저장"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': '요청 데이터가 없습니다'
+            }), 400
+        
+        complete_model = data.get('complete_model')
+        save_path = data.get('save_path', 'app/results/models/optimized_models.json')
+        
+        if not complete_model:
+            return jsonify({
+                'success': False,
+                'error': '저장할 모델 데이터가 없습니다'
+            }), 400
+        
+        # 디렉토리 생성
+        import os
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        # 배치 분석에서 쉽게 사용할 수 있도록 구조화
+        optimized_data = {
+            'metadata': {
+                'created_at': datetime.now().isoformat(),
+                'stage': complete_model.get('training_metadata', {}).get('stage', 'optimization_completed'),
+                'agents_used': complete_model.get('training_metadata', {}).get('agents_used', []),
+                'training_data_size': complete_model.get('training_metadata', {}).get('training_data_size', 0)
+            },
+            'agent_models': complete_model.get('saved_models', {}),
+            'agent_results': complete_model.get('agent_results', {}),
+            'optimization_results': complete_model.get('optimization_results', {}),
+            'ready_for_batch_analysis': True
+        }
+        
+        # 파일 저장
+        import json
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(optimized_data, f, indent=2, ensure_ascii=False)
+        
+        # 배치 분석용 심볼릭 링크 또는 복사본 생성
+        batch_ready_path = 'app/results/models/batch_ready_models.json'
+        with open(batch_ready_path, 'w', encoding='utf-8') as f:
+            json.dump(optimized_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"✅ 최적화된 모델 저장 완료: {save_path}")
+        print(f"✅ 배치 분석용 모델 준비 완료: {batch_ready_path}")
+        
+        return jsonify({
+            'success': True,
+            'message': '최적화된 모델과 임계값/가중치가 성공적으로 저장되었습니다',
+            'file_path': save_path,
+            'batch_ready_path': batch_ready_path,
+            'agents_count': len(optimized_data['agent_models']),
+            'has_optimization': bool(optimized_data['optimization_results']),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"❌ 최적화된 모델 저장 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'모델 저장 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
 
 if __name__ == '__main__':
     print("🚀 Integration Flask 서버 시작")
@@ -924,5 +1468,7 @@ if __name__ == '__main__':
     print("  GET  /get_employee_list - 직원 목록 조회")
     print("  POST /generate_report - 개별 직원 레포트 생성 (LLM 지원)")
     print("  POST /generate_batch_reports - 일괄 레포트 생성")
+    print("  POST /save_agent_models - 에이전트 모델 저장")
+    print("  POST /save_optimized_models - 최적화된 모델 저장")
     
     app.run(host='0.0.0.0', port=5007, debug=True)

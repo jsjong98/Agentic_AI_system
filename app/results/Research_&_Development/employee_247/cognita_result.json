@@ -1,0 +1,25 @@
+{
+  "risk_analysis": {
+    "employee_id": "247",
+    "manager_instability_score": 0.8,
+    "team_volatility_index": 0.3,
+    "social_isolation_index": 0.6,
+    "network_centrality_score": 0.7,
+    "overall_risk_score": 0.53,
+    "risk_category": "MEDIUM",
+    "risk_factors": [
+      "관리자_불안정성"
+    ],
+    "network_stats": {
+      "degree_centrality": 1.0,
+      "strength_centrality": 1.0,
+      "project_centrality": 0.0,
+      "quality_score": 0.5,
+      "direct_connections": 25,
+      "avg_strength": 1.0
+    },
+    "analysis_timestamp": "2025-09-23T22:56:39.237887"
+  },
+  "agent_type": "cognita",
+  "analysis_type": "individual"
+}

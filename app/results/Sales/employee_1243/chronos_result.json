@@ -1,0 +1,11 @@
+{
+  "trend_score": 0.8,
+  "prediction_confidence": 0.75,
+  "time_series_pattern": "declining",
+  "temporal_risk_factors": [
+    "장기 근무자 성과 정체",
+    "워라밸 불균형"
+  ],
+  "analysis_timestamp": "2025-09-23T23:14:03.870976",
+  "note": "Chronos 휴리스틱 시계열 분석"
+}

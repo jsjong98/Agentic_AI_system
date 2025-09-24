@@ -1,166 +1,92 @@
 #!/usr/bin/env python3
 """
-Agentic AI System 의존성 설치 및 검증 스크립트
-모든 필요한 라이브러리를 설치하고 import 테스트를 수행합니다.
+Agentic AI System 의존성 설치 스크립트
+PyTorch CUDA와 일반 패키지를 순차적으로 설치합니다.
 """
 
 import subprocess
 import sys
 import os
-from pathlib import Path
 
-def install_requirements():
-    """requirements_agentic.txt 파일을 사용하여 의존성 설치"""
-    
-    requirements_file = Path(__file__).parent / "requirements_agentic.txt"
-    
-    if not requirements_file.exists():
-        print("❌ requirements_agentic.txt 파일을 찾을 수 없습니다.")
-        return False
-    
-    print("🚀 Agentic AI System 의존성 설치를 시작합니다...")
-    print(f"📁 Requirements 파일: {requirements_file}")
+def run_command(command, description):
+    """명령어 실행 및 결과 출력"""
+    print(f"\n{'='*60}")
+    print(f"🚀 {description}")
+    print(f"{'='*60}")
+    print(f"실행 명령어: {command}")
+    print("-" * 60)
     
     try:
-        # pip install 실행
-        result = subprocess.run([
-            sys.executable, "-m", "pip", "install", "-r", str(requirements_file)
-        ], check=True, capture_output=True, text=True)
-        
-        print("✅ 모든 의존성이 성공적으로 설치되었습니다!")
+        result = subprocess.run(command, shell=True, check=True, 
+                              capture_output=False, text=True)
+        print(f"✅ {description} 완료!")
         return True
-        
     except subprocess.CalledProcessError as e:
-        print(f"❌ 설치 중 오류 발생: {e}")
-        print(f"stdout: {e.stdout}")
-        print(f"stderr: {e.stderr}")
+        print(f"❌ {description} 실패!")
+        print(f"오류 코드: {e.returncode}")
         return False
-
-def test_imports():
-    """주요 라이브러리 import 테스트"""
-    
-    print("\n🧪 라이브러리 import 테스트를 시작합니다...")
-    
-    test_modules = {
-        # 기본 데이터 처리
-        'numpy': 'numpy',
-        'pandas': 'pandas', 
-        'scipy': 'scipy',
-        
-        # 머신러닝
-        'scikit-learn': 'sklearn',
-        'xgboost': 'xgboost',
-        'torch': 'torch',
-        
-        # 하이퍼파라미터 최적화
-        'optuna': 'optuna',
-        
-        # XAI
-        'shap': 'shap',
-        'lime': 'lime',
-        
-        # 불균형 데이터
-        'imbalanced-learn': 'imblearn',
-        
-        # 그래프 DB
-        'neo4j': 'neo4j',
-        
-        # Flask
-        'flask': 'flask',
-        'flask-cors': 'flask_cors',
-        
-        # LLM & LangChain
-        'openai': 'openai',
-        'langchain': 'langchain',
-        'langchain-openai': 'langchain_openai',
-        'langchain-core': 'langchain_core',
-        'langgraph': 'langgraph',
-        
-        # 시각화
-        'matplotlib': 'matplotlib',
-        'seaborn': 'seaborn',
-        'plotly': 'plotly',
-        
-        # 유틸리티
-        'python-dotenv': 'dotenv',
-        'requests': 'requests',
-        'joblib': 'joblib',
-        'tqdm': 'tqdm',
-        'pydantic': 'pydantic',
-        
-        # 비동기
-        'aiohttp': 'aiohttp'
-    }
-    
-    success_count = 0
-    total_count = len(test_modules)
-    
-    for package_name, import_name in test_modules.items():
-        try:
-            __import__(import_name)
-            print(f"✅ {package_name} ({import_name})")
-            success_count += 1
-        except ImportError as e:
-            print(f"❌ {package_name} ({import_name}): {e}")
-    
-    print(f"\n📊 Import 테스트 결과: {success_count}/{total_count} 성공")
-    
-    if success_count == total_count:
-        print("🎉 모든 라이브러리가 정상적으로 설치되었습니다!")
-        return True
-    else:
-        print("⚠️ 일부 라이브러리 설치에 문제가 있습니다.")
-        return False
-
-def check_gpu_support():
-    """GPU 지원 확인 (PyTorch)"""
-    
-    print("\n🔍 GPU 지원 확인...")
-    
-    try:
-        import torch
-        
-        if torch.cuda.is_available():
-            gpu_count = torch.cuda.device_count()
-            current_device = torch.cuda.current_device()
-            gpu_name = torch.cuda.get_device_name(current_device)
-            
-            print(f"✅ CUDA 사용 가능!")
-            print(f"   GPU 개수: {gpu_count}")
-            print(f"   현재 GPU: {gpu_name}")
-            print(f"   CUDA 버전: {torch.version.cuda}")
-        else:
-            print("⚠️ CUDA 사용 불가 - CPU 모드로 실행됩니다.")
-            
-    except ImportError:
-        print("❌ PyTorch가 설치되지 않았습니다.")
 
 def main():
-    """메인 실행 함수"""
+    """메인 설치 프로세스"""
+    print("🤖 Agentic AI System 의존성 설치를 시작합니다...")
     
-    print("=" * 60)
-    print("🤖 Agentic AI System 의존성 설치 및 검증")
-    print("=" * 60)
+    # 현재 디렉토리 확인
+    current_dir = os.getcwd()
+    print(f"📁 현재 디렉토리: {current_dir}")
     
-    # 1. 의존성 설치
-    if not install_requirements():
-        print("\n❌ 설치 실패로 인해 테스트를 중단합니다.")
-        sys.exit(1)
+    # 모든 패키지 일괄 설치 (PyTorch CUDA 포함)
+    requirements_command = "pip install -r requirements_agentic.txt"
+    if not run_command(requirements_command, "모든 패키지 설치 (PyTorch CUDA 11.8 포함)"):
+        print("\n⚠️  CUDA 버전 설치에 실패했습니다. CPU 버전으로 시도합니다...")
+        # CPU 버전으로 fallback
+        pytorch_cpu_command = "pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu"
+        if not run_command(pytorch_cpu_command, "PyTorch CPU 버전 설치"):
+            print("❌ PyTorch 설치에 완전히 실패했습니다.")
+            return False
+        
+        # CPU 버전 설치 후 나머지 패키지 설치
+        other_packages_command = "pip install numpy pandas scipy scikit-learn xgboost optuna shap lime imbalanced-learn neo4j flask flask-cors werkzeug openai langchain langchain-openai langchain-core langgraph matplotlib seaborn plotly python-dotenv requests joblib tqdm pydantic aiohttp"
+        if not run_command(other_packages_command, "나머지 패키지 설치"):
+            print("❌ 나머지 패키지 설치에 실패했습니다.")
+            return False
     
-    # 2. Import 테스트
-    if not test_imports():
-        print("\n⚠️ 일부 라이브러리에 문제가 있지만 계속 진행합니다.")
+    # 3. 설치 확인
+    print(f"\n{'='*60}")
+    print("🔍 설치된 패키지 확인")
+    print(f"{'='*60}")
     
-    # 3. GPU 지원 확인
-    check_gpu_support()
+    # 주요 패키지들 확인
+    packages_to_check = [
+        "torch", "torchvision", "torchaudio",
+        "numpy", "pandas", "scikit-learn",
+        "flask", "openai", "langchain"
+    ]
     
-    print("\n" + "=" * 60)
-    print("🎯 설치 및 검증 완료!")
-    print("=" * 60)
-    print("\n다음 단계:")
-    print("1. 환경변수 설정: OPENAI_API_KEY")
-    print("2. Neo4j 데이터베이스 연결 설정")
-    print("3. python run_agentic_system.py 실행")
+    failed_packages = []
+    for package in packages_to_check:
+        try:
+            __import__(package)
+            print(f"✅ {package}: 설치됨")
+        except ImportError:
+            print(f"❌ {package}: 설치되지 않음")
+            failed_packages.append(package)
+    
+    if failed_packages:
+        print(f"\n⚠️  다음 패키지들이 설치되지 않았습니다: {', '.join(failed_packages)}")
+        print("수동으로 설치를 시도해보세요:")
+        for package in failed_packages:
+            print(f"  pip install {package}")
+        return False
+    
+    print(f"\n{'='*60}")
+    print("🎉 모든 의존성 설치가 완료되었습니다!")
+    print(f"{'='*60}")
+    print("이제 Agentic AI System을 실행할 수 있습니다.")
+    print("실행 명령어: python main.py")
+    
+    return True
 
 if __name__ == "__main__":
-    main()
+    success = main()
+    if not success:
+        sys.exit(1)

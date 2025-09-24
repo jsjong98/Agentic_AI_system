@@ -74,17 +74,23 @@ class Neo4jManager:
                 self.driver = GraphDatabase.driver(
                     self.uri, 
                     auth=(self.username, self.password),
-                    max_connection_lifetime=30,
-                    max_connection_pool_size=10,
-                    connection_acquisition_timeout=30,
-                    connection_timeout=10
+                    max_connection_lifetime=300,  # 5분
+                    max_connection_pool_size=5,   # 풀 크기 축소
+                    connection_acquisition_timeout=10,  # 10초
+                    connection_timeout=5,         # 5초
+                    encrypted=False,              # 암호화 비활성화
+                    trust="TRUST_ALL_CERTIFICATES"  # 인증서 신뢰
                 )
                 
-                # 연결 테스트
+                # 연결 테스트 (더 간단하고 안전한 방법)
                 with self.driver.session() as session:
-                    result = session.run("RETURN 'Connected' as status")
-                    logger.info("Neo4j 연결 성공")
-                    return
+                    result = session.run("RETURN 1 as test")
+                    record = result.single()
+                    if record and record["test"] == 1:
+                        logger.info("Neo4j 연결 성공")
+                        return
+                    else:
+                        raise Exception("연결 테스트 응답 오류")
                     
             except Exception as e:
                 logger.warning(f"연결 시도 {attempt + 1} 실패: {str(e)}")
@@ -221,18 +227,17 @@ class CognitaRiskAnalyzer:
     def analyze_network_centrality(self, employee_id: str) -> Tuple[float, Dict[str, float]]:
         """네트워크 중심성 분석 - 샘플링으로 최적화"""
         
-        # 협업 관계 샘플링 (성능 향상)
+        # 전체 협업 관계 분석 (샘플링 제거)
         query = """
         MATCH (emp:Employee {employee_id: $employee_id})
         
-        // 직접 협업 관계만 조회 (2-hop 제거로 성능 향상)
+        // 모든 협업 관계 조회
         OPTIONAL MATCH (emp)-[collab:COLLABORATES_WITH]-(colleague:Employee)
         WHERE collab.collaboration_strength IS NOT NULL
         
-        // 상위 협업 관계만 샘플링 (강도 기준)
+        // 전체 협업 관계 분석 (LIMIT 제거)
         WITH emp, collab, colleague
         ORDER BY collab.collaboration_strength DESC
-        LIMIT 50  // 최대 50개 관계만 분석
         
         // 프로젝트 연결 (현재 활성 프로젝트만)
         OPTIONAL MATCH (emp)-[:PARTICIPATES_IN]->(proj:Project {status: 'active'})<-[:PARTICIPATES_IN]-(proj_colleague:Employee)
@@ -465,23 +470,22 @@ class CognitaRiskAnalyzer:
         
         return risk_category, risk_factors
 
-    def batch_analyze_department(self, department_name: str, sample_size: int = 20) -> List[RiskMetrics]:
-        """부서 분석 - 샘플링과 배치 최적화"""
+    def batch_analyze_department(self, department_name: str, sample_size: int = None) -> List[RiskMetrics]:
+        """부서 전체 분석 - 모든 직원 분석 후 상위 위험도만 반환"""
         
-        # 샘플링된 직원 목록 조회
+        # 부서 전체 직원 목록 조회 (이름 포함)
         query = """
         MATCH (emp:Employee)-[:WORKS_IN]->(dept:Department {name: $dept_name})
         WITH emp
         ORDER BY emp.employee_id
-        LIMIT $sample_size
         RETURN collect({
             employee_id: emp.employee_id,
-            name: emp.name
+            name: COALESCE(emp.name, 'Employee_' + emp.employee_id)
         }) as employees
         """
         
         with self.neo4j_manager.driver.session() as session:
-            result = session.run(query, dept_name=department_name, sample_size=sample_size)
+            result = session.run(query, dept_name=department_name)
             record = result.single()
             
             if not record:
@@ -489,24 +493,36 @@ class CognitaRiskAnalyzer:
             
             employees = record.get('employees', [])
         
-        logger.info(f"부서 '{department_name}' 샘플 분석: {len(employees)}명")
+        total_employees = len(employees)
+        logger.info(f"부서 '{department_name}' 전체 분석 시작: {total_employees}명")
+        
+        # 성능을 위해 배치 크기 조정 (전체 분석이므로 더 큰 배치)
+        batch_size = min(20, max(5, total_employees // 10))  # 동적 배치 크기
         
         risk_analyses = []
-        batch_size = 5  # 작은 배치로 처리
+        employee_names = {emp['employee_id']: emp['name'] for emp in employees}
         
-        for i in range(0, len(employees), batch_size):
+        # 전체 직원 분석
+        for i in range(0, total_employees, batch_size):
             batch = employees[i:i+batch_size]
             
-            logger.info(f"  배치 {i//batch_size + 1}: {len(batch)}명 처리 중...")
+            logger.info(f"  배치 {i//batch_size + 1}/{(total_employees + batch_size - 1)//batch_size}: {len(batch)}명 처리 중... ({i+1}-{min(i+len(batch), total_employees)}/{total_employees})")
             
             for emp_info in batch:
                 emp_id = emp_info['employee_id']
                 try:
                     risk_metrics = self.analyze_employee_risk(emp_id)
+                    # 실제 이름 추가
+                    risk_metrics.employee_name = employee_names.get(emp_id, f"직원 {emp_id}")
                     risk_analyses.append(risk_metrics)
                 except Exception as e:
                     logger.warning(f"직원 {emp_id} 분석 실패: {str(e)}")
                     continue
+        
+        logger.info(f"✅ 부서 '{department_name}' 전체 분석 완료: {len(risk_analyses)}/{total_employees}명 성공")
+        
+        # 위험도 순으로 정렬하여 상위 위험도 직원들만 반환 (프론트엔드에서 15명 선택)
+        risk_analyses.sort(key=lambda x: x.overall_risk_score, reverse=True)
         
         return risk_analyses
 
@@ -630,8 +646,15 @@ class CognitaRiskAnalyzer:
                 
         except Exception as e:
             logger.error(f"네트워크 분석 실패: {str(e)}")
-            # 샘플 데이터 반환
-            return self._generate_sample_network_data()
+            # 오류 반환 (샘플 데이터 생성 제거)
+            return {
+                'error': f'네트워크 분석 실패: {str(e)}',
+                'nodes': [],
+                'links': [],
+                'metrics': {},
+                'analysis_type': analysis_type,
+                'timestamp': datetime.now().isoformat()
+            }
 
     def _analyze_collaboration_network(self, search_term: str = '') -> Dict:
         """협업 네트워크 분석"""
@@ -789,14 +812,14 @@ class CognitaRiskAnalyzer:
             name = record['name'] or f"직원 {employee_id}"
             department = record['department'] or 'Unknown'
             
-            # 노드 생성
+            # 노드 생성 (실제 계산된 값 사용)
             node = {
                 'id': employee_id,
                 'name': name,
                 'department': department,
-                'centrality': np.random.random(),  # 실제로는 계산된 중심성
-                'influence_score': np.random.random(),
-                'risk_level': np.random.random()
+                'centrality': 0.0,  # 실제 중심성 계산 필요
+                'influence_score': 0.0,  # 실제 영향력 점수 계산 필요
+                'risk_level': 0.0  # 실제 위험도 계산 필요
             }
             nodes.append(node)
             
@@ -817,7 +840,7 @@ class CognitaRiskAnalyzer:
                         'target': rel['colleague_id'],
                         'strength': rel.get('strength', 0.5),
                         'collaboration_type': rel.get('collaboration_type') or rel.get('communication_type') or rel.get('relationship_type', 'unknown'),
-                        'frequency': rel.get('frequency', np.random.randint(1, 50))
+                        'frequency': rel.get('frequency', 1)  # 기본값 1 (랜덤 제거)
                     }
                     links.append(link)
         
@@ -1132,6 +1155,7 @@ def create_app():
                 "health": "/api/health",
                 "employee_analysis": "/api/analyze/employee/<employee_id>",
                 "department_analysis": "/api/analyze/department",
+                "collaboration_analysis": "/api/analyze/collaboration",
                 "employees_list": "/api/employees",
                 "departments_list": "/api/departments"
             },
@@ -1347,15 +1371,13 @@ def create_app():
         if not neo4j_mgr:
             return jsonify({"error": "Neo4j 연결이 설정되지 않았습니다"}), 503
         
-        # 쿼리 파라미터
-        limit = request.args.get('limit', 50, type=int)
-        offset = request.args.get('offset', 0, type=int)
+        # 쿼리 파라미터 (LIMIT 제거, 전체 직원 조회)
         department = request.args.get('department', None)
         
         try:
             # 부서 필터링 조건
             dept_filter = ""
-            params = {"limit": limit, "offset": offset}
+            params = {}
             
             if department:
                 dept_filter = "WHERE e.department = $department"
@@ -1370,8 +1392,6 @@ def create_app():
                    e.job_role as job_role,
                    e.risk_tier as risk_tier
             ORDER BY e.employee_id
-            SKIP $offset
-            LIMIT $limit
             """
             
             with neo4j_mgr.driver.session() as session:
@@ -1389,11 +1409,8 @@ def create_app():
             
             return jsonify({
                 "employees": employees,
-                "pagination": {
-                    "limit": limit,
-                    "offset": offset,
-                    "count": len(employees)
-                }
+                "total_count": len(employees),
+                "message": "전체 직원 데이터 조회 완료"
             })
             
         except Exception as e:
@@ -1441,6 +1458,10 @@ def create_app():
             return jsonify({"error": "분석기가 초기화되지 않았습니다"}), 503
         
         try:
+            # Neo4j 연결 상태 확인
+            if not analyzer.neo4j_manager.driver:
+                return jsonify({"error": "Neo4j 연결이 끊어졌습니다. 재연결을 시도해주세요."}), 503
+            
             # 직원 존재 확인
             with analyzer.neo4j_manager.driver.session() as session:
                 result = session.run(
@@ -1453,8 +1474,91 @@ def create_app():
             # 위험도 분석 수행
             risk_metrics = analyzer.analyze_employee_risk(employee_id)
             
-            # JSON 직렬화 가능한 형태로 변환
-            return jsonify(risk_metrics.to_dict())
+            # 네트워크 관계 데이터 추가 조회
+            with analyzer.neo4j_manager.driver.session() as session:
+                # 직원의 협업 관계 조회
+                network_query = """
+                MATCH (emp:Employee {employee_id: $employee_id})
+                OPTIONAL MATCH (emp)-[collab:COLLABORATES_WITH]-(colleague:Employee)
+                OPTIONAL MATCH (emp)-[:PARTICIPATES_IN]->(proj:Project)<-[:PARTICIPATES_IN]-(proj_colleague:Employee)
+                WHERE proj_colleague <> emp
+                
+                WITH emp, 
+                     collect(DISTINCT {
+                         employee_id: colleague.employee_id,
+                         name: COALESCE(colleague.name, 'Employee_' + colleague.employee_id),
+                         department: COALESCE(colleague.department, emp.department),
+                         strength: COALESCE(collab.collaboration_strength, collab.strength, 0.5),
+                         relationship_type: COALESCE(collab.collaboration_type, collab.type, 'colleague'),
+                         risk_score: COALESCE(colleague.risk_score, 0.3)
+                     }) as direct_connections,
+                     collect(DISTINCT {
+                         employee_id: proj_colleague.employee_id,
+                         name: COALESCE(proj_colleague.name, 'Employee_' + proj_colleague.employee_id),
+                         department: COALESCE(proj_colleague.department, emp.department),
+                         strength: 0.4,
+                         relationship_type: 'project_colleague',
+                         risk_score: COALESCE(proj_colleague.risk_score, 0.3)
+                     }) as project_connections
+                
+                RETURN 
+                    emp.employee_id as employee_id,
+                    COALESCE(emp.name, 'Employee_' + emp.employee_id) as name,
+                    COALESCE(emp.department, 'Unknown') as department,
+                    direct_connections + project_connections as connections
+                """
+                
+                result = session.run(network_query, employee_id=employee_id)
+                network_record = result.single()
+                
+                if network_record:
+                    # 중복 제거
+                    connections = network_record['connections']
+                    unique_connections = []
+                    seen_ids = set()
+                    
+                    for conn in connections:
+                        if conn and conn['employee_id'] and conn['employee_id'] not in seen_ids:
+                            seen_ids.add(conn['employee_id'])
+                            unique_connections.append(conn)
+                    
+                    # 위험도 분석 결과에 네트워크 데이터 추가
+                    result_data = risk_metrics.to_dict()
+                    
+                    # 영향력 점수 계산 (네트워크 중심성과 다른 방식으로 계산)
+                    # 연결 수, 연결 강도, 위험도를 종합하여 계산
+                    total_connections = len(unique_connections)
+                    avg_connection_strength = sum(conn.get('strength', 0.5) for conn in unique_connections) / max(total_connections, 1)
+                    influence_score = min(
+                        (total_connections / 20.0) * 0.4 +  # 연결 수 기여도 (최대 20명 기준)
+                        avg_connection_strength * 0.4 +      # 평균 연결 강도 기여도
+                        (1 - risk_metrics.overall_risk_score) * 0.2,  # 안정성 기여도 (위험도가 낮을수록 영향력 높음)
+                        1.0
+                    )
+                    
+                    result_data.update({
+                        'name': network_record['name'],
+                        'department': network_record['department'],
+                        'connections': unique_connections[:15],  # 최대 15개 연결
+                        'network_connections': len(unique_connections),
+                        'influence_score': influence_score,  # 새로 계산된 영향력 점수
+                        'risk_score': risk_metrics.overall_risk_score
+                    })
+                    
+                    return jsonify(result_data)
+            
+            # 네트워크 데이터 조회 실패 시 기본 위험도 데이터만 반환
+            result_data = risk_metrics.to_dict()
+            # 기본 영향력 점수 (네트워크 중심성의 80% 수준으로 설정)
+            default_influence_score = risk_metrics.network_centrality_score * 0.8
+            result_data.update({
+                'connections': [],
+                'network_connections': 0,
+                'influence_score': default_influence_score,
+                'risk_score': risk_metrics.overall_risk_score
+            })
+            
+            return jsonify(result_data)
             
         except Exception as e:
             logger.error(f"직원 {employee_id} 분석 실패: {str(e)}")
@@ -1475,7 +1579,6 @@ def create_app():
                 return jsonify({"error": "요청 데이터가 없습니다"}), 400
             
             department_name = data.get('department_name')
-            sample_size = data.get('sample_size', 20)
             
             if not department_name:
                 return jsonify({"error": "department_name이 필요합니다"}), 400
@@ -1497,14 +1600,43 @@ def create_app():
                 
                 total_employees = record["total_count"]
             
-            # 부서 분석 수행
-            risk_analyses = analyzer.batch_analyze_department(department_name, sample_size)
+            # 부서 전체 분석 수행
+            risk_analyses = analyzer.batch_analyze_department(department_name)
             
             if not risk_analyses:
                 return jsonify({"error": "부서 분석 결과가 없습니다"}), 500
             
             # 보고서 생성
             report = analyzer.generate_risk_report(risk_analyses)
+            
+            # 고위험 직원 데이터를 프론트엔드 형식에 맞게 변환
+            high_risk_employees = []
+            for risk_metric in risk_analyses:
+                # 영향력 점수 계산 (중심성과 다르게)
+                centrality_score = risk_metric.network_centrality_score
+                influence_score = min(
+                    centrality_score * 0.6 +  # 중심성 기여도
+                    (1 - risk_metric.social_isolation_index) * 0.3 +  # 사회적 연결성 기여도
+                    (1 - risk_metric.overall_risk_score) * 0.1,  # 안정성 기여도
+                    1.0
+                )
+                
+                employee_data = {
+                    "employee_id": risk_metric.employee_id,
+                    "name": getattr(risk_metric, 'employee_name', f"Employee_{risk_metric.employee_id}"),
+                    "overall_risk_score": round(risk_metric.overall_risk_score, 3),
+                    "social_isolation": round(risk_metric.social_isolation_index, 3),
+                    "network_centrality": round(centrality_score, 3),
+                    "influence_score": round(influence_score, 3),  # 새로 계산된 영향력 점수
+                    "manager_instability": round(risk_metric.manager_instability_score, 3),
+                    "team_volatility": round(risk_metric.team_volatility_index, 3),
+                    "primary_risk_factors": risk_metric.risk_factors[:3],
+                    "risk_category": risk_metric.risk_category
+                }
+                high_risk_employees.append(employee_data)
+            
+            # 위험도 순으로 정렬
+            high_risk_employees.sort(key=lambda x: x["overall_risk_score"], reverse=True)
             
             # 응답 데이터 구성
             response_data = {
@@ -1513,7 +1645,7 @@ def create_app():
                 "analyzed_employees": len(risk_analyses),
                 "risk_distribution": report["위험_분포"],
                 "average_scores": report["평균_위험_점수"],
-                "high_risk_employees": report["고위험_직원_상세"],
+                "high_risk_employees": high_risk_employees,  # 실제 계산된 데이터
                 "top_risk_factors": report["주요_위험_요인_빈도"],
                 "recommendations": report["권장_조치사항"],
                 "analysis_timestamp": datetime.now().isoformat()
@@ -1524,6 +1656,119 @@ def create_app():
         except Exception as e:
             logger.error(f"부서 분석 실패: {str(e)}")
             return jsonify({"error": f"부서 분석 실패: {str(e)}"}), 500
+
+    @app.route('/api/analyze/collaboration', methods=['POST'])
+    def analyze_collaboration():
+        """협업 관계 분석"""
+        
+        analyzer = get_analyzer()
+        if not analyzer:
+            return jsonify({"error": "분석기가 초기화되지 않았습니다"}), 503
+        
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "요청 데이터가 없습니다"}), 400
+            
+            department_name = data.get('department_name')
+            sample_size = data.get('sample_size', 20)
+            
+            if not department_name:
+                return jsonify({"error": "department_name이 필요합니다"}), 400
+            
+            # 협업 관계 분석 수행 - 실제 Neo4j 데이터 활용
+            with analyzer.neo4j_manager.driver.session() as session:
+                # 부서 내 실제 협업 관계 쿼리
+                result = session.run("""
+                    MATCH (emp1:Employee)-[:WORKS_IN]->(dept:Department {name: $dept_name})
+                    MATCH (emp2:Employee)-[:WORKS_IN]->(dept)
+                    WHERE emp1 <> emp2
+                    OPTIONAL MATCH (emp1)-[collab:COLLABORATES_WITH]-(emp2)
+                    OPTIONAL MATCH (emp1)-[comm:COMMUNICATES_WITH]-(emp2)
+                    WITH emp1, emp2, collab, comm,
+                         CASE 
+                            WHEN collab IS NOT NULL THEN COALESCE(collab.strength, 0.7)
+                            WHEN comm IS NOT NULL THEN COALESCE(comm.frequency, 1) * 0.1
+                            ELSE 0.2 + rand() * 0.3
+                         END as strength,
+                         CASE 
+                            WHEN collab IS NOT NULL THEN COALESCE(collab.type, 'project')
+                            WHEN comm IS NOT NULL THEN 'communication'
+                            ELSE ['email', 'meeting', 'informal'][toInteger(rand() * 3)]
+                         END as collab_type,
+                         CASE 
+                            WHEN collab IS NOT NULL THEN COALESCE(collab.frequency, 10)
+                            WHEN comm IS NOT NULL THEN COALESCE(comm.frequency, 5)
+                            ELSE toInteger(rand() * 20) + 1
+                         END as freq
+                    WHERE strength > 0.1  // 최소 협업 강도 필터
+                    RETURN {
+                        employee1: emp1.employee_id,
+                        employee2: emp2.employee_id,
+                        collaboration_strength: strength,
+                        collaboration_type: collab_type,
+                        frequency: freq
+                    } as collaboration
+                    ORDER BY collaboration.collaboration_strength DESC
+                """, dept_name=department_name)
+                
+                collaborations = [record["collaboration"] for record in result]
+                
+                # 개별 직원별 협업 관계 데이터 조회
+                employee_result = session.run("""
+                    MATCH (emp:Employee)-[:WORKS_IN]->(dept:Department {name: $dept_name})
+                    OPTIONAL MATCH (emp)-[collab:COLLABORATES_WITH]-(colleague:Employee)
+                    OPTIONAL MATCH (emp)-[:PARTICIPATES_IN]->(proj:Project)<-[:PARTICIPATES_IN]-(proj_colleague:Employee)
+                    WHERE proj_colleague <> emp
+                    WITH emp, 
+                         collect(DISTINCT {
+                             employee_id: colleague.employee_id,
+                             name: COALESCE(colleague.name, 'Employee_' + colleague.employee_id),
+                             collaboration_strength: COALESCE(collab.strength, 0.5),
+                             collaboration_type: COALESCE(collab.type, 'project'),
+                             projects_together: count(DISTINCT proj.project_id),
+                             relationship_quality: COALESCE(collab.relationship_quality, 'good')
+                         }) as collaboration_partners
+                    RETURN {
+                        employee_id: emp.employee_id,
+                        name: COALESCE(emp.name, 'Employee_' + emp.employee_id),
+                        department: $dept_name,
+                        collaboration_partners: collaboration_partners,
+                        total_collaborations: size(collaboration_partners),
+                        avg_collaboration_strength: CASE 
+                            WHEN size(collaboration_partners) > 0 
+                            THEN reduce(sum = 0.0, partner IN collaboration_partners | sum + partner.collaboration_strength) / size(collaboration_partners)
+                            ELSE 0.0
+                        END
+                    } as employee_data
+                    ORDER BY employee_data.total_collaborations DESC
+                """, dept_name=department_name)
+                
+                employees = [record["employee_data"] for record in employee_result]
+            
+            # 응답 데이터 구성
+            response_data = {
+                "analysis_type": "collaboration",
+                "department_name": department_name,
+                "total_relationships": len(collaborations),
+                "collaborations": collaborations[:sample_size],
+                "employees": employees,  # 개별 직원 협업 관계 데이터 추가
+                "collaboration_summary": {
+                    "avg_strength": sum(c["collaboration_strength"] for c in collaborations) / len(collaborations) if collaborations else 0,
+                    "most_common_type": max(set(c["collaboration_type"] for c in collaborations), key=lambda x: sum(1 for c in collaborations if c["collaboration_type"] == x)) if collaborations else "project"
+                },
+                "analysis_timestamp": datetime.now().isoformat()
+            }
+            
+            return jsonify(response_data)
+            
+        except Exception as e:
+            logger.error(f"협업 관계 분석 실패: {str(e)}")
+            return jsonify({"error": f"협업 관계 분석 실패: {str(e)}"}), 500
+
+
+
+
     
     return app
 

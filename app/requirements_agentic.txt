@@ -13,9 +13,13 @@ scipy>=1.9.0
 # =============================================================================
 scikit-learn>=1.0.0
 xgboost>=1.6.0
+
+# PyTorch with CUDA 11.8 support
+# 설치 명령어: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 torch>=2.0.0
 torchvision>=0.15.0
 torchaudio>=2.0.0
+--index-url https://download.pytorch.org/whl/cu118
 
 # =============================================================================
 # 🎯 하이퍼파라미터 최적화 및 모델 튜닝
@@ -98,4 +102,24 @@ aiohttp>=3.8.0
 # =============================================================================
 # 🚀 설치 명령어
 # =============================================================================
+# 방법 1: 자동 설치 스크립트 사용 (권장)
+# python install_dependencies.py
+
+# 방법 2: 일괄 설치 (권장)
 # pip install -r requirements_agentic.txt
+
+# 방법 3: 수동 설치 (필요시)
+# 1. PyTorch CUDA 11.8 먼저 설치:
+#    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# 2. 나머지 패키지 설치:
+#    pip install numpy pandas scipy scikit-learn xgboost optuna shap lime imbalanced-learn neo4j flask flask-cors werkzeug openai langchain langchain-openai langchain-core langgraph matplotlib seaborn plotly python-dotenv requests joblib tqdm pydantic aiohttp
+
+# =============================================================================
+# 🔧 CUDA 11.8 요구사항
+# =============================================================================
+# - NVIDIA GPU 드라이버 >= 450.80.02 (Linux) 또는 >= 452.39 (Windows)
+# - CUDA Toolkit 11.8 (선택사항, PyTorch에 포함됨)
+# - cuDNN 8.7.0 (PyTorch에 포함됨)
+
+# GPU 없이 CPU만 사용하는 경우:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu

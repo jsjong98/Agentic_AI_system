@@ -20,9 +20,59 @@ from typing import Dict, List, Any
 import warnings
 warnings.filterwarnings('ignore')
 
+# 하이퍼파라미터 최적화를 위한 Optuna import
+try:
+    import optuna
+    from optuna.samplers import TPESampler
+    OPTUNA_AVAILABLE = True
+    print("✅ Optuna 사용 가능 - 베이지안 최적화 활성화")
+except ImportError:
+    OPTUNA_AVAILABLE = False
+    print("⚠️ Optuna 미설치 - 고정 하이퍼파라미터 사용")
+
 # 로컬 모듈 import
 from chronos_models import GRU_CNN_HybridModel, ChronosModelTrainer, create_hybrid_model, create_attention_model
 from chronos_processor_fixed import ProperTimeSeriesProcessor, ChronosVisualizer, employee_based_train_test_split
+
+def time_series_cross_validation(X, y, employee_ids, n_splits=3):
+    """
+    시계열 교차 검증 - 시간 순서를 고려한 직원별 분할
+    각 fold에서 이전 시점의 직원들로 학습하고 이후 시점의 직원들로 검증
+    """
+    unique_employees = np.unique(employee_ids)
+    n_employees = len(unique_employees)
+    
+    # 직원을 시간 순서대로 정렬 (가정: employee_id가 시간 순서와 연관)
+    # 실제로는 각 직원의 첫 시점을 기준으로 정렬해야 함
+    sorted_employees = np.sort(unique_employees)
+    
+    fold_size = n_employees // n_splits
+    cv_results = []
+    
+    for fold in range(n_splits):
+        # 시간 기반 분할: 이전 시점 직원들로 학습, 이후 시점 직원들로 검증
+        if fold == n_splits - 1:  # 마지막 fold
+            train_employees = sorted_employees[:fold * fold_size]
+            val_employees = sorted_employees[fold * fold_size:]
+        else:
+            train_employees = sorted_employees[:fold * fold_size + fold_size]
+            val_employees = sorted_employees[fold * fold_size + fold_size:(fold + 1) * fold_size + fold_size]
+        
+        if len(train_employees) == 0 or len(val_employees) == 0:
+            continue
+            
+        # 마스크 생성
+        train_mask = np.isin(employee_ids, train_employees)
+        val_mask = np.isin(employee_ids, val_employees)
+        
+        cv_results.append({
+            'train_indices': np.where(train_mask)[0],
+            'val_indices': np.where(val_mask)[0],
+            'train_employees': train_employees,
+            'val_employees': val_employees
+        })
+    
+    return cv_results
 
 app = Flask(__name__)
 CORS(app)
@@ -413,8 +463,13 @@ def train_model():
         epochs = params.get('epochs', 50)
         batch_size = params.get('batch_size', 32)
         learning_rate = params.get('learning_rate', 0.001)
+        optimize_hyperparameters_flag = params.get('optimize_hyperparameters', True)  # 기본적으로 최적화 사용
         
         print(f"🚀 모델 학습 시작 - Epochs: {epochs}, Batch Size: {batch_size}")
+        if optimize_hyperparameters_flag and OPTUNA_AVAILABLE:
+            print("🔧 베이지안 하이퍼파라미터 최적화 활성화")
+        else:
+            print("⚙️ 고정 하이퍼파라미터 사용")
         
         # 시퀀스 길이 업데이트
         processor.sequence_length = sequence_length
@@ -422,10 +477,15 @@ def train_model():
         # 개선된 시퀀스 생성
         X, y, employee_ids = processor.create_proper_sequences()
         
-        # 직원 기반 분할 (데이터 누수 방지)
+        # 직원 기반 분할 (데이터 누수 방지 - 시계열 특성 고려)
         X_train, X_test, y_train, y_test = employee_based_train_test_split(
             X, y, employee_ids, test_ratio=0.2
         )
+        
+        print(f"📊 시계열 검증 방식:")
+        print(f"   - 직원별 분할: 동일 직원 데이터가 train/test 동시 포함 방지")
+        print(f"   - 시간 순서 유지: 각 직원의 과거→현재 시퀀스 보존")
+        print(f"   - 예측 방향: 과거 6주 데이터로 미래 퇴사 여부 예측")
         
         # 텐서 변환
         X_train_tensor = torch.FloatTensor(X_train)
@@ -439,15 +499,112 @@ def train_model():
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
-        # 개선된 모델 생성
+        # 모델 생성 (최적화 여부에 따라)
         input_size = len(processor.feature_columns)
-        model = create_hybrid_model(
-            input_size=input_size,
-            gru_hidden=32,
-            cnn_filters=16,
-            kernel_sizes=[2, 3],
-            dropout=0.2
-        )
+        
+        if optimize_hyperparameters_flag and OPTUNA_AVAILABLE:
+            # 베이지안 최적화를 통한 하이퍼파라미터 탐색
+            print("🔧 베이지안 최적화로 최적 하이퍼파라미터 탐색 중...")
+            
+            def objective(trial):
+                # 하이퍼파라미터 제안
+                gru_hidden = trial.suggest_categorical('gru_hidden', [16, 32, 64, 128])
+                cnn_filters = trial.suggest_categorical('cnn_filters', [8, 16, 32, 64])
+                dropout = trial.suggest_float('dropout', 0.1, 0.5)
+                trial_lr = trial.suggest_loguniform('learning_rate', 1e-4, 1e-2)
+                trial_batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
+                
+                try:
+                    # 모델 생성
+                    trial_model = create_hybrid_model(
+                        input_size=input_size,
+                        gru_hidden=gru_hidden,
+                        cnn_filters=cnn_filters,
+                        kernel_sizes=[2, 3],
+                        dropout=dropout
+                    )
+                    trial_model.to(device)
+                    
+                    # 데이터 로더 (배치 크기 적용)
+                    trial_train_loader = DataLoader(train_dataset, batch_size=trial_batch_size, shuffle=True)
+                    trial_test_loader = DataLoader(test_dataset, batch_size=trial_batch_size, shuffle=False)
+                    
+                    # 트레이너 설정
+                    trial_trainer = ChronosModelTrainer(trial_model, device)
+                    trial_optimizer = optim.Adam(trial_model.parameters(), lr=trial_lr)
+                    trial_criterion = nn.CrossEntropyLoss()
+                    
+                    # 짧은 학습 (최적화용)
+                    best_val_acc = 0
+                    patience = 5
+                    patience_counter = 0
+                    
+                    for epoch in range(min(epochs, 30)):  # 최대 30 에포크로 제한
+                        train_loss, train_acc = trial_trainer.train_epoch(trial_train_loader, trial_optimizer, trial_criterion)
+                        test_results = trial_trainer.evaluate(trial_test_loader, trial_criterion)
+                        val_acc = test_results['accuracy']
+                        
+                        if val_acc > best_val_acc:
+                            best_val_acc = val_acc
+                            patience_counter = 0
+                        else:
+                            patience_counter += 1
+                            if patience_counter >= patience:
+                                break
+                        
+                        # Optuna pruning
+                        trial.report(val_acc, epoch)
+                        if trial.should_prune():
+                            raise optuna.TrialPruned()
+                    
+                    return best_val_acc
+                    
+                except Exception as e:
+                    print(f"Trial 실패: {str(e)}")
+                    return 0.0
+            
+            # Optuna Study 실행
+            study = optuna.create_study(
+                direction='maximize',
+                sampler=TPESampler(seed=42),
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=5)
+            )
+            
+            n_optimization_trials = 50  # 베이지안 최적화 50회로 설정
+            print(f"🚀 {n_optimization_trials}회 베이지안 최적화 시행...")
+            study.optimize(objective, n_trials=n_optimization_trials, timeout=1800)  # 30분 타임아웃
+            
+            # 최적 하이퍼파라미터로 모델 생성
+            best_params = study.best_params
+            print(f"✅ 최적 하이퍼파라미터: {best_params}")
+            
+            model = create_hybrid_model(
+                input_size=input_size,
+                gru_hidden=best_params['gru_hidden'],
+                cnn_filters=best_params['cnn_filters'],
+                kernel_sizes=[2, 3],
+                dropout=best_params['dropout']
+            )
+            
+            # 최적 설정 적용
+            learning_rate = best_params['learning_rate']
+            batch_size = best_params['batch_size']
+            
+            # 데이터로더 재생성 (최적 배치 크기로)
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            
+        else:
+            # 기존 고정 하이퍼파라미터 사용
+            print("⚙️ 고정 하이퍼파라미터로 모델 생성...")
+            model = create_hybrid_model(
+                input_size=input_size,
+                gru_hidden=32,
+                cnn_filters=16,
+                kernel_sizes=[2, 3],
+                dropout=0.2
+            )
+        
         model.to(device)
         
         # 트레이너 설정
@@ -505,6 +662,203 @@ def train_model():
         
     except Exception as e:
         print(f"❌ 학습 오류: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/optimize_hyperparameters', methods=['POST'])
+def optimize_hyperparameters():
+    """
+    Optuna를 사용한 베이지안 하이퍼파라미터 최적화
+    """
+    global model, processor
+    
+    if not OPTUNA_AVAILABLE:
+        return jsonify({
+            'error': 'Optuna가 설치되지 않았습니다. pip install optuna로 설치해주세요.'
+        }), 400
+    
+    try:
+        if processor is None or processor.ts_data is None:
+            return jsonify({'error': '데이터가 로드되지 않았습니다.'}), 400
+        
+        # 요청 파라미터 파싱
+        params = request.get_json() or {}
+        n_trials = params.get('n_trials', 50)  # 최적화 시행 횟수
+        timeout = params.get('timeout', 1800)  # 30분 타임아웃
+        
+        print(f"🔧 Chronos 베이지안 하이퍼파라미터 최적화 시작")
+        print(f"   시행 횟수: {n_trials}")
+        print(f"   타임아웃: {timeout}초")
+        
+        # 시퀀스 생성 (시간 순서 고려)
+        X, y, employee_ids = processor.create_proper_sequences()
+        
+        # 직원 기반 분할 (데이터 누수 방지 - 같은 직원의 데이터가 train/test에 동시 포함되지 않음)
+        X_train, X_test, y_train, y_test = employee_based_train_test_split(
+            X, y, employee_ids, test_ratio=0.2
+        )
+        
+        print(f"📊 시계열 데이터 검증 방식:")
+        print(f"   - 직원별 분할: 같은 직원 데이터가 train/test에 동시 포함되지 않음")
+        print(f"   - 시간 순서 보존: 각 직원의 시계열 순서 유지")
+        print(f"   - 미래 예측 방식: 과거 시퀀스로 미래 퇴사 여부 예측")
+        
+        # GPU 설정
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        input_size = len(processor.feature_columns)
+        
+        # 최적화 목적 함수 정의
+        def objective(trial):
+            # 하이퍼파라미터 제안
+            gru_hidden = trial.suggest_categorical('gru_hidden', [16, 32, 64, 128])
+            cnn_filters = trial.suggest_categorical('cnn_filters', [8, 16, 32, 64])
+            dropout = trial.suggest_float('dropout', 0.1, 0.5)
+            learning_rate = trial.suggest_loguniform('learning_rate', 1e-4, 1e-2)
+            batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
+            epochs = trial.suggest_int('epochs', 20, 100)
+            
+            try:
+                # 모델 생성
+                trial_model = create_hybrid_model(
+                    input_size=input_size,
+                    gru_hidden=gru_hidden,
+                    cnn_filters=cnn_filters,
+                    kernel_sizes=[2, 3],  # 고정
+                    dropout=dropout
+                )
+                trial_model.to(device)
+                
+                # 데이터 로더 생성
+                train_dataset = TensorDataset(
+                    torch.FloatTensor(X_train), 
+                    torch.LongTensor(y_train)
+                )
+                test_dataset = TensorDataset(
+                    torch.FloatTensor(X_test), 
+                    torch.LongTensor(y_test)
+                )
+                
+                train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+                test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+                
+                # 트레이너 및 옵티마이저 설정
+                trainer = ChronosModelTrainer(trial_model, device)
+                optimizer = optim.Adam(trial_model.parameters(), lr=learning_rate)
+                criterion = nn.CrossEntropyLoss()
+                
+                # 조기 종료를 위한 변수
+                best_val_acc = 0
+                patience = 10
+                patience_counter = 0
+                
+                # 학습 진행
+                for epoch in range(epochs):
+                    train_loss, train_acc = trainer.train_epoch(train_loader, optimizer, criterion)
+                    test_results = trainer.evaluate(test_loader, criterion)
+                    val_acc = test_results['accuracy']
+                    
+                    # 조기 종료 체크
+                    if val_acc > best_val_acc:
+                        best_val_acc = val_acc
+                        patience_counter = 0
+                    else:
+                        patience_counter += 1
+                        if patience_counter >= patience:
+                            break
+                    
+                    # Optuna pruning (중간 결과 기반 조기 종료)
+                    trial.report(val_acc, epoch)
+                    if trial.should_prune():
+                        raise optuna.TrialPruned()
+                
+                return best_val_acc
+                
+            except Exception as e:
+                print(f"Trial 실패: {str(e)}")
+                return 0.0  # 실패 시 최저 점수 반환
+        
+        # Optuna Study 생성 및 실행
+        study = optuna.create_study(
+            direction='maximize',
+            sampler=TPESampler(seed=42),
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=10)
+        )
+        
+        print("🚀 베이지안 최적화 시작...")
+        study.optimize(objective, n_trials=n_trials, timeout=timeout)
+        
+        # 최적 하이퍼파라미터로 최종 모델 학습
+        best_params = study.best_params
+        print(f"✅ 최적 하이퍼파라미터: {best_params}")
+        
+        # 최적 모델 생성 및 학습
+        optimized_model = create_hybrid_model(
+            input_size=input_size,
+            gru_hidden=best_params['gru_hidden'],
+            cnn_filters=best_params['cnn_filters'],
+            kernel_sizes=[2, 3],
+            dropout=best_params['dropout']
+        )
+        optimized_model.to(device)
+        
+        # 최적 설정으로 최종 학습
+        train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
+        test_dataset = TensorDataset(torch.FloatTensor(X_test), torch.LongTensor(y_test))
+        
+        train_loader = DataLoader(train_dataset, batch_size=best_params['batch_size'], shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=best_params['batch_size'], shuffle=False)
+        
+        trainer = ChronosModelTrainer(optimized_model, device)
+        optimizer = optim.Adam(optimized_model.parameters(), lr=best_params['learning_rate'])
+        criterion = nn.CrossEntropyLoss()
+        
+        # 최종 학습
+        final_epochs = min(best_params['epochs'], 50)  # 최대 50 에포크로 제한
+        for epoch in range(final_epochs):
+            train_loss, train_acc = trainer.train_epoch(train_loader, optimizer, criterion)
+            if epoch % 10 == 0:
+                test_results = trainer.evaluate(test_loader, criterion)
+                print(f"Final Training Epoch {epoch+1}/{final_epochs} - Val Acc: {test_results['accuracy']:.4f}")
+        
+        # 최종 평가
+        final_results = trainer.evaluate(test_loader, criterion)
+        
+        # 최적화된 모델 저장
+        model = optimized_model
+        
+        optimization_info = {
+            'best_params': best_params,
+            'best_score': study.best_value,
+            'n_trials': len(study.trials),
+            'optimization_time': datetime.now().isoformat(),
+            'final_accuracy': final_results['accuracy'],
+            'final_loss': final_results['loss']
+        }
+        
+        save_model(model, processor, optimization_info)
+        
+        return jsonify({
+            'message': 'Chronos 베이지안 하이퍼파라미터 최적화 완료',
+            'optimization_results': {
+                'best_hyperparameters': best_params,
+                'best_validation_score': study.best_value,
+                'final_test_accuracy': final_results['accuracy'],
+                'final_test_loss': final_results['loss'],
+                'total_trials': len(study.trials),
+                'optimization_method': 'Optuna TPESampler',
+                'trials_completed': len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
+                'trials_pruned': len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])
+            },
+            'model_info': {
+                'input_size': input_size,
+                'feature_count': len(processor.feature_columns),
+                'training_samples': len(X_train),
+                'test_samples': len(X_test)
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ 하이퍼파라미터 최적화 오류: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 

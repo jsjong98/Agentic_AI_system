@@ -7,16 +7,31 @@ Agora LLM Generator
 import openai
 import time
 import logging
+import os
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+from dotenv import load_dotenv
+
+# 환경변수 로드
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 class AgoraLLMGenerator:
     """LLM 기반 시장 분석 해석 생성 클래스"""
     
-    def __init__(self, api_key: str):
-        self.client = openai.OpenAI(api_key=api_key)
+    def __init__(self, api_key: str = None):
+        # API 키 설정 (환경변수 우선)
+        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
+        
+        if self.api_key:
+            self.client = openai.OpenAI(api_key=self.api_key)
+            self.llm_available = True
+        else:
+            self.client = None
+            self.llm_available = False
+            logger.warning("OpenAI API 키가 없습니다. 규칙 기반 해석만 사용됩니다.")
+        
         self.model = "gpt-4o-mini"  # 실제 사용 가능한 모델로 변경
         
         # 직무별 시장 컨텍스트 (Agora.ipynb와 동일한 구조)
@@ -47,12 +62,12 @@ class AgoraLLMGenerator:
             }
         }
         
-        logger.info("Agora LLM Generator 초기화 완료")
+        logger.info(f"Agora LLM Generator 초기화 완료 (LLM 사용 가능: {self.llm_available})")
     
     def generate_market_interpretation(self, analysis_result: Dict, use_llm: bool = True) -> str:
-        """시장 분석 결과에 대한 해석 생성"""
+        """시장 분석 결과에 대한 해석 생성 (JobSpy 데이터 지원)"""
         
-        if not use_llm:
+        if not use_llm or not self.llm_available:
             return self._generate_rule_based_interpretation(analysis_result)
         
         try:
@@ -135,6 +150,8 @@ class AgoraLLMGenerator:
 - 시장 압력 지수: {market_pressure} (0~1, 높을수록 외부 기회 많음)
 - 보상 격차 지수: {compensation_gap} (0~1, 높을수록 시장 대비 불리)
 - 종합 퇴사 위험도: {risk_level} ({overall_risk:.3f})
+- 데이터 출처: {market_data.get('data_source', 'Unknown')}
+- 데이터 신선도: {market_data.get('data_freshness', '정보 없음')}
 
 **업계 특성:**
 - 시장 변동성: {dept_context.get('market_volatility', 'medium')}

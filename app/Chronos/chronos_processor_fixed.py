@@ -11,9 +11,43 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import torch
 from torch.utils.data import Dataset, DataLoader, TensorDataset
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+# sklearn import with fallback
+try:
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+    SKLEARN_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  sklearn import 실패: {e}")
+    print("   일부 기능이 제한됩니다.")
+    SKLEARN_AVAILABLE = False
+    
+    # 기본 대체 클래스들
+    class StandardScaler:
+        def fit(self, X): return self
+        def transform(self, X): return X
+        def fit_transform(self, X): return X
+    
+    def train_test_split(*arrays, **kwargs):
+        # 간단한 분할 구현
+        test_size = kwargs.get('test_size', 0.2)
+        split_idx = int(len(arrays[0]) * (1 - test_size))
+        result = []
+        for arr in arrays:
+            result.extend([arr[:split_idx], arr[split_idx:]])
+        return result
+    
+    def classification_report(*args, **kwargs):
+        return "sklearn not available"
+    
+    def confusion_matrix(*args, **kwargs):
+        return [[0, 0], [0, 0]]
+    
+    def roc_auc_score(*args, **kwargs):
+        return 0.5
+    
+    def roc_curve(*args, **kwargs):
+        return [0, 1], [0, 1], [0.5]
 import joblib
 import io
 import base64
@@ -226,15 +260,10 @@ class ProperTimeSeriesProcessor:
             min_required_length = self.sequence_length + self.prediction_horizon
             if len(employee_data) >= min_required_length:
                 
-                # 전체 시계열 데이터를 고정 길이로 맞춤 (패딩 또는 샘플링)
+                # 전체 시계열 데이터 사용 (샘플링 제거)
                 if len(employee_data) >= self.sequence_length:
-                    if len(employee_data) > self.sequence_length:
-                        # 데이터가 더 길면 균등하게 샘플링
-                        indices = np.linspace(0, len(employee_data)-1, self.sequence_length, dtype=int)
-                        sequence_data = employee_data.iloc[indices][self.feature_columns].values
-                    else:
-                        # 데이터가 정확히 맞으면 그대로 사용
-                        sequence_data = employee_data[self.feature_columns].values
+                    # 최신 데이터를 사용하여 시퀀스 생성 (샘플링 대신 최근 데이터 사용)
+                    sequence_data = employee_data[self.feature_columns].values[-self.sequence_length:]
                     
                     # 각 직원당 하나의 시퀀스만 생성
                     sequences.append(sequence_data)

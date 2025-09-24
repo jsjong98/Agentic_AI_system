@@ -13,18 +13,27 @@ def check_dependencies():
     """
     필요한 의존성 패키지 확인
     """
-    required_packages = [
-        'flask', 'flask-cors', 'torch', 'pandas', 'numpy', 
-        'scikit-learn', 'matplotlib', 'seaborn', 'plotly', 'joblib'
-    ]
+    # 패키지명과 실제 import명이 다른 경우를 매핑
+    package_mapping = {
+        'flask': 'flask',
+        'flask-cors': 'flask_cors',
+        'torch': 'torch',
+        'pandas': 'pandas',
+        'numpy': 'numpy',
+        'scikit-learn': 'sklearn',  # 실제 import명은 sklearn
+        'matplotlib': 'matplotlib',
+        'seaborn': 'seaborn',
+        'plotly': 'plotly',
+        'joblib': 'joblib'
+    }
     
     missing_packages = []
     
-    for package in required_packages:
+    for package_name, import_name in package_mapping.items():
         try:
-            __import__(package.replace('-', '_'))
+            __import__(import_name)
         except ImportError:
-            missing_packages.append(package)
+            missing_packages.append(package_name)
     
     if missing_packages:
         print("❌ 다음 패키지들이 설치되지 않았습니다:")
@@ -86,10 +95,11 @@ def run_server():
     # 환경 설정
     setup_environment()
     
-    # 의존성 확인
+    # 의존성 확인 (경고만 표시하고 계속 진행)
     if not check_dependencies():
-        print("\n❌ 의존성 패키지를 먼저 설치해주세요.")
-        return False
+        print("\n⚠️  일부 의존성 패키지가 누락되었지만 서버를 시작합니다.")
+        print("   일부 기능이 제한될 수 있습니다.")
+        time.sleep(2)  # 경고 메시지를 읽을 시간 제공
     
     # 데이터 파일 확인
     check_data_files()
@@ -104,7 +114,8 @@ def run_server():
         print("   - 종료: Ctrl+C")
         print("=" * 50)
         
-        app.run(host='0.0.0.0', port=5003, debug=True)
+        # debug=False로 설정하여 reloader 문제 방지
+        app.run(host='0.0.0.0', port=5003, debug=False)
         
     except KeyboardInterrupt:
         print("\n👋 서버가 종료되었습니다.")
