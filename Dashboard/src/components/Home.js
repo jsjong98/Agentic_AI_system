@@ -42,6 +42,22 @@ import { predictionService } from '../services/predictionService';
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
+// 타이핑 커서 애니메이션을 위한 스타일
+const typingCursorStyle = `
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+`;
+
+// 스타일을 head에 추가
+if (typeof document !== 'undefined' && !document.getElementById('typing-cursor-style')) {
+  const style = document.createElement('style');
+  style.id = 'typing-cursor-style';
+  style.textContent = typingCursorStyle;
+  document.head.appendChild(style);
+}
+
 const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   const [chatMessages, setChatMessages] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
@@ -50,8 +66,11 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   const [selectedPrediction, setSelectedPrediction] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [historyManageVisible, setHistoryManageVisible] = useState(false);
+  const [typingMessageId, setTypingMessageId] = useState(null);
+  const [typingText, setTypingText] = useState('');
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const typingIntervalRef = useRef(null);
 
   // 초기 환영 메시지 및 예측 데이터 로드
   useEffect(() => {
@@ -65,15 +84,19 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       ? '안녕하세요! Retain Sentinel 360 AI 어시스턴트입니다. 저장된 분석 결과를 바탕으로 질문에 답변해드리겠습니다.'
       : '안녕하세요! Retain Sentinel 360 AI 어시스턴트입니다. 먼저 배치 분석을 실행하시면 분석 결과에 대해 질문하실 수 있습니다.';
 
-    const welcomeMessages = [
-      {
-        id: 1,
-        type: 'bot',
-        content: welcomeContent,
-        timestamp: new Date().toISOString()
-      }
-    ];
-    setChatMessages(welcomeMessages);
+    const welcomeMessage = {
+      id: 1,
+      type: 'bot',
+      content: welcomeContent,
+      timestamp: new Date().toISOString()
+    };
+
+    // 환영 메시지도 타이핑 효과로 표시
+    setTimeout(() => {
+      startTypingEffect(welcomeMessage.id, welcomeContent, () => {
+        setChatMessages([welcomeMessage]);
+      });
+    }, 500); // 0.5초 후 타이핑 시작
   }, [predictionHistory]);
 
   // 전역 배치 결과가 업데이트될 때 예측 히스토리도 업데이트
@@ -113,6 +136,64 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // 타이핑 효과 함수
+  const startTypingEffect = (messageId, fullText, onComplete) => {
+    // 기존 타이핑 효과가 있다면 중단
+    if (typingIntervalRef.current) {
+      clearTimeout(typingIntervalRef.current);
+    }
+
+    setTypingMessageId(messageId);
+    setTypingText('');
+    
+    let currentIndex = 0;
+    const baseTypingSpeed = 25; // 기본 타이핑 속도 (밀리초)
+    
+    const typeNextChar = () => {
+      if (currentIndex < fullText.length) {
+        const nextChar = fullText[currentIndex];
+        setTypingText(fullText.substring(0, currentIndex + 1));
+        currentIndex++;
+        
+        // 자동 스크롤 (타이핑 중에도)
+        setTimeout(() => scrollToBottom(), 10);
+        
+        // 문장 부호나 줄바꿈에서 약간 더 긴 지연
+        let delay = baseTypingSpeed;
+        if (nextChar === '.' || nextChar === '!' || nextChar === '?') {
+          delay = 300; // 문장 끝에서 더 긴 지연
+        } else if (nextChar === '\n') {
+          delay = 200; // 줄바꿈에서 중간 지연
+        } else if (nextChar === ',') {
+          delay = 150; // 쉼표에서 짧은 지연
+        }
+        
+        typingIntervalRef.current = setTimeout(typeNextChar, delay);
+      } else {
+        // 타이핑 완료
+        setTypingMessageId(null);
+        setTypingText('');
+        
+        // 최종 메시지를 채팅에 추가
+        if (onComplete) {
+          onComplete();
+        }
+      }
+    };
+    
+    // 타이핑 시작
+    typingIntervalRef.current = setTimeout(typeNextChar, baseTypingSpeed);
+  };
+
+  // 컴포넌트 언마운트 시 타이핑 효과 정리
+  useEffect(() => {
+    return () => {
+      if (typingIntervalRef.current) {
+        clearTimeout(typingIntervalRef.current);
+      }
+    };
+  }, []);
 
   // 예측 결과 히스토리 로드
   const loadPredictionHistory = async () => {
@@ -194,7 +275,10 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
         isFallback: !!data.fallback_response
       };
 
-      setChatMessages(prev => [...prev, botResponse]);
+      // 타이핑 효과로 응답 표시
+      startTypingEffect(botResponse.id, responseContent, () => {
+        setChatMessages(prev => [...prev, botResponse]);
+      });
       
       // fallback 응답인 경우 경고 메시지 표시
       if (data.fallback_response) {
@@ -206,8 +290,13 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       
       // API 호출 실패 시 fallback으로 기존 로직 사용
       const fallbackResponse = generateBotResponse(messageToSend);
-      fallbackResponse.content = `⚠️ AI 서버 연결에 실패했습니다. 기본 응답을 제공합니다.\n\n${fallbackResponse.content}`;
-      setChatMessages(prev => [...prev, fallbackResponse]);
+      const fallbackContent = `⚠️ AI 서버 연결에 실패했습니다. 기본 응답을 제공합니다.\n\n${fallbackResponse.content}`;
+      fallbackResponse.content = fallbackContent;
+      
+      // 타이핑 효과로 fallback 응답 표시
+      startTypingEffect(fallbackResponse.id, fallbackContent, () => {
+        setChatMessages(prev => [...prev, fallbackResponse]);
+      });
       
       message.warning('AI 서버에 연결할 수 없습니다. 기본 응답을 제공합니다.');
     } finally {
@@ -519,6 +608,58 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
                   </div>
                 </div>
               ))}
+              
+              {/* 타이핑 효과 중인 메시지 */}
+              {typingMessageId && (
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-start',
+                    marginBottom: '12px'
+                  }}
+                >
+                  <div
+                    style={{
+                      maxWidth: '70%',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px'
+                    }}
+                  >
+                    <Avatar
+                      icon={<RobotOutlined />}
+                      style={{
+                        backgroundColor: '#52c41a',
+                        flexShrink: 0
+                      }}
+                    />
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        backgroundColor: '#fff',
+                        color: '#333',
+                        border: '1px solid #d9d9d9',
+                        whiteSpace: 'pre-line',
+                        minHeight: '20px',
+                        position: 'relative'
+                      }}
+                    >
+                      {typingText}
+                      <span 
+                        style={{
+                          display: 'inline-block',
+                          width: '2px',
+                          height: '16px',
+                          backgroundColor: '#52c41a',
+                          marginLeft: '2px',
+                          animation: 'blink 1s infinite'
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {chatLoading && (
                 <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>

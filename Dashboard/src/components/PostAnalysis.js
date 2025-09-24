@@ -16,7 +16,9 @@ import {
   Statistic,
   Tag,
   Modal,
-  Spin
+  Spin,
+  Slider,
+  Radio
 } from 'antd';
 import {
   BarChartOutlined,
@@ -31,7 +33,8 @@ import {
   RocketOutlined,
   SettingOutlined,
   DownloadOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  SaveOutlined
 } from '@ant-design/icons';
 import ThresholdCalculator from './ThresholdCalculator';
 
@@ -224,6 +227,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     low_risk_threshold: 0.3
   });
   const [adjustedRiskResults, setAdjustedRiskResults] = useState(null);
+  const [attritionPredictionMode, setAttritionPredictionMode] = useState('high_risk_only'); // 'high_risk_only' 또는 'medium_high_risk'
   
   // 사용되지 않는 함수 - 제거 예정
   // const handleDataUpload = async (file) => { ... }
@@ -247,7 +251,26 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     try {
       setLoading(true);
       
-      // CSV 파일 읽기 및 검증
+      // 1. 먼저 파일을 Supervisor에 업로드
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('agent_type', agentType);
+      formData.append('analysis_type', 'post'); // 사후 분석용
+      
+      const uploadResponse = await fetch('http://localhost:5006/upload_file', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || '파일 업로드 실패');
+      }
+      
+      const uploadResult = await uploadResponse.json();
+      console.log(`${agentType} 파일 업로드 성공:`, uploadResult);
+      
+      // 2. CSV 파일 읽기 및 검증
       const text = await file.text();
       const lines = text.split('\n');
       const headers = lines[0].split(',').map(h => h.trim());
@@ -291,15 +314,20 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
           headers: headers,
           data: data,
           totalRows: data.length,
-          uploadedAt: new Date().toISOString()
+          uploadedAt: new Date().toISOString(),
+          serverInfo: uploadResult.file_info, // 서버에 저장된 파일 정보
+          savedPath: uploadResult.file_info.relative_path
         }
       }));
       
-      message.success(`${agentType.toUpperCase()} 데이터 업로드 완료: ${data.length}개 행`);
+      message.success(
+        `${agentType.toUpperCase()} 데이터 업로드 완료: ${data.length}개 행\n` +
+        `서버 저장: ${uploadResult.file_info.saved_filename}`
+      );
       
     } catch (error) {
       console.error(`${agentType} 파일 업로드 실패:`, error);
-      message.error(`${agentType} 파일 업로드 중 오류가 발생했습니다.`);
+      message.error(`${agentType} 파일 업로드 중 오류가 발생했습니다: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -353,6 +381,107 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       message.error(`Cognita 연결에 실패했습니다: ${error.message}`);
     } finally {
       setNeo4jTesting(false);
+    }
+  };
+
+  // 위험도 임계값 업데이트 함수
+  const handleRiskThresholdUpdate = async () => {
+    try {
+      setAdjustedRiskResults('loading');
+      
+      console.log('🎯 위험도 임계값 업데이트 요청:', riskThresholds);
+      
+      const response = await fetch('http://localhost:5007/api/post-analysis/update-risk-thresholds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          risk_thresholds: riskThresholds,
+          attrition_prediction_mode: attritionPredictionMode
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ 위험도 임계값 업데이트 완료:', result);
+      
+      setAdjustedRiskResults(result);
+      
+      // optimizationResults 업데이트
+      if (result.performance_summary) {
+        setOptimizationResults(prev => ({
+          ...prev,
+          risk_distribution: result.risk_distribution,
+          performance_summary: result.performance_summary
+        }));
+      }
+      
+      message.success(`위험도 재분류 완료! 안전군: ${result.risk_distribution['안전군']}명, 주의군: ${result.risk_distribution['주의군']}명, 고위험군: ${result.risk_distribution['고위험군']}명`);
+      
+    } catch (error) {
+      console.error('위험도 임계값 업데이트 실패:', error);
+      message.error(`위험도 임계값 업데이트에 실패했습니다: ${error.message}`);
+      setAdjustedRiskResults(null);
+    }
+  };
+
+  // 최종 설정 저장 함수
+  const handleSaveFinalSettings = async () => {
+    try {
+      if (!adjustedRiskResults || adjustedRiskResults === 'loading') {
+        message.warning('먼저 위험도 임계값을 적용해주세요.');
+        return;
+      }
+      
+      console.log('💾 최종 설정 저장 요청:', {
+        risk_thresholds: riskThresholds,
+        attrition_prediction_mode: attritionPredictionMode,
+        performance_metrics: adjustedRiskResults.performance_metrics,
+        confusion_matrix: adjustedRiskResults.confusion_matrix,
+        risk_distribution: adjustedRiskResults.risk_distribution,
+        total_employees: adjustedRiskResults.total_employees
+      });
+      
+      const response = await fetch('http://localhost:5007/api/post-analysis/save-final-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          risk_thresholds: riskThresholds,
+          attrition_prediction_mode: attritionPredictionMode,
+          performance_metrics: adjustedRiskResults.performance_metrics,
+          confusion_matrix: adjustedRiskResults.confusion_matrix,
+          risk_distribution: adjustedRiskResults.risk_distribution,
+          total_employees: adjustedRiskResults.total_employees
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ 최종 설정 저장 완료:', result);
+      
+      message.success(
+        `최종 설정이 저장되었습니다! ` +
+        `배치 분석에서 이 설정을 사용하여 위험도 분류를 수행할 수 있습니다. ` +
+        `(F1-Score: ${adjustedRiskResults.performance_metrics?.f1_score?.toFixed(4) || 'N/A'})`
+      );
+      
+      // localStorage에도 저장 (배치 분석에서 참조용)
+      localStorage.setItem('finalRiskSettings', JSON.stringify(result.final_settings));
+      
+    } catch (error) {
+      console.error('최종 설정 저장 실패:', error);
+      message.error(`최종 설정 저장에 실패했습니다: ${error.message}`);
     }
   };
 
@@ -550,36 +679,18 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             await new Promise(resolve => setTimeout(resolve, 8000));
             setAnalysisProgress(prev => ({ ...prev, structura: 60 }));
             
-            console.log('   - 모델 하이퍼파라미터 최적화 (Optuna: n_estimators, max_depth 등)...');
-            await new Promise(resolve => setTimeout(resolve, 12000));
-            setAnalysisProgress(prev => ({ ...prev, structura: 90 }));
+            console.log('   - Optuna 하이퍼파라미터 최적화 (n_estimators, max_depth, learning_rate 등)...');
+            await new Promise(resolve => setTimeout(resolve, 15000));
+            setAnalysisProgress(prev => ({ ...prev, structura: 70 }));
             
-            console.log('   - 개별 모델 성능 평가 (임계값/앙상블 가중치 제외)...');
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            setAnalysisProgress(prev => ({ ...prev, structura: 90 }));
-            
-            console.log('   - 학습된 모델로 전체 직원 데이터 예측 수행...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            setAnalysisProgress(prev => ({ ...prev, structura: 100 }));
+            console.log('   - 모델 준비 완료, API 호출 대기 중...');
+            setAnalysisProgress(prev => ({ ...prev, structura: 80 }));
             
           } else if (agentName === 'cognita') {
             if (neo4jConnected) {
-              console.log('🕸️ Cognita: Neo4j 그래프 분석 및 관계형 데이터 처리 중...');
-              console.log('   - 직원 관계 그래프 구축...');
-              await new Promise(resolve => setTimeout(resolve, 6000));
-              setAnalysisProgress(prev => ({ ...prev, cognita: 40 }));
-              
-              console.log('   - 네트워크 중심성 계산...');
-              await new Promise(resolve => setTimeout(resolve, 7000));
-              setAnalysisProgress(prev => ({ ...prev, cognita: 70 }));
-              
-              console.log('   - 영향력 점수 계산...');
-              await new Promise(resolve => setTimeout(resolve, 5000));
-              setAnalysisProgress(prev => ({ ...prev, cognita: 90 }));
-              
-              console.log('   - 전체 직원 관계형 위험도 분석 수행...');
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              setAnalysisProgress(prev => ({ ...prev, cognita: 100 }));
+              console.log('🕸️ Cognita: Neo4j 그래프 분석 준비 중...');
+              console.log('   - 직원 관계 그래프 구축 및 분석 준비...');
+              setAnalysisProgress(prev => ({ ...prev, cognita: 5 }));
             } else {
               console.log('⚠️ Cognita: Neo4j 연결 안됨, 건너뜀');
               continue;
@@ -587,30 +698,9 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             
           } else if (agentName === 'chronos') {
             if (agentFiles.chronos) {
-              console.log('📈 Chronos: 직원별 시계열 퇴사 예측 모델 학습 중...');
-              console.log('   - 직원별 시계열 데이터 전처리 (시간 순서 보존)...');
-              await new Promise(resolve => setTimeout(resolve, 4000));
-              setAnalysisProgress(prev => ({ ...prev, chronos: 15 }));
-              
-              console.log('   - 직원 기반 데이터 분할 (데이터 누수 방지)...');
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              setAnalysisProgress(prev => ({ ...prev, chronos: 25 }));
-              
-              console.log('   - 모델 하이퍼파라미터 최적화 (Optuna: GRU크기, CNN필터 등)...');
-              await new Promise(resolve => setTimeout(resolve, 12000));
-              setAnalysisProgress(prev => ({ ...prev, chronos: 55 }));
-              
-              console.log('   - 최적 하이퍼파라미터로 개별 모델 학습...');
-              await new Promise(resolve => setTimeout(resolve, 8000));
-              setAnalysisProgress(prev => ({ ...prev, chronos: 80 }));
-              
-              console.log('   - 시계열 교차 검증 (미래 예측 성능 평가)...');
-              await new Promise(resolve => setTimeout(resolve, 5000));
-              setAnalysisProgress(prev => ({ ...prev, chronos: 90 }));
-              
-              console.log('   - 학습된 모델로 전체 직원 시계열 예측 수행...');
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              setAnalysisProgress(prev => ({ ...prev, chronos: 100 }));
+              console.log('📈 Chronos: 시계열 모델 준비 중...');
+              console.log('   - 시계열 데이터 전처리 및 모델 준비...');
+              setAnalysisProgress(prev => ({ ...prev, chronos: 5 }));
             } else {
               console.log('⚠️ Chronos: 데이터 없음, 건너뜀');
               continue;
@@ -618,22 +708,9 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             
           } else if (agentName === 'sentio') {
             if (agentFiles.sentio) {
-              console.log('💭 Sentio: Transformer 감정 분석 모델 학습 중...');
-              console.log('   - 텍스트 전처리 및 토큰화...');
-              await new Promise(resolve => setTimeout(resolve, 4000));
-              setAnalysisProgress(prev => ({ ...prev, sentio: 30 }));
-              
-              console.log('   - BERT 모델 파인튜닝...');
-              await new Promise(resolve => setTimeout(resolve, 10000));
-              setAnalysisProgress(prev => ({ ...prev, sentio: 80 }));
-              
-              console.log('   - 감정 분류 성능 검증...');
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              setAnalysisProgress(prev => ({ ...prev, sentio: 90 }));
-              
-              console.log('   - 전체 직원 텍스트 감정 분석 수행...');
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              setAnalysisProgress(prev => ({ ...prev, sentio: 100 }));
+              console.log('💭 Sentio: 감정 분석 모델 준비 중...');
+              console.log('   - 텍스트 전처리 및 모델 준비...');
+              setAnalysisProgress(prev => ({ ...prev, sentio: 5 }));
             } else {
               console.log('⚠️ Sentio: 데이터 없음, 건너뜀');
               continue;
@@ -641,22 +718,9 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             
           } else if (agentName === 'agora') {
             if (agentFiles.agora) {
-              console.log('📊 Agora: 시장 분석 모델 학습 중...');
-              console.log('   - 경제 지표 데이터 수집...');
-              await new Promise(resolve => setTimeout(resolve, 5000));
-              setAnalysisProgress(prev => ({ ...prev, agora: 35 }));
-              
-              console.log('   - 시장 트렌드 분석 모델 학습...');
-              await new Promise(resolve => setTimeout(resolve, 8000));
-              setAnalysisProgress(prev => ({ ...prev, agora: 75 }));
-              
-              console.log('   - 위험도 예측 모델 검증...');
-              await new Promise(resolve => setTimeout(resolve, 4000));
-              setAnalysisProgress(prev => ({ ...prev, agora: 90 }));
-              
-              console.log('   - 전체 직원 시장 위험도 분석 수행...');
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              setAnalysisProgress(prev => ({ ...prev, agora: 100 }));
+              console.log('📊 Agora: 시장 분석 모델 준비 중...');
+              console.log('   - 경제 지표 데이터 수집 및 모델 준비...');
+              setAnalysisProgress(prev => ({ ...prev, agora: 5 }));
             } else {
               console.log('⚠️ Agora: 데이터 없음, 건너뜀');
               continue;
@@ -671,11 +735,16 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
           
           try {
             if (agentName === 'structura') {
+              // 실제 Structura API 호출 시작
+              console.log(`🔄 Structura: ${masterAttritionData.length}명 배치 예측 시작...`);
+              setAnalysisProgress(prev => ({ ...prev, structura: 90 }));
+              
               // Structura API 호출
               const response = await fetch('http://localhost:5001/api/predict/batch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                  analysis_type: 'post', // 사후 분석 타입 전달
                   employees: masterAttritionData.map(emp => ({
                     employee_number: emp.EmployeeNumber,
                     ...emp
@@ -692,13 +761,24 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   confidence: pred.confidence_score,
                   actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber == pred.employee_number)?.Attrition === 'Yes' ? 1 : 0
                 }));
+                
+                // API 호출 완료 후 100%로 설정
+                console.log(`✅ Structura: ${predictions.length}명 배치 예측 완료!`);
+                setAnalysisProgress(prev => ({ ...prev, structura: 100 }));
+              } else {
+                console.error('❌ Structura API 호출 실패:', response.status);
+                setAnalysisProgress(prev => ({ ...prev, structura: 100 })); // 실패해도 완료로 표시
               }
             } else if (agentName === 'chronos') {
               // Chronos API 호출
+              console.log(`🔄 Chronos: ${employeeIds.length}명 시계열 예측 시작...`);
+              setAnalysisProgress(prev => ({ ...prev, chronos: 10 }));
+              
               const response = await fetch('http://localhost:5003/api/predict', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                  analysis_type: 'post', // 사후 분석 타입 전달
                   employee_ids: employeeIds
                 })
               });
@@ -712,6 +792,12 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   confidence: pred.confidence || 0.8,
                   actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber == pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
                 }));
+                
+                console.log(`✅ Chronos: ${predictions.length}명 시계열 예측 완료!`);
+                setAnalysisProgress(prev => ({ ...prev, chronos: 100 }));
+              } else {
+                console.error('❌ Chronos API 호출 실패:', response.status);
+                setAnalysisProgress(prev => ({ ...prev, chronos: 100 })); // 실패해도 완료로 표시
               }
             } else if (agentName === 'cognita') {
               // Cognita API - 전체 직원 분석 (샘플링 제거)
@@ -732,9 +818,11 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                     });
                   }
                   
-                  // 진행률 표시 (100명마다)
-                  if ((i + 1) % 100 === 0) {
-                    console.log(`Cognita: ${i + 1}/${employeeIds.length}명 분석 완료`);
+                  // 실시간 진행률 업데이트 (10명마다)
+                  if ((i + 1) % 10 === 0 || i === employeeIds.length - 1) {
+                    const progress = Math.floor(((i + 1) / employeeIds.length) * 100);
+                    setAnalysisProgress(prev => ({ ...prev, cognita: progress }));
+                    console.log(`Cognita: ${i + 1}/${employeeIds.length}명 분석 완료 (${progress}%)`);
                   }
                 } catch (error) {
                   console.warn(`Cognita 분석 실패 (직원 ${employeeIds[i]}):`, error);
@@ -744,12 +832,14 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               console.log(`Cognita: 전체 분석 완료 - ${predictions.length}/${employeeIds.length}명 성공`);
             } else if (agentName === 'sentio') {
               // Sentio API 호출 - 전체 직원 분석 (샘플링 제거)
-              console.log(`Sentio: 전체 ${masterAttritionData.length}명 분석 시작...`);
+              console.log(`Sentio: 전체 ${masterAttritionData.length}명 배치 분석 시작...`);
+              setAnalysisProgress(prev => ({ ...prev, sentio: 10 }));
               
               const response = await fetch('http://localhost:5004/analyze_sentiment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                  analysis_type: 'post', // 사후 분석 타입 전달
                   employees: masterAttritionData.map(emp => ({
                     employee_id: emp.EmployeeNumber,
                     text_data: `직원 ${emp.EmployeeNumber}의 업무 관련 텍스트 데이터`
@@ -766,6 +856,12 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   confidence: 0.8,
                   actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber == pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
                 })) || [];
+                
+                console.log(`✅ Sentio: ${predictions.length}명 배치 분석 완료!`);
+                setAnalysisProgress(prev => ({ ...prev, sentio: 100 }));
+              } else {
+                console.error('❌ Sentio API 호출 실패:', response.status);
+                setAnalysisProgress(prev => ({ ...prev, sentio: 100 })); // 실패해도 완료로 표시
               }
             } else if (agentName === 'agora') {
               // Agora API - 전체 직원 분석 (샘플링 제거)
@@ -778,6 +874,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                      analysis_type: 'post', // 사후 분석 타입 전달
                       EmployeeNumber: employeeIds[i],
                       JobRole: masterAttritionData[i]?.JobRole || 'Unknown',
                       MonthlyIncome: masterAttritionData[i]?.MonthlyIncome || 5000,
@@ -796,9 +893,11 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                     });
                   }
                   
-                  // 진행률 표시 (100명마다)
-                  if ((i + 1) % 100 === 0) {
-                    console.log(`Agora: ${i + 1}/${employeeIds.length}명 분석 완료`);
+                  // 실시간 진행률 업데이트 (10명마다)
+                  if ((i + 1) % 10 === 0 || i === employeeIds.length - 1) {
+                    const progress = Math.floor(((i + 1) / employeeIds.length) * 100);
+                    setAnalysisProgress(prev => ({ ...prev, agora: progress }));
+                    console.log(`Agora: ${i + 1}/${employeeIds.length}명 분석 완료 (${progress}%)`);
                   }
                 } catch (error) {
                   console.warn(`Agora 분석 실패 (직원 ${employeeIds[i]}):`, error);
@@ -2013,6 +2112,250 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                         )}
                       </Col>
                     </Row>
+                  </Card>
+
+                  {/* 위험도 임계값 조정 */}
+                  <Card size="small" title="🎯 위험도 분류 임계값 조정">
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Alert
+                        message="임계값 조정 및 퇴사 예측 기준 설정"
+                        description="위험도 분류 기준과 퇴사 예측 모드를 조정하여 성능 지표를 확인할 수 있습니다."
+                        type="info"
+                        showIcon
+                      />
+                      
+                      {/* 퇴사 예측 모드 선택 */}
+                      <Card size="small" title="🎯 퇴사 예측 기준 설정">
+                        <Radio.Group 
+                          value={attritionPredictionMode} 
+                          onChange={(e) => setAttritionPredictionMode(e.target.value)}
+                          style={{ width: '100%' }}
+                        >
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <Radio value="high_risk_only">
+                              <div>
+                                <Text strong>고위험군만 퇴사 예측</Text>
+                                <br />
+                                <Text type="secondary">고위험군 = 퇴사(1), 주의군+안전군 = 잔류(0)</Text>
+                              </div>
+                            </Radio>
+                            <Radio value="medium_high_risk">
+                              <div>
+                                <Text strong>주의군+고위험군 퇴사 예측</Text>
+                                <br />
+                                <Text type="secondary">주의군+고위험군 = 퇴사(1), 안전군 = 잔류(0)</Text>
+                              </div>
+                            </Radio>
+                          </Space>
+                        </Radio.Group>
+                      </Card>
+                      
+                      <Row gutter={[16, 16]}>
+                        <Col span={12}>
+                          <Text strong>안전군 임계값 (0 ~ 이 값 미만)</Text>
+                          <Slider
+                            min={0.1}
+                            max={0.9}
+                            step={0.05}
+                            value={riskThresholds.low_risk_threshold}
+                            onChange={(value) => setRiskThresholds(prev => ({ ...prev, low_risk_threshold: value }))}
+                            marks={{
+                              0.1: '0.1',
+                              0.3: '0.3',
+                              0.5: '0.5',
+                              0.7: '0.7',
+                              0.9: '0.9'
+                            }}
+                            tooltip={{ formatter: (value) => `${value}` }}
+                          />
+                          <Text type="secondary">현재: {riskThresholds.low_risk_threshold}</Text>
+                        </Col>
+                        <Col span={12}>
+                          <Text strong>고위험군 임계값 (이 값 이상 ~ 1.0)</Text>
+                          <Slider
+                            min={0.1}
+                            max={0.9}
+                            step={0.05}
+                            value={riskThresholds.high_risk_threshold}
+                            onChange={(value) => setRiskThresholds(prev => ({ ...prev, high_risk_threshold: value }))}
+                            marks={{
+                              0.1: '0.1',
+                              0.3: '0.3',
+                              0.5: '0.5',
+                              0.7: '0.7',
+                              0.9: '0.9'
+                            }}
+                            tooltip={{ formatter: (value) => `${value}` }}
+                          />
+                          <Text type="secondary">현재: {riskThresholds.high_risk_threshold}</Text>
+                        </Col>
+                      </Row>
+                      
+                      <div style={{ textAlign: 'center', marginTop: 16 }}>
+                        <Text type="secondary">
+                          분류 기준: 안전군 (0 ~ {riskThresholds.low_risk_threshold}), 
+                          주의군 ({riskThresholds.low_risk_threshold} ~ {riskThresholds.high_risk_threshold}), 
+                          고위험군 ({riskThresholds.high_risk_threshold} ~ 1.0)
+                        </Text>
+                      </div>
+                      
+                      <div style={{ textAlign: 'center' }}>
+                        <Button 
+                          type="primary" 
+                          onClick={handleRiskThresholdUpdate}
+                          loading={adjustedRiskResults === 'loading'}
+                        >
+                          임계값 적용 및 재분류
+                        </Button>
+                      </div>
+                      
+                      {adjustedRiskResults && adjustedRiskResults !== 'loading' && (
+                        <>
+                          <Alert
+                            message="✅ 위험도 재분류 완료"
+                            description={`새로운 분류: 안전군 ${adjustedRiskResults.risk_distribution['안전군']}명, 주의군 ${adjustedRiskResults.risk_distribution['주의군']}명, 고위험군 ${adjustedRiskResults.risk_distribution['고위험군']}명`}
+                            type="success"
+                            showIcon
+                          />
+                          
+                          {/* 성능 지표 표시 */}
+                          {adjustedRiskResults.performance_metrics && Object.keys(adjustedRiskResults.performance_metrics).length > 0 && (
+                            <Card size="small" title="📊 업데이트된 성능 지표">
+                              <Row gutter={[16, 16]}>
+                                <Col span={6}>
+                                  <Statistic
+                                    title="F1-Score"
+                                    value={adjustedRiskResults.performance_metrics.f1_score}
+                                    precision={4}
+                                    valueStyle={{ color: '#52c41a', fontSize: '20px' }}
+                                  />
+                                </Col>
+                                <Col span={6}>
+                                  <Statistic
+                                    title="정밀도"
+                                    value={adjustedRiskResults.performance_metrics.precision}
+                                    precision={4}
+                                    valueStyle={{ color: '#1890ff' }}
+                                  />
+                                </Col>
+                                <Col span={6}>
+                                  <Statistic
+                                    title="재현율"
+                                    value={adjustedRiskResults.performance_metrics.recall}
+                                    precision={4}
+                                    valueStyle={{ color: '#fa8c16' }}
+                                  />
+                                </Col>
+                                <Col span={6}>
+                                  <Statistic
+                                    title="정확도"
+                                    value={adjustedRiskResults.performance_metrics.accuracy}
+                                    precision={4}
+                                    valueStyle={{ color: '#722ed1' }}
+                                  />
+                                </Col>
+                              </Row>
+                            </Card>
+                          )}
+                          
+                          {/* Confusion Matrix 표시 */}
+                          {adjustedRiskResults.confusion_matrix && Object.keys(adjustedRiskResults.confusion_matrix).length > 0 && (
+                            <Card size="small" title="📈 Confusion Matrix">
+                              <Row gutter={[16, 16]}>
+                                <Col span={12}>
+                                  <div style={{ textAlign: 'center', padding: '16px', border: '1px solid #d9d9d9', borderRadius: '6px' }}>
+                                    <Text strong>실제 잔류 (0)</Text>
+                                    <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
+                                      <Col span={12}>
+                                        <div style={{ padding: '8px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '4px' }}>
+                                          <Text strong style={{ color: '#52c41a' }}>TN: {adjustedRiskResults.confusion_matrix.true_negative}</Text>
+                                          <br />
+                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 잔류</Text>
+                                        </div>
+                                      </Col>
+                                      <Col span={12}>
+                                        <div style={{ padding: '8px', backgroundColor: '#fff2e8', border: '1px solid #ffbb96', borderRadius: '4px' }}>
+                                          <Text strong style={{ color: '#fa8c16' }}>FP: {adjustedRiskResults.confusion_matrix.false_positive}</Text>
+                                          <br />
+                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 퇴사</Text>
+                                        </div>
+                                      </Col>
+                                    </Row>
+                                  </div>
+                                </Col>
+                                <Col span={12}>
+                                  <div style={{ textAlign: 'center', padding: '16px', border: '1px solid #d9d9d9', borderRadius: '6px' }}>
+                                    <Text strong>실제 퇴사 (1)</Text>
+                                    <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
+                                      <Col span={12}>
+                                        <div style={{ padding: '8px', backgroundColor: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '4px' }}>
+                                          <Text strong style={{ color: '#f5222d' }}>FN: {adjustedRiskResults.confusion_matrix.false_negative}</Text>
+                                          <br />
+                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 잔류</Text>
+                                        </div>
+                                      </Col>
+                                      <Col span={12}>
+                                        <div style={{ padding: '8px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '4px' }}>
+                                          <Text strong style={{ color: '#52c41a' }}>TP: {adjustedRiskResults.confusion_matrix.true_positive}</Text>
+                                          <br />
+                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 퇴사</Text>
+                                        </div>
+                                      </Col>
+                                    </Row>
+                                  </div>
+                                </Col>
+                              </Row>
+                              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                                <Text type="secondary">
+                                  TN: True Negative (정확한 잔류 예측), FP: False Positive (잘못된 퇴사 예측)
+                                  <br />
+                                  FN: False Negative (놓친 퇴사), TP: True Positive (정확한 퇴사 예측)
+                                </Text>
+                              </div>
+                            </Card>
+                          )}
+                          
+                          {/* 최종 설정 저장 버튼 */}
+                          <Card size="small" title="💾 배치 분석용 설정 저장">
+                            <Space direction="vertical" style={{ width: '100%' }}>
+                              <Alert
+                                message="최종 설정 저장"
+                                description="현재 위험도 임계값과 퇴사 예측 기준을 배치 분석에서 사용할 수 있도록 저장합니다."
+                                type="info"
+                                showIcon
+                              />
+                              
+                              <div style={{ textAlign: 'center', padding: '16px', backgroundColor: '#fafafa', borderRadius: '6px' }}>
+                                <Text strong>현재 설정 요약</Text>
+                                <div style={{ marginTop: 8 }}>
+                                  <Text>• 안전군: 0 ~ {riskThresholds.low_risk_threshold}</Text><br />
+                                  <Text>• 주의군: {riskThresholds.low_risk_threshold} ~ {riskThresholds.high_risk_threshold}</Text><br />
+                                  <Text>• 고위험군: {riskThresholds.high_risk_threshold} ~ 1.0</Text><br />
+                                  <Text>• 퇴사 예측: {attritionPredictionMode === 'high_risk_only' ? '고위험군만' : '주의군 + 고위험군'}</Text>
+                                </div>
+                                {adjustedRiskResults?.performance_metrics && (
+                                  <div style={{ marginTop: 8 }}>
+                                    <Text type="secondary">F1-Score: {adjustedRiskResults.performance_metrics.f1_score?.toFixed(4)}</Text>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <div style={{ textAlign: 'center' }}>
+                                <Button 
+                                  type="primary" 
+                                  size="large"
+                                  onClick={handleSaveFinalSettings}
+                                  disabled={!adjustedRiskResults || adjustedRiskResults === 'loading'}
+                                  icon={<SaveOutlined />}
+                                >
+                                  배치 분석용 최종 설정 저장
+                                </Button>
+                              </div>
+                            </Space>
+                          </Card>
+                        </>
+                      )}
+                    </Space>
                   </Card>
 
                   {/* 최적화 결과 요약 */}

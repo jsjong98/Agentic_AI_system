@@ -65,7 +65,7 @@ python test_sentio_api.py
 ## 📡 API 엔드포인트
 
 ### 기본 정보
-- **서버 주소**: `http://localhost:5003`
+- **서버 주소**: `http://localhost:5004`
 - **헬스체크**: `GET /health`
 - **API 문서**: `GET /`
 
@@ -226,7 +226,7 @@ python test_sentio_api.py
 import requests
 
 # 텍스트 분석
-response = requests.post('http://localhost:5003/analyze/text', json={
+response = requests.post('http://localhost:5004/analyze/text', json={
     "text": "업무량이 너무 많아서 번아웃이 올 것 같습니다.",
     "employee_id": "emp_001"
 })
@@ -238,7 +238,7 @@ print(f"위험 요소: {result['risk_factors']}")
 
 ### cURL 예시
 ```bash
-curl -X POST http://localhost:5003/analyze/text \
+curl -X POST http://localhost:5004/analyze/text \
   -H "Content-Type: application/json" \
   -d '{"text": "팀워크가 좋고 성장할 수 있어서 만족합니다."}'
 ```
@@ -263,7 +263,7 @@ curl -X POST http://localhost:5003/analyze/text \
 3. **포트 충돌**
    ```bash
    # 다른 포트로 실행
-   python sentio_flask_backend.py --port 5004
+   python sentio_flask_backend.py --port 5005
    ```
 
 4. **패키지 의존성 오류**

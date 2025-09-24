@@ -65,7 +65,7 @@ python chronos_flask_backend.py
 
 ### 3. 웹 브라우저에서 접속
 ```
-http://localhost:5002
+http://localhost:5003
 ```
 
 ## 🧪 API 테스트
@@ -99,7 +99,7 @@ python test_chronos_api.py --full
 
 ### 1. 모델 학습
 ```bash
-curl -X POST http://localhost:5002/api/train \
+curl -X POST http://localhost:5003/api/train \
   -H "Content-Type: application/json" \
   -d '{
     "sequence_length": 6,
@@ -111,7 +111,7 @@ curl -X POST http://localhost:5002/api/train \
 
 ### 2. 예측 수행
 ```bash
-curl -X POST http://localhost:5002/api/predict \
+curl -X POST http://localhost:5003/api/predict \
   -H "Content-Type: application/json" \
   -d '{
     "employee_ids": [1, 2, 3, 4, 5]
@@ -120,7 +120,7 @@ curl -X POST http://localhost:5002/api/predict \
 
 ### 3. 전체 직원 예측
 ```bash
-curl -X POST http://localhost:5002/api/predict \
+curl -X POST http://localhost:5003/api/predict \
   -H "Content-Type: application/json" \
   -d '{}'
 ```

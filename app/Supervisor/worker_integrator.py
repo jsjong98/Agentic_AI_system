@@ -74,8 +74,11 @@ class WorkerClient:
             if additional_data:
                 request_data.update(additional_data)
             
+            # 배치 분석 여부 확인
+            is_batch_analysis = additional_data and additional_data.get('analysis_type') == 'batch'
+            
             # 워커별 특화 엔드포인트 결정
-            endpoint = self._get_analysis_endpoint()
+            endpoint = self._get_analysis_endpoint(is_batch_analysis)
             
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=self.timeout)
@@ -134,8 +137,13 @@ class WorkerClient:
                 "traceback": traceback.format_exc()
             }
     
-    def _get_analysis_endpoint(self) -> str:
+    def _get_analysis_endpoint(self, is_batch_analysis: bool = False) -> str:
         """워커 타입별 분석 엔드포인트 반환"""
+        if is_batch_analysis and self.worker_type in [WorkerType.STRUCTURA, WorkerType.CHRONOS]:
+            # 배치 분석에서는 Post 데이터로 학습 → Batch 데이터로 예측
+            return "/api/batch-analysis"
+        
+        # 일반 분석 엔드포인트
         endpoint_mapping = {
             WorkerType.STRUCTURA: "/predict_attrition",
             WorkerType.COGNITA: "/analyze_relationships",

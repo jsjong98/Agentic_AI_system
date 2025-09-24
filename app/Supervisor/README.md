@@ -89,11 +89,11 @@ AGORA_URL=http://localhost:5005
 슈퍼바이저를 실행하기 전에 모든 워커 서버가 실행되어야 합니다:
 ```bash
 # 각 워커 디렉토리에서 실행
-cd app/Structura && python run_structura_server.py
-cd app/Cognita && python run_cognita_server.py
-cd app/Chronos && python run_chronos_server.py
-cd app/Sentio && python run_sentio_server.py
-cd app/Agora && python run_agora_server.py
+cd app/Structura && python run_structura_server.py  # 포트: 5001
+cd app/Cognita && python run_cognita_server.py     # 포트: 5002
+cd app/Chronos && python run_chronos_server.py     # 포트: 5003
+cd app/Sentio && python run_sentio_server.py       # 포트: 5004
+cd app/Agora && python run_agora_server.py         # 포트: 5005
 ```
 
 ### 4. 슈퍼바이저 서버 실행

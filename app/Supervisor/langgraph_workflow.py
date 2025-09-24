@@ -95,7 +95,10 @@ class WorkflowNodes:
             analysis_results = await self.worker_integrator.analyze_employee_parallel(
                 employee_id=state.employee_id,
                 target_workers=pending_workers,
-                additional_data={"session_id": state.session_id}
+                additional_data={
+                    "session_id": state.session_id,
+                    "analysis_type": state.analysis_type
+                }
             )
             
             # 결과를 상태에 업데이트
@@ -148,6 +151,7 @@ class WorkflowNodes:
                 target_workers=retryable_workers,
                 additional_data={
                     "session_id": state.session_id,
+                    "analysis_type": state.analysis_type,
                     "is_retry": True
                 }
             )
@@ -420,7 +424,8 @@ class SupervisorWorkflow:
         return workflow
     
     async def analyze_employee(self, employee_id: str, 
-                             session_id: Optional[str] = None) -> Dict[str, Any]:
+                             session_id: Optional[str] = None,
+                             analysis_type: str = 'batch') -> Dict[str, Any]:
         """
         직원 분석 실행
         
@@ -435,7 +440,8 @@ class SupervisorWorkflow:
             # 초기 상태 생성
             initial_state = AgentState(
                 employee_id=employee_id,
-                session_id=session_id or str(uuid.uuid4())
+                session_id=session_id or str(uuid.uuid4()),
+                analysis_type=analysis_type
             )
             
             self.logger.info(f"Starting analysis for employee {employee_id}")

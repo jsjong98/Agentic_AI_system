@@ -111,7 +111,7 @@ class ExplainabilityResult:
 class StructuraHRPredictor:
     """Structura HR 이탈 예측 시스템 (xAI 포함)"""
     
-    def __init__(self, data_path: str = "data/IBM_HR_personas_assigned.csv", random_state: int = 42):
+    def __init__(self, data_path: str = None, random_state: int = 42):
         self.data_path = data_path
         self.random_state = random_state
         self.model = None
@@ -1055,6 +1055,19 @@ class StructuraHRPredictor:
 # Flask 애플리케이션 생성 및 설정
 # ------------------------------------------------------
 
+# 유틸리티 함수들
+def get_data_path_by_analysis_type(analysis_type='batch'):
+    """분석 타입에 따른 데이터 경로 반환"""
+    uploads_dir = f"../uploads/structura/{analysis_type}"
+    
+    if os.path.exists(uploads_dir):
+        files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
+        if files:
+            files.sort(reverse=True)  # 최신 파일 우선
+            return os.path.join(uploads_dir, files[0])
+    
+    return None
+
 def create_app():
     """Flask 애플리케이션 팩토리"""
     
@@ -1087,8 +1100,30 @@ def create_app():
         try:
             logger.info("Structura HR 예측 서비스 초기화 중...")
             
+            # uploads 디렉토리에서 Structura 파일 찾기 (batch 우선, post 대안)
+            data_path = None
+            
+            # batch 분석용 파일 먼저 확인
+            batch_dir = "../uploads/structura/batch"
+            if os.path.exists(batch_dir):
+                files = [f for f in os.listdir(batch_dir) if f.endswith('.csv')]
+                if files:
+                    files.sort(reverse=True)  # 최신 파일 우선
+                    data_path = os.path.join(batch_dir, files[0])
+                    logger.info(f"Structura batch 데이터 파일 발견: {data_path}")
+            
+            # batch 파일이 없으면 post 분석용 파일 확인
+            if data_path is None:
+                post_dir = "../uploads/structura/post"
+                if os.path.exists(post_dir):
+                    files = [f for f in os.listdir(post_dir) if f.endswith('.csv')]
+                    if files:
+                        files.sort(reverse=True)  # 최신 파일 우선
+                        data_path = os.path.join(post_dir, files[0])
+                        logger.info(f"Structura post 데이터 파일 발견: {data_path}")
+            
             # 예측기 초기화
-            predictor = StructuraHRPredictor()
+            predictor = StructuraHRPredictor(data_path=data_path)
             
             # 기존 모델이 있으면 로딩
             model_path = "hr_attrition_model.pkl"
@@ -1318,7 +1353,7 @@ def create_app():
         try:
             # 요청 데이터 파싱
             data = request.get_json() or {}
-            optimize_hp = data.get('optimize_hyperparameters', False)
+            optimize_hp = data.get('optimize_hyperparameters', True)
             use_sampling = data.get('use_sampling', True)
             
             logger.info(f"모델 훈련 시작 - 하이퍼파라미터 최적화: {optimize_hp}, 샘플링: {use_sampling}")
@@ -1494,14 +1529,67 @@ def create_app():
         """배치 예측 엔드포인트 (여러 직원 동시 처리)"""
         
         predictor = get_predictor()
-        if not predictor or not predictor.model:
-            return jsonify({"error": "모델이 로딩되지 않았습니다"}), 503
+        if not predictor:
+            return jsonify({"error": "예측기가 초기화되지 않았습니다"}), 503
         
         try:
             # 요청 데이터 파싱
-            data = request.get_json()
-            if not data or not isinstance(data, list):
+            request_data = request.get_json()
+            if not request_data:
+                return jsonify({"error": "요청 데이터가 없습니다"}), 400
+            
+            # 분석 타입 확인 (기본값: batch)
+            analysis_type = request_data.get('analysis_type', 'batch')
+            logger.info(f"분석 타입: {analysis_type}")
+            
+            # 분석 타입에 따른 데이터 경로 확인
+            data_path = get_data_path_by_analysis_type(analysis_type)
+            if data_path and data_path != predictor.data_path:
+                logger.info(f"새로운 데이터 경로로 예측기 업데이트: {data_path}")
+                predictor.data_path = data_path
+            
+            # employees 키가 있는 경우와 직접 배열인 경우 모두 처리
+            if isinstance(request_data, dict) and 'employees' in request_data:
+                data = request_data['employees']
+            elif isinstance(request_data, list):
+                data = request_data
+            else:
                 return jsonify({"error": "배치 예측을 위한 직원 데이터 리스트가 필요합니다"}), 400
+            
+            if not isinstance(data, list):
+                return jsonify({"error": "직원 데이터는 배열 형태여야 합니다"}), 400
+            
+            # 모델이 없으면 받은 데이터로 즉시 훈련
+            if not predictor.model:
+                logger.info("모델이 없어서 받은 데이터로 즉시 훈련을 시작합니다")
+                
+                # 받은 데이터를 DataFrame으로 변환
+                import pandas as pd
+                df = pd.DataFrame(data)
+                
+                # Attrition 컬럼이 있는지 확인
+                if 'Attrition' not in df.columns:
+                    return jsonify({"error": "훈련을 위해서는 Attrition 컬럼이 필요합니다"}), 400
+                
+                # 임시로 데이터를 저장하고 훈련
+                temp_data_path = "temp_training_data.csv"
+                df.to_csv(temp_data_path, index=False)
+                
+                # 예측기의 데이터 경로를 임시 파일로 변경
+                predictor.data_path = temp_data_path
+                
+                try:
+                    # 모델 훈련 실행
+                    metrics = predictor.run_full_pipeline(optimize_hp=True, use_sampling=True)
+                    logger.info(f"즉시 훈련 완료: {metrics}")
+                except Exception as train_error:
+                    logger.error(f"즉시 훈련 실패: {str(train_error)}")
+                    return jsonify({"error": f"모델 훈련 실패: {str(train_error)}"}), 500
+                finally:
+                    # 임시 파일 정리
+                    import os
+                    if os.path.exists(temp_data_path):
+                        os.remove(temp_data_path)
             
             results = []
             for i, employee_data in enumerate(data):
@@ -1615,7 +1703,101 @@ def create_app():
             logger.error(f"직원 분석 실패: {str(e)}")
             return jsonify({"error": f"직원 분석 실패: {str(e)}"}), 500
     
+    # 배치 분석 엔드포인트 등록
+    app.add_url_rule('/api/batch-analysis', 'batch_analysis', batch_analysis, methods=['POST'])
+    
     return app
+
+# ------------------------------------------------------
+# 배치 분석 전용 엔드포인트
+# ------------------------------------------------------
+
+def batch_analysis():
+    """배치 분석: Post 데이터로 학습 → Batch 데이터로 예측"""
+    global predictor
+    
+    try:
+        logger.info("🚀 Structura 배치 분석 시작: Post 데이터 학습 → Batch 데이터 예측")
+        
+        # 1단계: Post 데이터로 모델 학습
+        post_data_path = get_data_path_by_analysis_type('post')
+        if not post_data_path:
+            return jsonify({"error": "Post 분석 데이터가 없습니다. 먼저 사후 분석을 수행해주세요."}), 400
+        
+        logger.info(f"📚 Post 데이터로 모델 학습: {post_data_path}")
+        
+        # 예측기 초기화 (Post 데이터로)
+        predictor = StructuraHRPredictor(data_path=post_data_path)
+        predictor.load_data()
+        
+        # 모델 학습 (하이퍼파라미터 최적화 포함)
+        training_result = predictor.train_model(optimize_hp=True)
+        logger.info(f"✅ 모델 학습 완료: {training_result}")
+        
+        # 2단계: Batch 데이터로 예측
+        batch_data_path = get_data_path_by_analysis_type('batch')
+        if not batch_data_path:
+            return jsonify({"error": "Batch 분석 데이터가 없습니다. 먼저 배치 데이터를 업로드해주세요."}), 400
+        
+        logger.info(f"🔮 Batch 데이터로 예측 수행: {batch_data_path}")
+        
+        # Batch 데이터 로드
+        import pandas as pd
+        batch_data = pd.read_csv(batch_data_path)
+        logger.info(f"📊 Batch 데이터 로드 완료: {len(batch_data)}명")
+        
+        # 예측 수행
+        predictions = []
+        for idx, row in batch_data.iterrows():
+            try:
+                # 개별 직원 예측
+                employee_data = row.to_dict()
+                prediction = predictor.predict_single_employee(employee_data)
+                
+                predictions.append({
+                    'employee_id': employee_data.get('EmployeeNumber', idx),
+                    'risk_score': prediction.get('attrition_probability', 0.5),
+                    'predicted_attrition': prediction.get('predicted_attrition', 0),
+                    'confidence': prediction.get('confidence', 0.7),
+                    'feature_importance': prediction.get('feature_importance', {}),
+                    'xai_explanation': prediction.get('xai_explanation', {}),
+                    'shap_values': prediction.get('shap_values', {}),
+                    'lime_explanation': prediction.get('lime_explanation', {}),
+                    'model_interpretation': prediction.get('model_interpretation', {}),
+                    'employee_data': employee_data
+                })
+                
+            except Exception as e:
+                logger.warning(f"직원 {idx} 예측 실패: {str(e)}")
+                predictions.append({
+                    'employee_id': employee_data.get('EmployeeNumber', idx),
+                    'risk_score': 0.5,
+                    'predicted_attrition': 0,
+                    'confidence': 0.1,
+                    'error': str(e),
+                    'employee_data': employee_data
+                })
+        
+        logger.info(f"✅ Structura 배치 분석 완료: {len(predictions)}명 예측")
+        
+        return jsonify({
+            "success": True,
+            "message": f"Structura 배치 분석 완료: Post 데이터 학습 → {len(predictions)}명 Batch 예측",
+            "agent": "structura",
+            "training_data_path": post_data_path,
+            "prediction_data_path": batch_data_path,
+            "total_predictions": len(predictions),
+            "predictions": predictions,
+            "model_info": {
+                "training_samples": len(predictor.data) if predictor.data is not None else 0,
+                "features_used": list(predictor.feature_columns) if hasattr(predictor, 'feature_columns') else [],
+                "model_type": "XGBoost with Hyperparameter Optimization"
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Structura 배치 분석 실패: {str(e)}")
+        return jsonify({"error": f"Structura 배치 분석 실패: {str(e)}"}), 500
 
 # ------------------------------------------------------
 # 서버 실행 함수
@@ -1623,42 +1805,49 @@ def create_app():
 
 def run_server(host='0.0.0.0', port=5001, debug=True):
     """Flask 서버 실행 (XAI 포함 최신 버전)"""
-    app = create_app()
-    
-    print("=" * 70)
-    print("🚀 Structura HR 예측 Flask 백엔드 서버 시작 (XAI 포함)")
-    print("=" * 70)
-    print(f"📡 서버 주소: http://{host}:{port}")
-    print(f"🔗 React 연동: http://localhost:3000에서 접근 가능")
-    print(f"🤖 XAI 기능: SHAP 기반 설명 가능한 AI")
-    print(f"🔄 디버그 모드: {'활성화' if debug else '비활성화'}")
-    print()
-    print("주요 엔드포인트:")
-    print(f"  • 헬스체크: http://{host}:{port}/api/health")
-    print(f"  • 데이터 업로드: http://{host}:{port}/api/upload/data")
-    print(f"  • 모델 훈련: http://{host}:{port}/api/train")
-    print(f"  • 이직 예측: http://{host}:{port}/api/predict")
-    print(f"  • 배치 예측: http://{host}:{port}/api/predict/batch")
-    print(f"  • 예측 설명: http://{host}:{port}/api/explain")
-    print(f"  • 직원 분석: http://{host}:{port}/api/employee/analysis/<employee_number>")
-    print(f"  • 피처 중요도: http://{host}:{port}/api/feature-importance")
-    print(f"  • 모델 정보: http://{host}:{port}/api/model/info")
-    print()
-    print("XAI 기능:")
-    print(f"  • SHAP: {'✅' if SHAP_AVAILABLE else '❌'}")
-    print(f"  • Feature Importance: ✅")
-    print(f"  • Optuna: {'✅' if OPTUNA_AVAILABLE else '❌'}")
-    print()
-    print("새로운 기능:")
-    print("  • EmployeeNumber별 개별 XAI 설명")
-    print("  • Probability 중심 예측 결과")
-    print("  • 배치 처리 및 통계 분석")
-    print("  • 위험도 기반 권장사항 제공")
-    print()
-    print("서버를 중지하려면 Ctrl+C를 누르세요.")
-    print("=" * 70)
-    
-    app.run(host=host, port=port, debug=debug)
+    try:
+        app = create_app()
+        
+        print("=" * 70)
+        print("🚀 Structura HR 예측 Flask 백엔드 서버 시작 (XAI 포함)")
+        print("=" * 70)
+        print(f"📡 서버 주소: http://{host}:{port}")
+        print(f"🔗 React 연동: http://localhost:3000에서 접근 가능")
+        print(f"🤖 XAI 기능: SHAP 기반 설명 가능한 AI")
+        print(f"🔄 디버그 모드: {'활성화' if debug else '비활성화'}")
+        print()
+        print("주요 엔드포인트:")
+        print(f"  • 헬스체크: http://{host}:{port}/api/health")
+        print(f"  • 데이터 업로드: http://{host}:{port}/api/upload/data")
+        print(f"  • 모델 훈련: http://{host}:{port}/api/train")
+        print(f"  • 이직 예측: http://{host}:{port}/api/predict")
+        print(f"  • 배치 예측: http://{host}:{port}/api/predict/batch")
+        print(f"  • 예측 설명: http://{host}:{port}/api/explain")
+        print(f"  • 직원 분석: http://{host}:{port}/api/employee/analysis/<employee_number>")
+        print(f"  • 피처 중요도: http://{host}:{port}/api/feature-importance")
+        print(f"  • 모델 정보: http://{host}:{port}/api/model/info")
+        print()
+        print("XAI 기능:")
+        print(f"  • SHAP: {'✅' if SHAP_AVAILABLE else '❌'}")
+        print(f"  • Feature Importance: ✅")
+        print(f"  • Optuna: {'✅' if OPTUNA_AVAILABLE else '❌'}")
+        print()
+        print("새로운 기능:")
+        print("  • EmployeeNumber별 개별 XAI 설명")
+        print("  • Probability 중심 예측 결과")
+        print("  • 배치 처리 및 통계 분석")
+        print("  • 위험도 기반 권장사항 제공")
+        print()
+        print("서버를 중지하려면 Ctrl+C를 누르세요.")
+        print("=" * 70)
+        
+        app.run(host=host, port=port, debug=debug)
+        
+    except Exception as e:
+        print(f"❌ 서버 실행 중 오류 발생: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 if __name__ == '__main__':
     run_server()

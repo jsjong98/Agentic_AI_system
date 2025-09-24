@@ -42,12 +42,51 @@ text_processor = None
 keyword_analyzer = None
 text_generator = None
 
-# 데이터 경로 설정
-DATA_PATH = {
-    'hr_data': '../../data/IBM_HR.csv',
-    'text_data': '../../data/IBM_HR_text.csv',
-    'sample_texts': '../../sample_hr_texts.csv'
-}
+# 데이터 경로 설정 - uploads 디렉토리에서 찾기
+def get_sentio_data_paths(analysis_type='batch'):
+    """uploads 디렉토리에서 Sentio 데이터 파일 찾기"""
+    uploads_dir = f"../uploads/sentio/{analysis_type}"
+    data_paths = {
+        'hr_data': None,
+        'text_data': None,
+        'sample_texts': None
+    }
+    
+    if os.path.exists(uploads_dir):
+        files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
+        if files:
+            # 가장 최근 파일 사용 (타임스탬프 기준)
+            files.sort(reverse=True)
+            
+            # 파일들을 분류
+            for file in files:
+                file_path = os.path.join(uploads_dir, file)
+                if 'text' in file.lower():
+                    if data_paths['text_data'] is None:
+                        data_paths['text_data'] = file_path
+                    if data_paths['sample_texts'] is None:
+                        data_paths['sample_texts'] = file_path
+                elif data_paths['hr_data'] is None:
+                    data_paths['hr_data'] = file_path
+    
+    # batch에 파일이 없으면 post 디렉토리 확인
+    if analysis_type == 'batch' and not any(data_paths.values()):
+        post_paths = get_sentio_data_paths('post')
+        for key, value in post_paths.items():
+            if data_paths[key] is None:
+                data_paths[key] = value
+    
+    # 기본값으로 fallback
+    if data_paths['hr_data'] is None:
+        data_paths['hr_data'] = '../../data/IBM_HR.csv'
+    if data_paths['text_data'] is None:
+        data_paths['text_data'] = '../../data/IBM_HR_text.csv'
+    if data_paths['sample_texts'] is None:
+        data_paths['sample_texts'] = '../../sample_hr_texts.csv'
+        
+    return data_paths
+
+DATA_PATH = get_sentio_data_paths()
 
 MODEL_PATH = 'app/Sentio/models'
 os.makedirs(MODEL_PATH, exist_ok=True)
@@ -445,11 +484,19 @@ def generate_text():
             keywords = data['keywords']
             text_type = data.get('text_type', 'SELF_REVIEW')
             employee_id = data.get('employee_id', 'unknown')
+            analysis_type = data.get('analysis_type', 'batch')
             
-            generated_text = text_generator.generate_text_from_keywords(
-                keywords=keywords,
-                text_type=text_type
-            )
+            # 배치/사후 분석에서는 LLM 사용 안함 (API 비용 절약)
+            use_llm = analysis_type not in ['batch', 'post']
+            
+            if use_llm:
+                generated_text = text_generator.generate_text_from_keywords(
+                    keywords=keywords,
+                    text_type=text_type
+                )
+            else:
+                # 배치/사후 분석에서는 간단한 키워드 기반 텍스트 반환
+                generated_text = f"키워드 기반 분석 완료 (분석 타입: {analysis_type}, 키워드: {', '.join(keywords[:5])})"
             
             result = SentioGenerationResult(
                 employee_id=employee_id,
@@ -502,7 +549,10 @@ def generate_comprehensive_report():
         
         employee_id = data['employee_id']
         worker_results = data['worker_results']  # {structura: {...}, cognita: {...}, chronos: {...}, sentio: {...}}
-        use_llm = data.get('use_llm', False)  # LLM 사용 여부 (기본값: False)
+        analysis_type = data.get('analysis_type', 'batch')
+        
+        # 배치/사후 분석에서는 LLM 사용 안함 (API 비용 절약)
+        use_llm = data.get('use_llm', analysis_type not in ['batch', 'post'])
         
         if not keyword_analyzer:
             return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다."}), 500
@@ -542,59 +592,127 @@ def analyze_sentiment():
     입력: employee_id, 추가 데이터
     출력: 감정 분석 결과
     """
+    global DATA_PATH, keyword_analyzer, text_processor
+    
     try:
         data = request.get_json()
         
-        if not data or 'employee_id' not in data:
-            return jsonify({"error": "employee_id가 필요합니다."}), 400
+        # 단일 직원 분석과 배치 분석 모두 지원
+        if 'employee_id' in data:
+            # 단일 직원 분석
+            employee_id = data['employee_id']
+            analysis_type = data.get('analysis_type', 'batch')
+            employees_data = [{'employee_id': employee_id, 'text_data': data.get('text_data', {})}]
+        elif 'employees' in data:
+            # 배치 분석
+            employees_data = data['employees']
+            analysis_type = data.get('analysis_type', 'batch')
+            if not employees_data:
+                return jsonify({"error": "employees 배열이 비어있습니다."}), 400
+        else:
+            return jsonify({"error": "employee_id 또는 employees 배열이 필요합니다."}), 400
         
-        employee_id = data['employee_id']
+        # 배치/사후 분석에서는 LLM 사용 안함 (API 비용 절약)
+        use_llm = analysis_type not in ['batch', 'post']
         
-        # 실제 텍스트 데이터가 있는지 확인
-        text_data = data.get('text_data', {})
-        self_review = text_data.get('self_review', '')
-        peer_feedback = text_data.get('peer_feedback', '')
-        weekly_survey = text_data.get('weekly_survey', '')
+        # 분석 타입에 따른 데이터 경로 확인 및 재로드
+        new_data_paths = get_sentio_data_paths(analysis_type)
+        current_data_paths = get_sentio_data_paths()
+        
+        if new_data_paths != current_data_paths:
+            print(f"🔄 Sentio: {analysis_type} 분석을 위한 데이터 재로드")
+            DATA_PATH = new_data_paths
+            
+            # 키워드 분석기 재초기화
+            try:
+                if new_data_paths['sample_texts'] and os.path.exists(new_data_paths['sample_texts']):
+                    keyword_analyzer = SentioKeywordAnalyzer(new_data_paths['sample_texts'])
+                    keyword_analyzer.load_data()
+                    text_processor = SentioTextProcessor(analyzer=keyword_analyzer)
+                    print(f"✅ Sentio {analysis_type} 데이터 재로드 완료")
+            except Exception as e:
+                print(f"⚠️ Sentio 데이터 재로드 실패: {e}")
+        
+        print(f"📊 Sentio {analysis_type} 분석 시작 - {len(employees_data)}명")
         
         if not text_processor:
             return jsonify({"error": "텍스트 프로세서가 초기화되지 않았습니다."}), 500
         
-        # 텍스트가 없으면 더미 데이터 대신 기본값 반환
-        if not any([self_review, peer_feedback, weekly_survey]):
-            logger.warning(f"직원 {employee_id}의 텍스트 데이터가 없습니다. 기본값을 반환합니다.")
-            return jsonify({
-                "sentiment_score": 0.5,  # 중립
-                "risk_keywords": ["no_text_data"],
-                "emotional_state": "neutral",
-                "confidence_score": 0.1,  # 낮은 신뢰도
-                "text_analysis_summary": f"직원 {employee_id}의 텍스트 데이터가 부족하여 정확한 분석이 어렵습니다.",
-                "analysis_timestamp": datetime.now().isoformat()
-            })
+        # 배치 분석 결과 저장
+        analysis_results = []
         
-        # 실제 텍스트 분석 수행
-        combined_text = ' '.join([str(text) for text in [self_review, peer_feedback, weekly_survey] if text])
+        for emp_data in employees_data:
+            employee_id = emp_data.get('employee_id')
+            text_data = emp_data.get('text_data', {})
+            
+            # 텍스트 데이터 추출
+            if isinstance(text_data, str):
+                # 단순 문자열인 경우
+                combined_text = text_data
+            else:
+                # 딕셔너리인 경우
+                self_review = text_data.get('self_review', '')
+                peer_feedback = text_data.get('peer_feedback', '')
+                weekly_survey = text_data.get('weekly_survey', '')
+                combined_text = ' '.join([str(text) for text in [self_review, peer_feedback, weekly_survey] if text])
+            
+            # 텍스트가 없으면 기본값 사용
+            if not combined_text or combined_text.strip() == '':
+                combined_text = f"직원 {employee_id}의 기본 텍스트 데이터"
+            
+            try:
+                # 실제 텍스트 분석 수행
+                analysis_result = text_processor.analyze_text(
+                    text=combined_text,
+                    employee_id=employee_id,
+                    text_type="comprehensive"
+                )
+                
+                # 개별 결과 생성
+                individual_result = {
+                    "employee_id": employee_id,
+                    "sentiment_score": analysis_result.get('sentiment_score', 0.5),
+                    "risk_keywords": analysis_result.get('risk_factors', [])[:10],
+                    "emotional_state": determine_emotional_state(analysis_result.get('sentiment_score', 0.5)),
+                    "confidence_score": min(0.9, max(0.1, len(analysis_result.get('keywords', [])) / 20)),
+                    "text_analysis_summary": f"JD-R 모델 기반 분석 - 위험도: {analysis_result.get('risk_level', 'MEDIUM')}, 키워드: {len(analysis_result.get('keywords', []))}개{' (분석 타입: ' + analysis_type + ')' if not use_llm else ''}",
+                    "analysis_timestamp": datetime.now().isoformat(),
+                    "detailed_analysis": {
+                        "attrition_risk_score": analysis_result.get('attrition_risk_score', 0.5),
+                        "risk_level": analysis_result.get('risk_level', 'MEDIUM'),
+                        "keywords_count": len(analysis_result.get('keywords', [])),
+                        "jd_r_indicators": analysis_result.get('jd_r_indicators', {})
+                    },
+                    # PostAnalysis.js에서 기대하는 필드 추가
+                    "psychological_risk_score": analysis_result.get('attrition_risk_score', 0.5)
+                }
+                
+                analysis_results.append(individual_result)
+                
+            except Exception as e:
+                logger.warning(f"직원 {employee_id} 분석 실패: {str(e)}")
+                # 실패한 경우 기본값 반환
+                analysis_results.append({
+                    "employee_id": employee_id,
+                    "sentiment_score": 0.5,
+                    "risk_keywords": ["analysis_error"],
+                    "emotional_state": "neutral",
+                    "confidence_score": 0.1,
+                    "text_analysis_summary": f"분석 중 오류 발생: {str(e)}",
+                    "analysis_timestamp": datetime.now().isoformat(),
+                    "psychological_risk_score": 0.5
+                })
         
-        analysis_result = text_processor.analyze_text(
-            text=combined_text,
-            employee_id=employee_id,
-            text_type="comprehensive"
-        )
+        # 단일 직원인 경우 기존 형식으로 반환
+        if len(employees_data) == 1:
+            return jsonify(analysis_results[0])
         
-        # Supervisor가 기대하는 형식으로 결과 반환
+        # 배치 분석인 경우 배열 형식으로 반환
         return jsonify({
-            "sentiment_score": analysis_result.get('sentiment_score', 0.5),
-            "risk_keywords": analysis_result.get('risk_factors', [])[:10],  # 상위 10개
-            "emotional_state": determine_emotional_state(analysis_result.get('sentiment_score', 0.5)),
-            "confidence_score": min(0.9, max(0.1, len(analysis_result.get('keywords', [])) / 20)),  # 키워드 수 기반 신뢰도
-            "text_analysis_summary": f"JD-R 모델 기반 분석 - 위험도: {analysis_result.get('risk_level', 'MEDIUM')}, 키워드: {len(analysis_result.get('keywords', []))}개",
-            "analysis_timestamp": datetime.now().isoformat(),
-            # 추가 상세 정보
-            "detailed_analysis": {
-                "attrition_risk_score": analysis_result.get('attrition_risk_score', 0.5),
-                "risk_level": analysis_result.get('risk_level', 'MEDIUM'),
-                "keywords_count": len(analysis_result.get('keywords', [])),
-                "jd_r_indicators": analysis_result.get('jd_r_indicators', {})
-            }
+            "success": True,
+            "analysis_results": analysis_results,
+            "total_analyzed": len(analysis_results),
+            "analysis_type": analysis_type
         })
         
     except Exception as e:

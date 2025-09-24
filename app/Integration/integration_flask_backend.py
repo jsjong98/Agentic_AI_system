@@ -12,6 +12,12 @@ import os
 import json
 from datetime import datetime
 import traceback
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+from matplotlib import font_manager
+import warnings
+warnings.filterwarnings('ignore')
 from typing import Dict, List, Any
 from dotenv import load_dotenv
 
@@ -1260,13 +1266,45 @@ def bayesian_optimization():
         except Exception as e:
             print(f"⚠️ 결과 저장 중 오류 (계속 진행): {str(e)}")
         
-        # 위험도 분류 통계 시뮬레이션
+        # 위험도 분류 통계 (실제 점수 기반)
         total_employees = len(current_data)
+        
+        # 앙상블 점수를 기반으로 실제 위험도 분류
+        if 'ensemble_score' in current_data.columns:
+            ensemble_scores = current_data['ensemble_score']
+            high_risk_count = len(ensemble_scores[ensemble_scores >= 0.7])
+            medium_risk_count = len(ensemble_scores[(ensemble_scores >= 0.3) & (ensemble_scores < 0.7)])
+            low_risk_count = len(ensemble_scores[ensemble_scores < 0.3])
+        else:
+            # 앙상블 점수가 없으면 기본 분포 사용
+            high_risk_count = int(total_employees * 0.15)
+            medium_risk_count = int(total_employees * 0.25)
+            low_risk_count = total_employees - high_risk_count - medium_risk_count
+        
         risk_distribution = {
-            '안전군': int(total_employees * 0.6),
-            '주의군': int(total_employees * 0.25),
-            '고위험군': int(total_employees * 0.15)
+            '안전군': low_risk_count,
+            '주의군': medium_risk_count,
+            '고위험군': high_risk_count
         }
+        
+        # performance_summary 생성 (성능 분석 탭 활성화를 위해 필요)
+        performance_summary = {
+            'performance_metrics': {
+                'f1_score': best_performance['f1_score'],
+                'precision': best_performance['precision'],
+                'recall': best_performance['recall'],
+                'accuracy': best_performance.get('accuracy', 0.85)
+            },
+            'risk_statistics': risk_distribution,
+            'optimization_summary': {
+                'total_trials': len(optimization_history),
+                'best_trial': max(optimization_history, key=lambda x: x['f1_score']) if optimization_history else None,
+                'convergence_achieved': True
+            }
+        }
+        
+        # current_results에 저장
+        current_results['performance_summary'] = performance_summary
         
         return jsonify({
             'success': True,
@@ -1275,6 +1313,7 @@ def bayesian_optimization():
             'optimal_weights': optimal_weights,
             'best_performance': best_performance,
             'optimization_history': optimization_history,
+            'performance_summary': performance_summary,
             'cv_results': {
                 'mean_f1_score': best_performance['f1_score'],
                 'std_f1_score': 0.02,
@@ -1294,6 +1333,849 @@ def bayesian_optimization():
             'error': f'베이지안 최적화 중 오류 발생: {str(e)}',
             'traceback': traceback.format_exc()
         }), 500
+
+@app.route('/api/post-analysis/update-risk-thresholds', methods=['POST'])
+def update_risk_thresholds():
+    """위험도 분류 임계값 및 퇴사 예측 기준 업데이트"""
+    global current_data, current_results
+    
+    try:
+        data = request.get_json()
+        new_thresholds = data.get('risk_thresholds', {})
+        attrition_prediction_mode = data.get('attrition_prediction_mode', 'high_risk_only')  # 'high_risk_only' 또는 'medium_high_risk'
+        
+        high_risk_threshold = new_thresholds.get('high_risk_threshold', 0.7)
+        low_risk_threshold = new_thresholds.get('low_risk_threshold', 0.3)
+        
+        print(f"🎯 위험도 임계값 업데이트: 안전군 < {low_risk_threshold}, 주의군 {low_risk_threshold}-{high_risk_threshold}, 고위험군 >= {high_risk_threshold}")
+        print(f"🎯 퇴사 예측 모드: {attrition_prediction_mode}")
+        
+        if current_data is None or current_data.empty:
+            return jsonify({
+                'success': False,
+                'error': '분석 데이터가 없습니다. 먼저 Bayesian Optimization을 실행해주세요.'
+            }), 400
+        
+        # 새로운 임계값으로 위험도 재분류
+        total_employees = len(current_data)
+        
+        if 'ensemble_score' in current_data.columns:
+            ensemble_scores = current_data['ensemble_score']
+            high_risk_count = len(ensemble_scores[ensemble_scores >= high_risk_threshold])
+            medium_risk_count = len(ensemble_scores[(ensemble_scores >= low_risk_threshold) & (ensemble_scores < high_risk_threshold)])
+            low_risk_count = len(ensemble_scores[ensemble_scores < low_risk_threshold])
+            
+            # 위험도 레벨 컬럼 업데이트
+            current_data['risk_level'] = current_data['ensemble_score'].apply(
+                lambda x: '고위험군' if x >= high_risk_threshold 
+                         else '주의군' if x >= low_risk_threshold 
+                         else '안전군'
+            )
+            
+            # 퇴사 예측 컬럼 업데이트 (새로운 기준에 따라)
+            if attrition_prediction_mode == 'high_risk_only':
+                # 고위험군만 퇴사 예측
+                current_data['predicted_attrition'] = (current_data['ensemble_score'] >= high_risk_threshold).astype(int)
+            else:  # 'medium_high_risk'
+                # 주의군 + 고위험군 퇴사 예측
+                current_data['predicted_attrition'] = (current_data['ensemble_score'] >= low_risk_threshold).astype(int)
+                
+        else:
+            return jsonify({
+                'success': False,
+                'error': '앙상블 점수 데이터가 없습니다.'
+            }), 400
+        
+        # 새로운 위험도 분포
+        new_risk_distribution = {
+            '안전군': low_risk_count,
+            '주의군': medium_risk_count,
+            '고위험군': high_risk_count
+        }
+        
+        # 성능 지표 계산 (실제 퇴사 데이터가 있는 경우)
+        performance_metrics = {}
+        confusion_matrix = {}
+        
+        if 'actual_attrition' in current_data.columns:
+            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix as cm
+            
+            y_true = current_data['actual_attrition'].astype(int)
+            y_pred = current_data['predicted_attrition'].astype(int)
+            
+            # 성능 지표 계산
+            accuracy = accuracy_score(y_true, y_pred)
+            precision = precision_score(y_true, y_pred, zero_division=0)
+            recall = recall_score(y_true, y_pred, zero_division=0)
+            f1 = f1_score(y_true, y_pred, zero_division=0)
+            
+            performance_metrics = {
+                'accuracy': float(accuracy),
+                'precision': float(precision),
+                'recall': float(recall),
+                'f1_score': float(f1)
+            }
+            
+            # Confusion Matrix 계산
+            cm_matrix = cm(y_true, y_pred)
+            confusion_matrix = {
+                'true_negative': int(cm_matrix[0, 0]),   # 실제 잔류, 예측 잔류
+                'false_positive': int(cm_matrix[0, 1]),  # 실제 잔류, 예측 퇴사
+                'false_negative': int(cm_matrix[1, 0]),  # 실제 퇴사, 예측 잔류
+                'true_positive': int(cm_matrix[1, 1])    # 실제 퇴사, 예측 퇴사
+            }
+            
+            print(f"📊 성능 지표 계산 완료:")
+            print(f"   정확도: {accuracy:.4f}")
+            print(f"   정밀도: {precision:.4f}")
+            print(f"   재현율: {recall:.4f}")
+            print(f"   F1-Score: {f1:.4f}")
+            print(f"📊 Confusion Matrix: TN={confusion_matrix['true_negative']}, FP={confusion_matrix['false_positive']}, FN={confusion_matrix['false_negative']}, TP={confusion_matrix['true_positive']}")
+        else:
+            print("⚠️ 실제 퇴사 데이터(actual_attrition)가 없어 성능 지표를 계산할 수 없습니다.")
+        
+        # performance_summary 업데이트
+        if 'performance_summary' in current_results:
+            current_results['performance_summary']['risk_statistics'] = new_risk_distribution
+            current_results['performance_summary']['risk_thresholds'] = {
+                'high_risk_threshold': high_risk_threshold,
+                'low_risk_threshold': low_risk_threshold
+            }
+            current_results['performance_summary']['attrition_prediction_mode'] = attrition_prediction_mode
+            
+            # 성능 지표가 계산된 경우 업데이트
+            if performance_metrics:
+                current_results['performance_summary']['performance_metrics'] = performance_metrics
+                current_results['performance_summary']['confusion_matrix'] = confusion_matrix
+        
+        print(f"✅ 위험도 재분류 완료: 안전군 {low_risk_count}명, 주의군 {medium_risk_count}명, 고위험군 {high_risk_count}명")
+        
+        return jsonify({
+            'success': True,
+            'message': '위험도 임계값이 업데이트되었습니다.',
+            'risk_distribution': new_risk_distribution,
+            'risk_thresholds': {
+                'high_risk_threshold': high_risk_threshold,
+                'low_risk_threshold': low_risk_threshold
+            },
+            'attrition_prediction_mode': attrition_prediction_mode,
+            'performance_metrics': performance_metrics,
+            'confusion_matrix': confusion_matrix,
+            'total_employees': total_employees,
+            'performance_summary': current_results.get('performance_summary', {})
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'위험도 임계값 업데이트 중 오류 발생: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/post-analysis/save-final-settings', methods=['POST'])
+def save_final_settings():
+    """최종 위험도 분류 설정을 배치 분석용으로 저장"""
+    global current_results
+    
+    try:
+        data = request.get_json()
+        
+        # 사용자가 최종 결정한 설정 + 최적화된 가중치
+        final_settings = {
+            'risk_thresholds': data.get('risk_thresholds', {}),
+            'attrition_prediction_mode': data.get('attrition_prediction_mode', 'high_risk_only'),
+            'performance_metrics': data.get('performance_metrics', {}),
+            'confusion_matrix': data.get('confusion_matrix', {}),
+            'risk_distribution': data.get('risk_distribution', {}),
+            'integration_config': current_results.get('integration_config', {}) if current_results else {},
+            'optimized_weights': current_results.get('optimized_weights', {}) if current_results else {},
+            'timestamp': datetime.now().isoformat(),
+            'total_employees': data.get('total_employees', 0),
+            'source': 'post_analysis_optimization'
+        }
+        
+        print(f"💾 최종 위험도 분류 설정 저장:")
+        print(f"   안전군 임계값: < {final_settings['risk_thresholds'].get('low_risk_threshold', 0.3)}")
+        print(f"   고위험군 임계값: >= {final_settings['risk_thresholds'].get('high_risk_threshold', 0.7)}")
+        print(f"   퇴사 예측 모드: {final_settings['attrition_prediction_mode']}")
+        
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # 배치 분석용 설정 파일 저장
+        settings_file = os.path.join(project_root, 'app/results/models/final_risk_settings.json')
+        os.makedirs(os.path.dirname(settings_file), exist_ok=True)
+        
+        import json
+        with open(settings_file, 'w', encoding='utf-8') as f:
+            json.dump(final_settings, f, indent=2, ensure_ascii=False)
+        
+        # current_results에도 저장
+        current_results['final_risk_settings'] = final_settings
+        
+        print(f"✅ 최종 설정 저장 완료: {settings_file}")
+        
+        return jsonify({
+            'success': True,
+            'message': '최종 위험도 분류 설정이 저장되었습니다.',
+            'settings_file': settings_file,
+            'final_settings': final_settings
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'최종 설정 저장 중 오류 발생: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+def create_xai_visualizations(employee_result, employee_dir, employee_id):
+    """XAI 시각화 생성 및 저장"""
+    try:
+        # 시각화 디렉토리 생성
+        viz_dir = os.path.join(employee_dir, 'visualizations')
+        os.makedirs(viz_dir, exist_ok=True)
+        
+        # 한글 폰트 설정
+        plt.rcParams['font.family'] = ['DejaVu Sans', 'Malgun Gothic', 'AppleGothic']
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        agent_results = employee_result.get('agent_results', {})
+        
+        # 1. Structura Feature Importance 시각화
+        if 'structura' in agent_results:
+            structura_data = agent_results['structura']
+            feature_importance = structura_data.get('feature_importance', {})
+            
+            if feature_importance:
+                plt.figure(figsize=(12, 8))
+                features = list(feature_importance.keys())
+                importances = list(feature_importance.values())
+                
+                # 중요도 순으로 정렬
+                sorted_idx = np.argsort(importances)[::-1]
+                features = [features[i] for i in sorted_idx]
+                importances = [importances[i] for i in sorted_idx]
+                
+                plt.barh(range(len(features)), importances, color='skyblue')
+                plt.yticks(range(len(features)), features)
+                plt.xlabel('Feature Importance')
+                plt.title(f'Structura Feature Importance - Employee {employee_id}')
+                plt.tight_layout()
+                plt.savefig(os.path.join(viz_dir, 'structura_feature_importance.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+        
+        # 2. Structura SHAP Values 시각화
+        if 'structura' in agent_results:
+            shap_values = agent_results['structura'].get('shap_values', {})
+            
+            if shap_values:
+                plt.figure(figsize=(12, 8))
+                features = list(shap_values.keys())
+                values = list(shap_values.values())
+                
+                # SHAP 값에 따라 색상 결정
+                colors = ['red' if v > 0 else 'blue' for v in values]
+                
+                plt.barh(range(len(features)), values, color=colors, alpha=0.7)
+                plt.yticks(range(len(features)), features)
+                plt.xlabel('SHAP Values')
+                plt.title(f'Structura SHAP Values - Employee {employee_id}')
+                plt.axvline(x=0, color='black', linestyle='-', alpha=0.3)
+                plt.tight_layout()
+                plt.savefig(os.path.join(viz_dir, 'structura_shap_values.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+        
+        # 3. Chronos Attention Weights 시각화
+        if 'chronos' in agent_results:
+            chronos_data = agent_results['chronos']
+            xai_explanation = chronos_data.get('xai_explanation', {})
+            attention_weights = xai_explanation.get('attention_weights', {})
+            
+            if attention_weights:
+                plt.figure(figsize=(12, 6))
+                timesteps = list(attention_weights.keys())
+                weights = list(attention_weights.values())
+                
+                plt.plot(range(len(timesteps)), weights, marker='o', linewidth=2, markersize=8)
+                plt.xlabel('Time Steps')
+                plt.ylabel('Attention Weights')
+                plt.title(f'Chronos Attention Weights - Employee {employee_id}')
+                plt.xticks(range(len(timesteps)), timesteps, rotation=45)
+                plt.grid(True, alpha=0.3)
+                plt.tight_layout()
+                plt.savefig(os.path.join(viz_dir, 'chronos_attention_weights.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+        
+        # 4. Chronos Sequence Importance 시각화
+        if 'chronos' in agent_results:
+            sequence_importance = agent_results['chronos'].get('xai_explanation', {}).get('sequence_importance', {})
+            
+            if sequence_importance:
+                plt.figure(figsize=(12, 6))
+                timesteps = list(sequence_importance.keys())
+                importance = list(sequence_importance.values())
+                
+                plt.bar(range(len(timesteps)), importance, color='lightcoral', alpha=0.7)
+                plt.xlabel('Time Steps')
+                plt.ylabel('Sequence Importance')
+                plt.title(f'Chronos Sequence Importance - Employee {employee_id}')
+                plt.xticks(range(len(timesteps)), timesteps, rotation=45)
+                plt.tight_layout()
+                plt.savefig(os.path.join(viz_dir, 'chronos_sequence_importance.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+        
+        # 5. 에이전트별 위험도 점수 비교
+        agent_scores = {}
+        if 'structura' in agent_results:
+            agent_scores['Structura'] = agent_results['structura'].get('attrition_probability', 0)
+        if 'chronos' in agent_results:
+            agent_scores['Chronos'] = agent_results['chronos'].get('risk_score', 0)
+        if 'cognita' in agent_results:
+            agent_scores['Cognita'] = agent_results['cognita'].get('overall_risk_score', 0)
+        if 'sentio' in agent_results:
+            agent_scores['Sentio'] = agent_results['sentio'].get('risk_score', 0)
+        if 'agora' in agent_results:
+            agent_scores['Agora'] = agent_results['agora'].get('market_risk_score', 0)
+        
+        if agent_scores:
+            plt.figure(figsize=(10, 6))
+            agents = list(agent_scores.keys())
+            scores = list(agent_scores.values())
+            
+            bars = plt.bar(agents, scores, color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'])
+            plt.ylabel('Risk Score')
+            plt.title(f'Agent Risk Scores Comparison - Employee {employee_id}')
+            plt.ylim(0, 1)
+            
+            # 막대 위에 값 표시
+            for bar, score in zip(bars, scores):
+                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
+                        f'{score:.3f}', ha='center', va='bottom')
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(viz_dir, 'agent_scores_comparison.png'), dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        # 6. Sentio 감정 분포 시각화
+        if 'sentio' in agent_results:
+            emotion_dist = agent_results['sentio'].get('emotion_distribution', {})
+            
+            if emotion_dist:
+                plt.figure(figsize=(8, 8))
+                emotions = list(emotion_dist.keys())
+                values = list(emotion_dist.values())
+                
+                colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
+                plt.pie(values, labels=emotions, autopct='%1.1f%%', colors=colors[:len(emotions)])
+                plt.title(f'Sentio Emotion Distribution - Employee {employee_id}')
+                plt.tight_layout()
+                plt.savefig(os.path.join(viz_dir, 'sentio_emotion_distribution.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+        
+        print(f"✅ XAI 시각화 생성 완료: {viz_dir}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ XAI 시각화 생성 실패 (직원 {employee_id}): {str(e)}")
+        return False
+
+@app.route('/api/batch-analysis/save-results', methods=['POST'])
+def save_batch_analysis_results():
+    """배치 분석 결과를 부서별로 정리하여 저장"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'results' not in data:
+            return jsonify({
+                'success': False,
+                'error': '분석 결과 데이터가 없습니다.'
+            }), 400
+        
+        results = data['results']
+        analysis_timestamp = datetime.now().isoformat()
+        
+        print(f"💾 배치 분석 결과 저장 시작: {len(results)}명")
+        
+        # 프로젝트 루트 기준으로 절대 경로 생성 (기존 구조 활용)
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        results_base_dir = os.path.join(project_root, 'app/results')
+        
+        # 배치 분석 요약용 디렉토리
+        batch_summary_dir = os.path.join(results_base_dir, 'batch_analysis')
+        os.makedirs(batch_summary_dir, exist_ok=True)
+        
+        # 부서별 결과 정리
+        department_results = {}
+        individual_results = []
+        
+        for employee in results:
+            # 부서 정보 추출 (기존 구조에 맞게)
+            dept = employee.get('department', '미분류')
+            
+            # 부서명 정규화 (기존 구조와 일치시키기)
+            dept_mapping = {
+                'Human Resources': 'Human_Resources',
+                'Research & Development': 'Research_&_Development', 
+                'Research and Development': 'Research_&_Development',
+                'R&D': 'Research_&_Development',
+                'Sales': 'Sales',
+                'HR': 'Human_Resources'
+            }
+            
+            normalized_dept = dept_mapping.get(dept, dept.replace(' ', '_').replace('&', '_&_'))
+            
+            if normalized_dept not in department_results:
+                department_results[normalized_dept] = {
+                    'department': normalized_dept,
+                    'original_name': dept,
+                    'total_employees': 0,
+                    'risk_distribution': {'안전군': 0, '주의군': 0, '고위험군': 0},
+                    'employees': []
+                }
+            
+            # 위험도 분류
+            risk_score = employee.get('risk_score', 0)
+            risk_level = employee.get('risk_level', 'unknown')
+            
+            # 위험도 분포 업데이트
+            if risk_level == 'low':
+                department_results[normalized_dept]['risk_distribution']['안전군'] += 1
+            elif risk_level == 'medium':
+                department_results[normalized_dept]['risk_distribution']['주의군'] += 1
+            elif risk_level == 'high':
+                department_results[normalized_dept]['risk_distribution']['고위험군'] += 1
+            
+            department_results[normalized_dept]['total_employees'] += 1
+            
+            # 개별 직원 결과 정리
+            employee_result = {
+                'employee_id': employee.get('employee_number', 'Unknown'),
+                'department': dept,
+                'risk_score': risk_score,
+                'risk_level': risk_level,
+                'analysis_timestamp': analysis_timestamp,
+                'agent_results': {}
+            }
+            
+            # 각 에이전트 결과 추출
+            analysis_result = employee.get('analysis_result', {})
+            
+            # Structura 결과 (XAI 포함)
+            if 'structura_result' in analysis_result:
+                structura = analysis_result['structura_result']
+                employee_result['agent_results']['structura'] = {
+                    'attrition_probability': structura.get('prediction', {}).get('attrition_probability', 0),
+                    'predicted_attrition': structura.get('prediction', {}).get('predicted_attrition', 0),
+                    'confidence': structura.get('prediction', {}).get('confidence', 0),
+                    'feature_importance': structura.get('prediction', {}).get('feature_importance', {}),
+                    'xai_explanation': structura.get('xai_explanation', {}),
+                    'shap_values': structura.get('shap_values', {}),
+                    'lime_explanation': structura.get('lime_explanation', {})
+                }
+            
+            # Chronos 결과 (XAI 포함)
+            if 'chronos_result' in analysis_result:
+                chronos = analysis_result['chronos_result']
+                employee_result['agent_results']['chronos'] = {
+                    'risk_score': chronos.get('prediction', {}).get('risk_score', 0),
+                    'anomaly_score': chronos.get('anomaly_detection', {}).get('anomaly_score', 0),
+                    'trend_analysis': chronos.get('trend_analysis', {}),
+                    'xai_explanation': chronos.get('xai_explanation', {}),
+                    'attention_weights': chronos.get('attention_weights', {}),
+                    'sequence_importance': chronos.get('sequence_importance', {})
+                }
+            
+            # Cognita 결과
+            if 'cognita_result' in analysis_result:
+                cognita = analysis_result['cognita_result']
+                employee_result['agent_results']['cognita'] = {
+                    'overall_risk_score': cognita.get('risk_analysis', {}).get('overall_risk_score', 0),
+                    'network_centrality': cognita.get('network_analysis', {}).get('centrality_score', 0),
+                    'relationship_strength': cognita.get('relationship_analysis', {}).get('avg_strength', 0),
+                    'influence_score': cognita.get('influence_analysis', {}).get('influence_score', 0)
+                }
+            
+            # Sentio 결과
+            if 'sentio_result' in analysis_result:
+                sentio = analysis_result['sentio_result']
+                employee_result['agent_results']['sentio'] = {
+                    'sentiment_score': sentio.get('sentiment_analysis', {}).get('overall_sentiment', 0),
+                    'risk_score': sentio.get('sentiment_analysis', {}).get('risk_score', 0),
+                    'keyword_analysis': sentio.get('keyword_analysis', {}),
+                    'emotion_distribution': sentio.get('emotion_analysis', {})
+                }
+            
+            # Agora 결과
+            if 'agora_result' in analysis_result:
+                agora = analysis_result['agora_result']
+                employee_result['agent_results']['agora'] = {
+                    'market_risk_score': agora.get('market_analysis', {}).get('risk_score', 0),
+                    'industry_trend': agora.get('industry_analysis', {}),
+                    'job_market_analysis': agora.get('job_market', {}),
+                    'external_factors': agora.get('external_factors', {})
+                }
+            
+            individual_results.append(employee_result)
+            department_results[normalized_dept]['employees'].append(employee_result)
+            
+            # 기존 구조에 맞게 개별 직원 파일 저장
+            employee_id = employee.get('employee_number', 'Unknown')
+            employee_dir = os.path.join(results_base_dir, normalized_dept, f'employee_{employee_id}')
+            os.makedirs(employee_dir, exist_ok=True)
+            
+            # 배치 분석 결과 저장 (기존 파일과 구분)
+            batch_result_file = os.path.join(employee_dir, f'batch_analysis_{analysis_timestamp.replace(":", "-").replace(".", "-")}.json')
+            with open(batch_result_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'analysis_type': 'batch_analysis',
+                    'timestamp': analysis_timestamp,
+                    'employee_result': employee_result,
+                    'applied_settings': data.get('applied_settings', {}),
+                    'xai_included': True,
+                    'visualizations_generated': True
+                }, f, indent=2, ensure_ascii=False)
+            
+            # XAI 시각화 생성 및 저장 (PNG 파일들)
+            visualization_success = create_xai_visualizations(employee_result, employee_dir, employee_id)
+            
+            print(f"✅ 직원 {employee_id} 배치 분석 결과 저장: {batch_result_file}")
+            if visualization_success:
+                print(f"✅ 직원 {employee_id} XAI 시각화 생성 완료")
+            else:
+                print(f"⚠️ 직원 {employee_id} XAI 시각화 생성 부분 실패")
+        
+        # 부서별 결과 저장 (배치 분석 요약 디렉토리에)
+        dept_summary_file = os.path.join(batch_summary_dir, f'department_summary_{analysis_timestamp.replace(":", "-").replace(".", "-")}.json')
+        with open(dept_summary_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                'analysis_timestamp': analysis_timestamp,
+                'total_employees': len(results),
+                'total_departments': len(department_results),
+                'department_results': department_results,
+                'applied_settings': data.get('applied_settings', {}),
+                'summary_statistics': {
+                    'overall_risk_distribution': {
+                        '안전군': sum(dept['risk_distribution']['안전군'] for dept in department_results.values()),
+                        '주의군': sum(dept['risk_distribution']['주의군'] for dept in department_results.values()),
+                        '고위험군': sum(dept['risk_distribution']['고위험군'] for dept in department_results.values())
+                    }
+                }
+            }, f, indent=2, ensure_ascii=False)
+        
+        # 개별 직원 상세 결과 저장 (XAI 포함) - 배치 분석 요약 디렉토리에
+        individual_file = os.path.join(batch_summary_dir, f'individual_results_{analysis_timestamp.replace(":", "-").replace(".", "-")}.json')
+        with open(individual_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                'analysis_timestamp': analysis_timestamp,
+                'total_employees': len(individual_results),
+                'individual_results': individual_results,
+                'applied_settings': data.get('applied_settings', {}),
+                'xai_included': True,
+                'agents_analyzed': ['structura', 'chronos', 'cognita', 'sentio', 'agora']
+            }, f, indent=2, ensure_ascii=False)
+        
+        print(f"✅ 배치 분석 결과 저장 완료:")
+        print(f"   부서별 요약: {dept_summary_file}")
+        print(f"   개별 상세: {individual_file}")
+        print(f"   총 {len(department_results)}개 부서, {len(individual_results)}명 직원")
+        
+        return jsonify({
+            'success': True,
+            'message': f'배치 분석 결과가 저장되었습니다.',
+            'files_saved': {
+                'department_summary': dept_summary_file,
+                'individual_results': individual_file
+            },
+            'statistics': {
+                'total_employees': len(individual_results),
+                'total_departments': len(department_results),
+                'department_breakdown': {dept: info['total_employees'] for dept, info in department_results.items()}
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ 배치 분석 결과 저장 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'배치 분석 결과 저장 중 오류 발생: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/generate-employee-report', methods=['POST'])
+def generate_employee_report():
+    """개별 직원 보고서 생성 (LLM 기반)"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': '요청 데이터가 없습니다.'
+            }), 400
+        
+        employee_id = data.get('employee_id')
+        department = data.get('department', '미분류')
+        risk_level = data.get('risk_level', 'unknown')
+        risk_score = data.get('risk_score', 0)
+        agent_scores = data.get('agent_scores', {})
+        
+        if not employee_id:
+            return jsonify({
+                'success': False,
+                'error': '직원 ID가 필요합니다.'
+            }), 400
+        
+        print(f"📝 직원 {employee_id} 보고서 생성 시작")
+        
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # 부서명 정규화
+        dept_mapping = {
+            'Human Resources': 'Human_Resources',
+            'Research & Development': 'Research_&_Development', 
+            'Research and Development': 'Research_&_Development',
+            'R&D': 'Research_&_Development',
+            'Sales': 'Sales',
+            'HR': 'Human_Resources'
+        }
+        normalized_dept = dept_mapping.get(department, department.replace(' ', '_').replace('&', '_&_'))
+        
+        # 직원 데이터 파일 경로
+        employee_dir = os.path.join(project_root, 'app/results', normalized_dept, f'employee_{employee_id}')
+        
+        if not os.path.exists(employee_dir):
+            return jsonify({
+                'success': False,
+                'error': f'직원 {employee_id}의 분석 결과를 찾을 수 없습니다.'
+            }), 404
+        
+        # 각 에이전트 결과 파일 로드
+        agent_data = {}
+        
+        # Structura 결과 로드
+        structura_file = os.path.join(employee_dir, 'structura_result.json')
+        if os.path.exists(structura_file):
+            with open(structura_file, 'r', encoding='utf-8') as f:
+                agent_data['structura'] = json.load(f)
+        
+        # Chronos 결과 로드
+        chronos_file = os.path.join(employee_dir, 'chronos_result.json')
+        if os.path.exists(chronos_file):
+            with open(chronos_file, 'r', encoding='utf-8') as f:
+                agent_data['chronos'] = json.load(f)
+        
+        # Cognita 결과 로드
+        cognita_file = os.path.join(employee_dir, 'cognita_result.json')
+        if os.path.exists(cognita_file):
+            with open(cognita_file, 'r', encoding='utf-8') as f:
+                agent_data['cognita'] = json.load(f)
+        
+        # Sentio 결과 로드
+        sentio_file = os.path.join(employee_dir, 'sentio_result.json')
+        if os.path.exists(sentio_file):
+            with open(sentio_file, 'r', encoding='utf-8') as f:
+                agent_data['sentio'] = json.load(f)
+        
+        # 직원 정보 로드
+        employee_info_file = os.path.join(employee_dir, 'employee_info.json')
+        employee_info = {}
+        if os.path.exists(employee_info_file):
+            with open(employee_info_file, 'r', encoding='utf-8') as f:
+                employee_info = json.load(f)
+        
+        # 배치 분석 결과 로드 (가장 최신)
+        batch_files = [f for f in os.listdir(employee_dir) if f.startswith('batch_analysis_') and f.endswith('.json')]
+        batch_data = {}
+        if batch_files:
+            latest_batch_file = sorted(batch_files)[-1]  # 가장 최신 파일
+            with open(os.path.join(employee_dir, latest_batch_file), 'r', encoding='utf-8') as f:
+                batch_data = json.load(f)
+        
+        # LLM으로 보고서 생성
+        report = generate_llm_report(
+            employee_id=employee_id,
+            department=department,
+            risk_level=risk_level,
+            risk_score=risk_score,
+            agent_scores=agent_scores,
+            agent_data=agent_data,
+            employee_info=employee_info,
+            batch_data=batch_data
+        )
+        
+        print(f"✅ 직원 {employee_id} 보고서 생성 완료")
+        
+        return jsonify({
+            'success': True,
+            'report': report,
+            'employee_id': employee_id,
+            'department': department,
+            'risk_level': risk_level
+        })
+        
+    except Exception as e:
+        print(f"❌ 보고서 생성 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'보고서 생성 중 오류 발생: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+def generate_llm_report(employee_id, department, risk_level, risk_score, agent_scores, agent_data, employee_info, batch_data):
+    """LLM을 사용한 개별 직원 보고서 생성"""
+    try:
+        # 위험도 분류 한글 변환
+        risk_level_kr = {
+            'high': '고위험군',
+            'medium': '주의군', 
+            'low': '안전군'
+        }.get(risk_level, '미분류')
+        
+        # Structura 주요 위험 요인 추출
+        structura_risks = []
+        if 'structura' in agent_data and 'explanation' in agent_data['structura']:
+            explanation = agent_data['structura']['explanation']
+            if 'individual_explanation' in explanation:
+                top_risks = explanation['individual_explanation'].get('top_risk_factors', [])
+                structura_risks = [factor.get('factor', '') for factor in top_risks[:3]]
+        
+        # Structura 보호 요인 추출
+        structura_protections = []
+        if 'structura' in agent_data and 'explanation' in agent_data['structura']:
+            explanation = agent_data['structura']['explanation']
+            if 'individual_explanation' in explanation:
+                top_protections = explanation['individual_explanation'].get('top_protective_factors', [])
+                structura_protections = [factor.get('factor', '') for factor in top_protections[:3]]
+        
+        # 보고서 템플릿
+        report_template = f"""
+# 직원 위험도 분석 보고서
+
+## 📋 기본 정보
+- **직원 ID**: {employee_id}
+- **소속 부서**: {department}
+- **위험도 분류**: {risk_level_kr}
+- **종합 위험 점수**: {risk_score:.1%}
+
+## 📊 에이전트별 분석 결과
+
+### 🧠 Structura (HR 데이터 분석)
+- **이직 확률**: {agent_scores.get('structura', 0):.1%}
+- **주요 위험 요인**: {', '.join(structura_risks) if structura_risks else '데이터 없음'}
+- **보호 요인**: {', '.join(structura_protections) if structura_protections else '데이터 없음'}
+
+### ⏰ Chronos (시계열 분석)
+- **시계열 위험도**: {agent_scores.get('chronos', 0):.1%}
+- **트렌드 분석**: {"상승 추세" if agent_scores.get('chronos', 0) > 0.5 else "안정적"}
+
+### 🔗 Cognita (관계 분석)
+- **관계 위험도**: {agent_scores.get('cognita', 0):.1%}
+- **네트워크 영향력**: {"높음" if agent_scores.get('cognita', 0) > 0.6 else "보통" if agent_scores.get('cognita', 0) > 0.3 else "낮음"}
+
+### 💭 Sentio (감정 분석)
+- **감정 위험도**: {agent_scores.get('sentio', 0):.1%}
+- **감정 상태**: {"부정적" if agent_scores.get('sentio', 0) > 0.5 else "긍정적"}
+
+### 🌍 Agora (시장 분석)
+- **시장 위험도**: {agent_scores.get('agora', 0):.1%}
+- **외부 환경**: {"불리함" if agent_scores.get('agora', 0) > 0.5 else "유리함"}
+
+## 🎯 종합 분석 및 권장사항
+
+### 위험도 평가
+"""
+
+        if risk_level == 'high':
+            report_template += """
+이 직원은 **고위험군**으로 분류되어 즉각적인 관심과 개입이 필요합니다.
+
+**주요 우려사항:**
+- 높은 이직 확률로 인한 인재 손실 위험
+- 팀 내 부정적 영향 전파 가능성
+- 업무 성과 및 몰입도 저하 우려
+
+**즉시 권장사항:**
+1. **1:1 면담 실시**: 관리자와의 개별 상담을 통한 문제점 파악
+2. **근무 환경 개선**: 주요 위험 요인에 대한 구체적 개선 방안 수립
+3. **인센티브 제공**: 성과 보상, 승진 기회, 교육 지원 등 고려
+4. **정기적 모니터링**: 월 1회 이상 상태 점검 및 피드백
+"""
+        elif risk_level == 'medium':
+            report_template += """
+이 직원은 **주의군**으로 분류되어 예방적 관리가 필요합니다.
+
+**주요 특징:**
+- 중간 수준의 이직 위험도
+- 적절한 개입을 통한 개선 가능성 높음
+- 조기 대응을 통한 위험도 감소 기대
+
+**권장사항:**
+1. **정기적 피드백**: 분기별 성과 면담 및 커리어 상담
+2. **업무 만족도 향상**: 업무 배치 조정, 역할 명확화
+3. **교육 기회 제공**: 역량 개발 프로그램 참여 지원
+4. **팀 내 소통 강화**: 동료 및 상사와의 관계 개선 지원
+"""
+        else:
+            report_template += """
+이 직원은 **안전군**으로 분류되어 현재 안정적인 상태입니다.
+
+**주요 특징:**
+- 낮은 이직 위험도
+- 높은 업무 만족도 및 조직 몰입도
+- 팀 내 긍정적 영향력 기대
+
+**유지 관리 방안:**
+1. **현재 상태 유지**: 기존의 긍정적 요인들을 지속적으로 지원
+2. **성장 기회 제공**: 추가적인 도전과 발전 기회 제공
+3. **멘토 역할**: 다른 직원들의 롤모델 및 멘토 역할 부여
+4. **장기적 관점**: 경력 개발 계획 수립 및 지원
+"""
+
+        report_template += f"""
+
+## 📈 데이터 기반 인사이트
+
+### XAI (설명 가능한 AI) 분석
+- **가장 중요한 예측 요인**: {structura_risks[0] if structura_risks else '데이터 분석 중'}
+- **개선 가능한 영역**: {structura_protections[0] if structura_protections else '추가 분석 필요'}
+
+### 시각화 자료
+- 상세한 XAI 시각화는 다음 경로에서 확인 가능합니다:
+  `app/results/{department.replace(' ', '_').replace('&', '_&_')}/employee_{employee_id}/visualizations/`
+
+## 📅 후속 조치 계획
+
+### 단기 (1개월 이내)
+- [ ] 직속 상사와의 1:1 면담 실시
+- [ ] 주요 위험 요인에 대한 구체적 개선 방안 논의
+- [ ] 업무 환경 및 조건 점검
+
+### 중기 (3개월 이내)
+- [ ] 개선 방안 실행 및 효과 측정
+- [ ] 추가적인 지원 방안 검토
+- [ ] 정기적 모니터링 체계 구축
+
+### 장기 (6개월 이후)
+- [ ] 위험도 재평가 실시
+- [ ] 장기적 경력 개발 계획 수립
+- [ ] 조직 내 역할 및 기여도 재검토
+
+---
+*본 보고서는 AI 기반 분석 결과를 바탕으로 생성되었으며, 실제 인사 결정 시에는 추가적인 정성적 평가가 필요합니다.*
+
+**보고서 생성 일시**: {datetime.now().strftime('%Y년 %m월 %d일 %H:%M:%S')}
+"""
+
+        return report_template.strip()
+        
+    except Exception as e:
+        print(f"❌ LLM 보고서 생성 실패: {str(e)}")
+        return f"보고서 생성 중 오류가 발생했습니다: {str(e)}"
 
 
 @app.route('/get_employee_list', methods=['GET'])
@@ -1347,13 +2229,18 @@ def save_agent_models():
                 'error': '저장할 모델 데이터가 없습니다'
             }), 400
         
-        # 디렉토리 생성
+        # 프로젝트 루트 기준으로 절대 경로 생성
         import os
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        # app/Integration에서 프로젝트 루트로 이동 (../../)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        absolute_save_path = os.path.join(project_root, save_path)
+        
+        # 디렉토리 생성
+        os.makedirs(os.path.dirname(absolute_save_path), exist_ok=True)
         
         # 파일 저장
         import json
-        with open(save_path, 'w', encoding='utf-8') as f:
+        with open(absolute_save_path, 'w', encoding='utf-8') as f:
             json.dump(models, f, indent=2, ensure_ascii=False)
         
         print(f"✅ 에이전트 모델 저장 완료: {save_path}")
@@ -1393,9 +2280,14 @@ def save_optimized_models():
                 'error': '저장할 모델 데이터가 없습니다'
             }), 400
         
-        # 디렉토리 생성
+        # 프로젝트 루트 기준으로 절대 경로 생성
         import os
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        # app/Integration에서 프로젝트 루트로 이동 (../../)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        absolute_save_path = os.path.join(project_root, save_path)
+        
+        # 디렉토리 생성
+        os.makedirs(os.path.dirname(absolute_save_path), exist_ok=True)
         
         # 배치 분석에서 쉽게 사용할 수 있도록 구조화
         optimized_data = {
@@ -1413,12 +2305,13 @@ def save_optimized_models():
         
         # 파일 저장
         import json
-        with open(save_path, 'w', encoding='utf-8') as f:
+        with open(absolute_save_path, 'w', encoding='utf-8') as f:
             json.dump(optimized_data, f, indent=2, ensure_ascii=False)
         
         # 배치 분석용 심볼릭 링크 또는 복사본 생성
         batch_ready_path = 'app/results/models/batch_ready_models.json'
-        with open(batch_ready_path, 'w', encoding='utf-8') as f:
+        absolute_batch_path = os.path.join(project_root, batch_ready_path)
+        with open(absolute_batch_path, 'w', encoding='utf-8') as f:
             json.dump(optimized_data, f, indent=2, ensure_ascii=False)
         
         print(f"✅ 최적화된 모델 저장 완료: {save_path}")

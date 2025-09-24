@@ -73,7 +73,7 @@ python test_agora_api.py
 ## 📡 API 엔드포인트
 
 ### 기본 정보
-- **Base URL**: `http://localhost:5004`
+- **Base URL**: `http://localhost:5005`
 - **Content-Type**: `application/json`
 
 ### 주요 엔드포인트
@@ -245,7 +245,7 @@ python test_agora_api.py
 ### 성능 테스트
 ```bash
 # 100명 배치 분석 성능 테스트
-curl -X POST http://localhost:5004/analyze/batch \
+curl -X POST http://localhost:5005/analyze/batch \
   -H "Content-Type: application/json" \
   -d @test_data_100_employees.json
 ```
@@ -257,7 +257,7 @@ curl -X POST http://localhost:5004/analyze/batch \
 1. **서버 시작 실패**
    ```bash
    # 포트 충돌 확인
-   lsof -i :5004
+   lsof -i :5005
    
    # 의존성 재설치
    pip install -r requirements.txt --force-reinstall
