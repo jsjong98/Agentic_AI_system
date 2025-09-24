@@ -11,6 +11,8 @@
     "antd": "^5.7.0",
     "axios": "^1.4.0",
     "d3": "^7.9.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.3",
     "lodash": "^4.17.21",
     "moment": "^2.29.4",
     "papaparse": "^5.4.1",
@@ -46,5 +48,5 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:8000"
+  "proxy": "http://localhost:5006"
 }

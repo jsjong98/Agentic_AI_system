@@ -10,6 +10,15 @@ from typing import Dict, Tuple, List, Optional
 import warnings
 warnings.filterwarnings('ignore')
 
+# Bayesian Optimization 라이브러리 (선택적)
+try:
+    from skopt import gp_minimize
+    from skopt.space import Real
+    from skopt.utils import use_named_args
+    SKOPT_AVAILABLE = True
+except ImportError:
+    SKOPT_AVAILABLE = False
+
 
 class ThresholdCalculator:
     """
@@ -21,7 +30,8 @@ class ThresholdCalculator:
         self.performance_results = {}
         
     def find_optimal_threshold(self, y_true: np.ndarray, y_score: np.ndarray, 
-                             thresholds: Optional[np.ndarray] = None) -> Tuple[float, float, pd.DataFrame]:
+                             thresholds: Optional[np.ndarray] = None, 
+                             method: str = 'grid') -> Tuple[float, float, pd.DataFrame]:
         """
         F1-score가 최대가 되는 임계값을 찾는 함수
         
@@ -29,12 +39,22 @@ class ThresholdCalculator:
         y_true: 실제 라벨 (0, 1)
         y_score: 예측 점수
         thresholds: 테스트할 임계값 리스트 (None이면 자동 생성)
+        method: 최적화 방법 ('grid' 또는 'bayesian')
         
         Returns:
         best_threshold: 최적 임계값
         best_f1: 최대 F1-score
         results: 모든 임계값에 대한 결과
         """
+        
+        if method == 'bayesian' and SKOPT_AVAILABLE:
+            return self._find_optimal_threshold_bayesian(y_true, y_score)
+        else:
+            return self._find_optimal_threshold_grid(y_true, y_score, thresholds)
+    
+    def _find_optimal_threshold_grid(self, y_true: np.ndarray, y_score: np.ndarray, 
+                                   thresholds: Optional[np.ndarray] = None) -> Tuple[float, float, pd.DataFrame]:
+        """Grid Search를 통한 임계값 최적화"""
         
         if thresholds is None:
             # 점수의 범위를 기반으로 임계값 생성
@@ -72,14 +92,76 @@ class ThresholdCalculator:
         
         return best_threshold, best_f1, results_df
     
+    def _find_optimal_threshold_bayesian(self, y_true: np.ndarray, y_score: np.ndarray,
+                                       n_calls: int = 50) -> Tuple[float, float, pd.DataFrame]:
+        """Bayesian Optimization을 통한 임계값 최적화"""
+        
+        min_score = np.min(y_score)
+        max_score = np.max(y_score)
+        
+        # 임계값 범위 설정
+        dimensions = [Real(min_score, max_score, name='threshold')]
+        
+        @use_named_args(dimensions)
+        def objective(threshold):
+            """목적 함수: F1-score의 음수를 반환"""
+            y_pred = (y_score >= threshold).astype(int)
+            
+            if len(np.unique(y_pred)) > 1:
+                f1 = f1_score(y_true, y_pred)
+            else:
+                f1 = 0
+            
+            return -f1  # 최소화 문제로 변환
+        
+        # Bayesian Optimization 실행
+        result = gp_minimize(
+            func=objective,
+            dimensions=dimensions,
+            n_calls=n_calls,
+            random_state=42,
+            acq_func='EI',
+            n_initial_points=10
+        )
+        
+        best_threshold = result.x[0]
+        best_f1 = -result.fun
+        
+        # 결과 DataFrame 생성 (시각화용)
+        thresholds = np.linspace(min_score, max_score, 100)
+        results = []
+        
+        for threshold in thresholds:
+            y_pred = (y_score >= threshold).astype(int)
+            
+            if len(np.unique(y_pred)) > 1:
+                f1 = f1_score(y_true, y_pred)
+                precision = precision_score(y_true, y_pred)
+                recall = recall_score(y_true, y_pred)
+            else:
+                f1 = precision = recall = 0
+            
+            results.append({
+                'threshold': threshold,
+                'f1_score': f1,
+                'precision': precision,
+                'recall': recall
+            })
+        
+        results_df = pd.DataFrame(results)
+        
+        return best_threshold, best_f1, results_df
+    
     def calculate_thresholds_for_scores(self, data: pd.DataFrame, 
-                                      score_columns: List[str]) -> Dict:
+                                      score_columns: List[str], 
+                                      method: str = 'bayesian') -> Dict:
         """
         여러 Score에 대해 최적 임계값을 계산
         
         Parameters:
         data: 데이터프레임 (attrition_binary 컬럼 포함)
         score_columns: Score 컬럼명 리스트
+        method: 최적화 방법 ('grid' 또는 'bayesian')
         
         Returns:
         results: 각 Score별 최적 임계값 및 성능 지표
@@ -88,7 +170,7 @@ class ThresholdCalculator:
         results = {}
         
         for score_col in score_columns:
-            print(f"=== {score_col} 분석 중 ===")
+            print(f"=== {score_col} 분석 중 ({method} 방법) ===")
             
             # 결측값 제거
             mask = ~(data[score_col].isna() | data['attrition_binary'].isna())
@@ -96,7 +178,7 @@ class ThresholdCalculator:
             y_score = data.loc[mask, score_col]
             
             # 최적 임계값 찾기
-            best_threshold, best_f1, results_df = self.find_optimal_threshold(y_true, y_score)
+            best_threshold, best_f1, results_df = self.find_optimal_threshold(y_true, y_score, method=method)
             
             # 최적 임계값에서의 상세 성능 확인
             y_pred_optimal = (y_score >= best_threshold).astype(int)

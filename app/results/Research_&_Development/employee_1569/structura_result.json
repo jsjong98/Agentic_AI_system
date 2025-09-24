@@ -1,0 +1,122 @@
+{
+  "prediction": {
+    "employee_id": "1569",
+    "attrition_probability": 0.7336877584457397,
+    "attrition_prediction": 1,
+    "risk_category": "HIGH",
+    "confidence_score": 0.4673755168914795,
+    "prediction_timestamp": "2025-09-23T22:53:33.655632"
+  },
+  "explanation": {
+    "employee_id": "1569",
+    "feature_importance": {
+      "RelationshipSatisfaction": 0.03405288979411125,
+      "Education": 0.02487798221409321,
+      "JobInvolvement": 0.03501373156905174,
+      "EnvironmentSatisfaction": 0.048257846385240555,
+      "JobLevel": 0.07228615880012512,
+      "JobSatisfaction": 0.04019258916378021,
+      "StockOptionLevel": 0.07264421880245209,
+      "WorkLifeBalance": 0.03580893576145172,
+      "Department": 0.037670474499464035,
+      "JobRole": 0.046762410551309586,
+      "MaritalStatus": 0.036864522844552994,
+      "OverTime": 0.0779639258980751,
+      "Age": 0.04039482772350311,
+      "DailyRate": 0.03578038513660431,
+      "DistanceFromHome": 0.036774344742298126,
+      "MonthlyIncome": 0.04666806384921074,
+      "NumCompaniesWorked": 0.050036631524562836,
+      "TotalWorkingYears": 0.04981709271669388,
+      "TrainingTimesLastYear": 0.02378365956246853,
+      "YearsAtCompany": 0.02968277968466282,
+      "YearsInCurrentRole": 0.03649982064962387,
+      "YearsSinceLastPromotion": 0.03537580743432045,
+      "YearsWithCurrManager": 0.05279093235731125
+    },
+    "shap_values": {
+      "RelationshipSatisfaction": -0.11810857057571411,
+      "Education": 0.10384577512741089,
+      "JobInvolvement": -0.0645294338464737,
+      "EnvironmentSatisfaction": 0.691679060459137,
+      "JobLevel": 0.03779386729001999,
+      "JobSatisfaction": 0.3114367723464966,
+      "StockOptionLevel": -0.2101370096206665,
+      "WorkLifeBalance": -0.11588393151760101,
+      "Department": -0.08726394921541214,
+      "JobRole": 0.21955494582653046,
+      "MaritalStatus": -0.18748600780963898,
+      "OverTime": -0.5744233131408691,
+      "Age": -0.44746410846710205,
+      "DailyRate": 0.07407714426517487,
+      "DistanceFromHome": -0.38132375478744507,
+      "MonthlyIncome": 0.5202070474624634,
+      "NumCompaniesWorked": -0.12053432315587997,
+      "TotalWorkingYears": 0.33989793062210083,
+      "TrainingTimesLastYear": 0.056277040392160416,
+      "YearsAtCompany": 0.07584365457296371,
+      "YearsInCurrentRole": 0.08804940432310104,
+      "YearsSinceLastPromotion": -0.11394377797842026,
+      "YearsWithCurrManager": 0.6405643820762634
+    },
+    "lime_explanation": {
+      "features": [
+        "OverTime=0",
+        "NumCompaniesWorked <= 1.00",
+        "EnvironmentSatisfaction <= 2.00",
+        "DistanceFromHome <= 2.00",
+        "MonthlyIncome <= 2922.25",
+        "2.00 < JobInvolvement <= 3.00",
+        "JobSatisfaction <= 2.00",
+        "0.00 < StockOptionLevel <= 1.00",
+        "2.00 < WorkLifeBalance <= 3.00",
+        "YearsWithCurrManager <= 2.00"
+      ],
+      "values": [
+        -0.2098698628153347,
+        -0.11724512089197889,
+        0.10710342020106828,
+        -0.09025895522184416,
+        0.0813776080377678,
+        -0.08106392663591094,
+        0.08048190219445552,
+        -0.07721196366387259,
+        -0.06765961672680201,
+        0.059399757015489454
+      ],
+      "intercept": 0.5307075853866317
+    },
+    "top_risk_factors": [
+      {
+        "feature": "EnvironmentSatisfaction",
+        "impact": 0.691679060459137,
+        "type": "risk"
+      },
+      {
+        "feature": "YearsWithCurrManager",
+        "impact": 0.6405643820762634,
+        "type": "risk"
+      },
+      {
+        "feature": "MonthlyIncome",
+        "impact": 0.5202070474624634,
+        "type": "risk"
+      }
+    ],
+    "top_protective_factors": [
+      {
+        "feature": "OverTime",
+        "impact": 0.5744233131408691,
+        "type": "protective"
+      },
+      {
+        "feature": "Age",
+        "impact": 0.44746410846710205,
+        "type": "protective"
+      }
+    ],
+    "explanation_timestamp": "2025-09-23T22:53:33.729138"
+  },
+  "agent_type": "structura",
+  "analysis_type": "individual"
+}

@@ -99,7 +99,11 @@ def check_worker_availability():
 def main():
     """메인 실행 함수"""
     
-    print("🚀 Supervisor 에이전트 서버 시작")
+    # Windows에서 UTF-8 인코딩 설정
+    if sys.platform == "win32":
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
+    
+    print(">> Supervisor Agent Server Starting")
     print("=" * 50)
     
     # 환경 설정
@@ -123,19 +127,19 @@ def main():
         port = int(os.getenv('SUPERVISOR_PORT', '5006'))
         debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
         
-        print(f"\n🌐 서버 정보:")
-        print(f"  📡 주소: http://localhost:{port}")
-        print(f"  🔧 디버그: {debug}")
-        print(f"  🤖 사용 가능한 워커: {len(available_workers)}/5")
+        print(f"\n>> Server Information:")
+        print(f"  Address: http://localhost:{port}")
+        print(f"  Debug: {debug}")
+        print(f"  Available Workers: {len(available_workers)}/5")
         
-        print(f"\n📋 주요 엔드포인트:")
+        print(f"\n>> Main Endpoints:")
         print(f"  GET  http://localhost:{port}/health")
         print(f"  POST http://localhost:{port}/analyze_employee")
         print(f"  GET  http://localhost:{port}/worker_health_check")
         print(f"  POST http://localhost:{port}/batch_analyze")
         print(f"  GET  http://localhost:{port}/system_info")
         
-        print(f"\n🔥 서버 시작 중...")
+        print(f"\n>> Starting Server...")
         print("=" * 50)
         
         # 서버 실행

@@ -35,10 +35,9 @@ class AgenticResultManager:
         self.setup_directory_structure()
         
     def setup_directory_structure(self):
-        """계층적 디렉토리 구조 생성"""
-        # 기본 구조 (계층적)
+        """간소화된 디렉토리 구조 생성"""
+        # 기본 구조 (간소화)
         directories = [
-            "departments",         # 부서별 최상위 폴더
             "global_reports",      # 전체 종합 보고서
             "models",             # 저장된 모델들
             "temp"                # 임시 파일들
@@ -47,7 +46,7 @@ class AgenticResultManager:
         for directory in directories:
             (self.base_output_dir / directory).mkdir(parents=True, exist_ok=True)
             
-        logger.info(f"계층적 결과 저장 디렉토리 구조 생성 완료: {self.base_output_dir}")
+        logger.info(f"간소화된 결과 저장 디렉토리 구조 생성 완료: {self.base_output_dir}")
     
     def _sanitize_folder_name(self, name: str) -> str:
         """폴더명으로 사용할 수 있도록 문자열 정리"""
@@ -63,25 +62,82 @@ class AgenticResultManager:
         return sanitized if sanitized else "Unknown"
     
     def _get_hierarchical_path(self, department: str, job_role: str, position: str, employee_id: str) -> Path:
-        """계층적 경로 생성: 부서/직무/직급/직원"""
+        """간소화된 경로 생성: 부서/직원"""
         
         dept_clean = self._sanitize_folder_name(department)
-        role_clean = self._sanitize_folder_name(job_role)
-        pos_clean = self._sanitize_folder_name(position)
         
+        # 간소화된 구조: results/부서명/employee_ID
         hierarchical_path = (
             self.base_output_dir / 
-            "departments" / 
             dept_clean / 
-            "job_roles" / 
-            role_clean / 
-            "positions" / 
-            pos_clean / 
-            "employees" / 
             f"employee_{employee_id}"
         )
         
         return hierarchical_path
+    
+    def _update_department_index(self, department: str, employee_id: str, job_role: str, position: str):
+        """부서별 직원 인덱스 파일 업데이트"""
+        try:
+            dept_clean = self._sanitize_folder_name(department)
+            index_file = self.base_output_dir / dept_clean / "department_index.json"
+            
+            # 기존 인덱스 로드
+            if index_file.exists():
+                with open(index_file, 'r', encoding='utf-8') as f:
+                    index_data = json.load(f)
+            else:
+                index_data = {
+                    "department": department,
+                    "created_at": datetime.now().isoformat(),
+                    "structure_version": "simplified_v1.0",
+                    "employees": {},
+                    "job_roles": {},
+                    "positions": {},
+                    "statistics": {
+                        "total_employees": 0,
+                        "job_role_count": {},
+                        "position_count": {}
+                    }
+                }
+            
+            # 직원 정보 업데이트
+            index_data["employees"][employee_id] = {
+                "job_role": job_role,
+                "position": position,
+                "last_updated": datetime.now().isoformat(),
+                "folder_path": f"employee_{employee_id}"
+            }
+            
+            # Job Role 인덱스 업데이트
+            if job_role not in index_data["job_roles"]:
+                index_data["job_roles"][job_role] = []
+            if employee_id not in index_data["job_roles"][job_role]:
+                index_data["job_roles"][job_role].append(employee_id)
+            
+            # Position 인덱스 업데이트
+            if position not in index_data["positions"]:
+                index_data["positions"][position] = []
+            if employee_id not in index_data["positions"][position]:
+                index_data["positions"][position].append(employee_id)
+            
+            # 통계 업데이트
+            index_data["statistics"]["total_employees"] = len(index_data["employees"])
+            index_data["statistics"]["job_role_count"] = {
+                role: len(employees) for role, employees in index_data["job_roles"].items()
+            }
+            index_data["statistics"]["position_count"] = {
+                pos: len(employees) for pos, employees in index_data["positions"].items()
+            }
+            index_data["last_updated"] = datetime.now().isoformat()
+            
+            # 인덱스 파일 저장
+            with open(index_file, 'w', encoding='utf-8') as f:
+                json.dump(index_data, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"부서 인덱스 업데이트 완료: {department} - {employee_id}")
+            
+        except Exception as e:
+            logger.error(f"부서 인덱스 업데이트 실패: {e}")
     
     def save_employee_result(self, employee_id: str, employee_data: Dict, 
                            worker_results: Dict, department: str = None, 
@@ -112,6 +168,9 @@ class AgenticResultManager:
         
         with open(employee_dir / "employee_info.json", 'w', encoding='utf-8') as f:
             json.dump(employee_info, f, ensure_ascii=False, indent=2)
+        
+        # 부서별 인덱스 파일 업데이트
+        self._update_department_index(dept, employee_id, role, pos)
         
         # 2. 각 워커 에이전트 결과 저장
         results_summary = {"employee_id": employee_id, "timestamp": timestamp}

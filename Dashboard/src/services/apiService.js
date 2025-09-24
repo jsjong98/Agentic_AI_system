@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// API 기본 설정
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// API 기본 설정 - Supervisor 포트로 변경
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5006';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -45,7 +45,7 @@ export const apiService = {
   // 서버 상태 확인
   async checkHealth() {
     try {
-      const response = await apiClient.get('/api/health');
+      const response = await apiClient.get('/health');
       return response.data;
     } catch (error) {
       throw new Error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
@@ -301,7 +301,7 @@ export const apiService = {
   // 배치 분석 API
   async analyzeBatch(batchConfig) {
     try {
-      const response = await apiClient.post('/api/analyze/batch', batchConfig);
+      const response = await apiClient.post('/batch_analyze', batchConfig);
       return response.data;
     } catch (error) {
       throw error;
@@ -311,7 +311,7 @@ export const apiService = {
   // Integration 보고서 생성
   async generateIntegrationReport(reportConfig) {
     try {
-      const response = await apiClient.post('/api/integration/report', reportConfig);
+      const response = await apiClient.post('/api/workers/integration/generate_report', reportConfig);
       return response.data;
     } catch (error) {
       throw error;

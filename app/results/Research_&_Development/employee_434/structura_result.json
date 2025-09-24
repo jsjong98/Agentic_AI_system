@@ -1,0 +1,122 @@
+{
+  "prediction": {
+    "employee_id": "434",
+    "attrition_probability": 0.19636353850364685,
+    "attrition_prediction": 1,
+    "risk_category": "LOW",
+    "confidence_score": 0.6072729229927063,
+    "prediction_timestamp": "2025-09-23T22:52:14.517629"
+  },
+  "explanation": {
+    "employee_id": "434",
+    "feature_importance": {
+      "RelationshipSatisfaction": 0.03405288979411125,
+      "Education": 0.02487798221409321,
+      "JobInvolvement": 0.03501373156905174,
+      "EnvironmentSatisfaction": 0.048257846385240555,
+      "JobLevel": 0.07228615880012512,
+      "JobSatisfaction": 0.04019258916378021,
+      "StockOptionLevel": 0.07264421880245209,
+      "WorkLifeBalance": 0.03580893576145172,
+      "Department": 0.037670474499464035,
+      "JobRole": 0.046762410551309586,
+      "MaritalStatus": 0.036864522844552994,
+      "OverTime": 0.0779639258980751,
+      "Age": 0.04039482772350311,
+      "DailyRate": 0.03578038513660431,
+      "DistanceFromHome": 0.036774344742298126,
+      "MonthlyIncome": 0.04666806384921074,
+      "NumCompaniesWorked": 0.050036631524562836,
+      "TotalWorkingYears": 0.04981709271669388,
+      "TrainingTimesLastYear": 0.02378365956246853,
+      "YearsAtCompany": 0.02968277968466282,
+      "YearsInCurrentRole": 0.03649982064962387,
+      "YearsSinceLastPromotion": 0.03537580743432045,
+      "YearsWithCurrManager": 0.05279093235731125
+    },
+    "shap_values": {
+      "RelationshipSatisfaction": -0.037379082292318344,
+      "Education": 0.03286391869187355,
+      "JobInvolvement": -0.10322225838899612,
+      "EnvironmentSatisfaction": -0.14375713467597961,
+      "JobLevel": 0.07220808416604996,
+      "JobSatisfaction": 0.12062479555606842,
+      "StockOptionLevel": 0.3678925335407257,
+      "WorkLifeBalance": 0.02185799553990364,
+      "Department": -0.020164113491773605,
+      "JobRole": -0.3472786247730255,
+      "MaritalStatus": -0.1455351561307907,
+      "OverTime": -0.7186831831932068,
+      "Age": 0.4228368103504181,
+      "DailyRate": -0.3954930603504181,
+      "DistanceFromHome": -0.27797171473503113,
+      "MonthlyIncome": 0.20014172792434692,
+      "NumCompaniesWorked": -0.2483123540878296,
+      "TotalWorkingYears": -0.01439597737044096,
+      "TrainingTimesLastYear": 0.018416984006762505,
+      "YearsAtCompany": -0.03889437019824982,
+      "YearsInCurrentRole": -0.0771285742521286,
+      "YearsSinceLastPromotion": -0.0868738442659378,
+      "YearsWithCurrManager": -0.2862178385257721
+    },
+    "lime_explanation": {
+      "features": [
+        "OverTime=0",
+        "NumCompaniesWorked <= 1.00",
+        "StockOptionLevel <= 0.00",
+        "RelationshipSatisfaction <= 2.00",
+        "MonthlyIncome <= 2922.25",
+        "Age <= 30.00",
+        "JobSatisfaction <= 2.00",
+        "WorkLifeBalance <= 2.00",
+        "YearsWithCurrManager <= 2.00",
+        "DailyRate > 1162.00"
+      ],
+      "values": [
+        -0.22242625813056566,
+        -0.12295853068142137,
+        0.11540972756003665,
+        0.09549565973791864,
+        0.0911716703093164,
+        0.08146088278642775,
+        0.08021976560478025,
+        0.075671108813832,
+        0.06327559442078735,
+        -0.06128637189507665
+      ],
+      "intercept": 0.31404757031185065
+    },
+    "top_risk_factors": [
+      {
+        "feature": "Age",
+        "impact": 0.4228368103504181,
+        "type": "risk"
+      },
+      {
+        "feature": "StockOptionLevel",
+        "impact": 0.3678925335407257,
+        "type": "risk"
+      }
+    ],
+    "top_protective_factors": [
+      {
+        "feature": "OverTime",
+        "impact": 0.7186831831932068,
+        "type": "protective"
+      },
+      {
+        "feature": "DailyRate",
+        "impact": 0.3954930603504181,
+        "type": "protective"
+      },
+      {
+        "feature": "JobRole",
+        "impact": 0.3472786247730255,
+        "type": "protective"
+      }
+    ],
+    "explanation_timestamp": "2025-09-23T22:52:14.609158"
+  },
+  "agent_type": "structura",
+  "analysis_type": "individual"
+}

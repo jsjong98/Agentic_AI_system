@@ -193,9 +193,19 @@ class StructuraHRPredictor:
         # 1. 변수 타입별 분류 (노트북과 동일)
         all_feature_columns = self.ordinal_cols + self.nominal_cols + self.numerical_cols
         
-        # 2. 필요한 컬럼만 선택 + 타겟
-        df_processed = df[all_feature_columns + ['Attrition']].copy()
-        logger.info(f"선택된 특성 변수 개수: {len(all_feature_columns)}")
+        # 2. 실제 존재하는 컬럼만 필터링
+        available_columns = df.columns.tolist()
+        existing_feature_columns = [col for col in all_feature_columns if col in available_columns]
+        missing_columns = [col for col in all_feature_columns if col not in available_columns]
+        
+        if missing_columns:
+            logger.warning(f"누락된 컬럼들: {missing_columns}")
+            logger.info(f"사용 가능한 컬럼들: {available_columns}")
+        
+        # 3. 필요한 컬럼만 선택 + 타겟
+        target_columns = existing_feature_columns + ['Attrition']
+        df_processed = df[target_columns].copy()
+        logger.info(f"선택된 특성 변수 개수: {len(existing_feature_columns)} (전체 {len(all_feature_columns)}개 중)")
         
         # 3. 상수 컬럼 제거 (노트북과 동일)
         constant_cols_found = []
@@ -207,12 +217,13 @@ class StructuraHRPredictor:
         if constant_cols_found:
             df_processed = df_processed.drop(columns=constant_cols_found)
             logger.info(f"상수 컬럼 제거: {constant_cols_found}")
-            # 제거된 컬럼들을 각 타입 리스트에서도 제거
-            self.ordinal_cols = [col for col in self.ordinal_cols if col not in constant_cols_found]
-            self.nominal_cols = [col for col in self.nominal_cols if col not in constant_cols_found]
-            self.numerical_cols = [col for col in self.numerical_cols if col not in constant_cols_found]
         
-        # 4. 명목형 범주형 변수만 라벨 인코딩 (노트북과 동일)
+        # 4. 컬럼 타입 리스트 업데이트 (존재하는 컬럼만 유지)
+        self.ordinal_cols = [col for col in self.ordinal_cols if col in df_processed.columns]
+        self.nominal_cols = [col for col in self.nominal_cols if col in df_processed.columns]
+        self.numerical_cols = [col for col in self.numerical_cols if col in df_processed.columns]
+        
+        # 5. 명목형 범주형 변수만 라벨 인코딩 (노트북과 동일)
         logger.info(f"명목형 범주형 변수 인코딩: {self.nominal_cols}")
         self.encoders = {}
         for col in self.nominal_cols:
@@ -222,10 +233,10 @@ class StructuraHRPredictor:
                 df_processed[col] = le.fit_transform(df_processed[col].astype(str))
                 self.encoders[col] = le
         
-        # 5. 타겟 변수 인코딩 (노트북과 동일)
+        # 6. 타겟 변수 인코딩 (노트북과 동일)
         df_processed['Attrition'] = (df_processed['Attrition'] == 'Yes').astype(int)
         
-        # 6. 상관관계 분석 및 저상관 변수 제거 (노트북과 동일)
+        # 7. 상관관계 분석 및 저상관 변수 제거 (노트북과 동일)
         correlation_with_target = df_processed.corr()['Attrition'].abs().sort_values(ascending=False)
         low_corr_features = correlation_with_target[correlation_with_target < self.low_corr_threshold].index.tolist()
         if 'Attrition' in low_corr_features:
@@ -235,11 +246,11 @@ class StructuraHRPredictor:
             df_processed = df_processed.drop(columns=low_corr_features)
             logger.info(f"저상관 변수 제거 (< {self.low_corr_threshold}): {low_corr_features}")
         
-        # 7. X, y 분리
+        # 8. X, y 분리
         y = df_processed['Attrition']
         X = df_processed.drop(columns=['Attrition'])
         
-        # 8. 데이터 타입 변환 (XGBoost 호환성)
+        # 9. 데이터 타입 변환 (XGBoost 호환성)
         logger.info("데이터 타입 변환 중...")
         for col in X.columns:
             if X[col].dtype == 'object':
@@ -259,7 +270,7 @@ class StructuraHRPredictor:
                     X[col] = le.fit_transform(X[col].astype(str))
                     logger.info(f"  {col}: object → label encoded")
         
-        # 9. 최종 특성 변수 리스트 업데이트
+        # 10. 최종 특성 변수 리스트 업데이트
         self.final_features = X.columns.tolist()
         logger.info(f"최종 특성 변수 개수: {len(self.final_features)}")
         logger.info("데이터 전처리 완료")
@@ -374,7 +385,10 @@ class StructuraHRPredictor:
     def train_model(self, X_train: pd.DataFrame, y_train: pd.Series, 
                    hyperparams: Optional[Dict] = None) -> XGBClassifier:
         """모델 훈련 및 xAI 설정"""
-        logger.info("모델 훈련 시작...")
+        import time
+        start_time = time.time()
+        
+        logger.info(f"🚀 XGBoost 모델 훈련 시작... (데이터: {len(X_train)}행 x {len(X_train.columns)}열)")
         
         if hyperparams is None:
             hyperparams = self._get_default_params()
@@ -383,6 +397,8 @@ class StructuraHRPredictor:
         neg = int((y_train == 0).sum())
         pos = int((y_train == 1).sum())
         self.scale_pos_weight = neg / max(pos, 1)
+        
+        logger.info(f"📊 클래스 분포: Negative={neg}, Positive={pos}, Scale_pos_weight={self.scale_pos_weight:.3f}")
         
         # 모델 파라미터 설정
         params = {
@@ -394,18 +410,35 @@ class StructuraHRPredictor:
             'scale_pos_weight': self.scale_pos_weight,
             'n_jobs': -1,
             'random_state': self.random_state,
-            'verbosity': 0,
+            'verbosity': 1,  # 학습 과정 표시
             **hyperparams
         }
         
+        logger.info(f"🔧 XGBoost 파라미터: n_estimators={params['n_estimators']}, tree_method={params['tree_method']}")
+        
         self.model = XGBClassifier(**params)
+        
+        # 실제 학습 시간 측정
+        fit_start_time = time.time()
         self.model.fit(X_train, y_train)
+        fit_end_time = time.time()
+        
+        fit_duration = fit_end_time - fit_start_time
+        logger.info(f"⏱️ XGBoost 학습 완료: {fit_duration:.2f}초 ({fit_duration/60:.1f}분)")
+        
         self.feature_columns = X_train.columns.tolist()
         
         # xAI 설정
+        logger.info("🔍 xAI 설명기 설정 중...")
+        xai_start_time = time.time()
         self._setup_explainers(X_train, y_train)
+        xai_end_time = time.time()
         
-        logger.info("모델 훈련 및 xAI 설정 완료")
+        xai_duration = xai_end_time - xai_start_time
+        logger.info(f"🔍 xAI 설정 완료: {xai_duration:.2f}초")
+        
+        total_duration = time.time() - start_time
+        logger.info(f"✅ 전체 모델 훈련 및 xAI 설정 완료: {total_duration:.2f}초 ({total_duration/60:.1f}분)")
         return self.model
     
     def _setup_explainers(self, X_train: pd.DataFrame, y_train: pd.Series):

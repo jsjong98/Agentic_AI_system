@@ -251,8 +251,6 @@ cp IBM_HR_timeseries.csv ../data/IBM_HR_timeseries.csv
 ```bash
 # HR 텍스트 데이터 배치
 cp IBM_HR_text.csv ../data/IBM_HR_text.csv
-# 또는
-cp sample_hr_texts.csv ../data/sample_hr_texts.csv
 
 # OpenAI API 키 설정 (GPT-5-nano용)
 export OPENAI_API_KEY="your-gpt5nano-api-key"

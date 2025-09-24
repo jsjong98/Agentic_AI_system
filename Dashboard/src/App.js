@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Typography, notification } from 'antd';
 import {
-  DashboardOutlined,
+  HomeOutlined,
   ApiOutlined,
   RobotOutlined,
   BarChartOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 
-import Dashboard from './components/Dashboard';
+import Home from './components/Home';
 import ExportResults from './components/ExportResults';
 import BatchAnalysis from './components/BatchAnalysis';
 import PostAnalysis from './components/PostAnalysis';
 import RelationshipAnalysis from './components/RelationshipAnalysis';
+import GroupStatistics from './components/GroupStatistics';
 import { apiService } from './services/apiService';
 
 const { Header, Sider, Content } = Layout;
@@ -20,9 +22,13 @@ const { Title } = Typography;
 
 const App = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedKey, setSelectedKey] = useState('batch');
+  const [selectedKey, setSelectedKey] = useState('home');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
+  
+  // 전역 배치 분석 결과 상태 (페이지 간 공유)
+  const [globalBatchResults, setGlobalBatchResults] = useState(null);
+  const [lastAnalysisTimestamp, setLastAnalysisTimestamp] = useState(null);
   const [dataLoaded] = useState(true); // 데이터 로딩 상태를 기본적으로 활성화
 
   // 전역 에러 핸들러
@@ -87,17 +93,22 @@ const App = () => {
     };
   }, []);
 
-  // 메뉴 아이템 - 배치 분석 중심으로 단순화
+  // 메뉴 아이템 - 홈 화면을 첫 번째로 배치
   const menuItems = [
+    {
+      key: 'home',
+      icon: <HomeOutlined />,
+      label: '🏠 홈',
+    },
     {
       key: 'batch',
       icon: <RobotOutlined />,
-      label: '🎯 배치 분석 (메인)',
+      label: '🎯 배치 분석',
     },
     {
-      key: 'dashboard',
-      icon: <DashboardOutlined />,
-      label: '📊 시스템 현황',
+      key: 'group-statistics',
+      icon: <TeamOutlined />,
+      label: '📈 단체 통계',
     },
     {
       key: 'cognita',
@@ -116,9 +127,23 @@ const App = () => {
     },
   ];
 
-  // 서버 상태 확인
+  // 서버 상태 확인 및 localStorage에서 배치 결과 복원
   useEffect(() => {
     checkServerStatus();
+    
+    // localStorage에서 배치 분석 결과 복원
+    try {
+      const storedResults = localStorage.getItem('batchAnalysisResults');
+      const storedTimestamp = localStorage.getItem('lastAnalysisTimestamp');
+      
+      if (storedResults && storedTimestamp) {
+        setGlobalBatchResults(JSON.parse(storedResults));
+        setLastAnalysisTimestamp(storedTimestamp);
+        console.log('배치 분석 결과 복원됨:', JSON.parse(storedResults));
+      }
+    } catch (error) {
+      console.error('배치 결과 복원 실패:', error);
+    }
   }, []);
 
   const checkServerStatus = async () => {
@@ -148,33 +173,54 @@ const App = () => {
   };
 
   // 현재 선택된 컴포넌트 렌더링
+  // 배치 분석 결과 업데이트 함수
+  const updateBatchResults = (results) => {
+    setGlobalBatchResults(results);
+    const timestamp = new Date().toISOString();
+    setLastAnalysisTimestamp(timestamp);
+    
+    // localStorage에도 저장
+    try {
+      localStorage.setItem('batchAnalysisResults', JSON.stringify(results));
+      localStorage.setItem('lastAnalysisTimestamp', timestamp);
+      console.log('배치 분석 결과 전역 업데이트:', results);
+    } catch (error) {
+      console.error('배치 결과 저장 실패:', error);
+    }
+  };
+
   const renderContent = () => {
     const commonProps = {
       loading,
       setLoading: setGlobalLoading,
       serverStatus,
       dataLoaded,
+      // 전역 배치 결과 전달
+      globalBatchResults,
+      lastAnalysisTimestamp,
+      updateBatchResults, // 배치 결과 업데이트 함수
     };
 
     switch (selectedKey) {
+      case 'home':
+        return (
+          <Home
+            {...commonProps}
+            onNavigate={setSelectedKey}
+          />
+        );
       case 'batch':
         return (
           <BatchAnalysis
             {...commonProps}
-          />
-        );
-      case 'dashboard':
-        return (
-          <Dashboard
-            {...commonProps}
-            onRefreshStatus={checkServerStatus}
+            onNavigate={setSelectedKey}
           />
         );
       case 'cognita':
         return (
           <RelationshipAnalysis
             {...commonProps}
-            batchResults={localStorage.getItem('batchAnalysisResults') ? JSON.parse(localStorage.getItem('batchAnalysisResults')) : null}
+            batchResults={globalBatchResults} // 전역 상태 사용
           />
         );
       case 'post-analysis':
@@ -189,10 +235,17 @@ const App = () => {
             {...commonProps}
           />
         );
+      case 'group-statistics':
+        return (
+          <GroupStatistics
+            {...commonProps}
+          />
+        );
       default:
         return (
-          <BatchAnalysis
+          <Home
             {...commonProps}
+            onNavigate={setSelectedKey}
           />
         );
     }
@@ -256,7 +309,12 @@ const App = () => {
           lineHeight: '64px'
         }}>
           <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-            대시보드
+            {selectedKey === 'home' ? '홈' : 
+             selectedKey === 'batch' ? '배치 분석' :
+             selectedKey === 'group-statistics' ? '단체 통계' :
+             selectedKey === 'cognita' ? '개별 관계분석' :
+             selectedKey === 'post-analysis' ? '사후 분석' :
+             selectedKey === 'export' ? '결과 내보내기' : '대시보드'}
           </Title>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>

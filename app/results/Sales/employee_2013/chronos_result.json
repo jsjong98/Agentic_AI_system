@@ -1,0 +1,8 @@
+{
+  "trend_score": 0.5,
+  "prediction_confidence": 0.65,
+  "time_series_pattern": "unstable",
+  "temporal_risk_factors": [],
+  "analysis_timestamp": "2025-09-23T23:14:03.931968",
+  "note": "Chronos 휴리스틱 시계열 분석"
+}

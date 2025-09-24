@@ -535,6 +535,90 @@ def generate_comprehensive_report():
         logger.error(f"종합 레포트 생성 오류: {str(e)}")
         return jsonify({"error": f"레포트 생성 중 오류가 발생했습니다: {str(e)}"}), 500
 
+@app.route('/analyze_sentiment', methods=['POST'])
+def analyze_sentiment():
+    """
+    Supervisor에서 호출하는 감정 분석 API
+    입력: employee_id, 추가 데이터
+    출력: 감정 분석 결과
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'employee_id' not in data:
+            return jsonify({"error": "employee_id가 필요합니다."}), 400
+        
+        employee_id = data['employee_id']
+        
+        # 실제 텍스트 데이터가 있는지 확인
+        text_data = data.get('text_data', {})
+        self_review = text_data.get('self_review', '')
+        peer_feedback = text_data.get('peer_feedback', '')
+        weekly_survey = text_data.get('weekly_survey', '')
+        
+        if not text_processor:
+            return jsonify({"error": "텍스트 프로세서가 초기화되지 않았습니다."}), 500
+        
+        # 텍스트가 없으면 더미 데이터 대신 기본값 반환
+        if not any([self_review, peer_feedback, weekly_survey]):
+            logger.warning(f"직원 {employee_id}의 텍스트 데이터가 없습니다. 기본값을 반환합니다.")
+            return jsonify({
+                "sentiment_score": 0.5,  # 중립
+                "risk_keywords": ["no_text_data"],
+                "emotional_state": "neutral",
+                "confidence_score": 0.1,  # 낮은 신뢰도
+                "text_analysis_summary": f"직원 {employee_id}의 텍스트 데이터가 부족하여 정확한 분석이 어렵습니다.",
+                "analysis_timestamp": datetime.now().isoformat()
+            })
+        
+        # 실제 텍스트 분석 수행
+        combined_text = ' '.join([str(text) for text in [self_review, peer_feedback, weekly_survey] if text])
+        
+        analysis_result = text_processor.analyze_text(
+            text=combined_text,
+            employee_id=employee_id,
+            text_type="comprehensive"
+        )
+        
+        # Supervisor가 기대하는 형식으로 결과 반환
+        return jsonify({
+            "sentiment_score": analysis_result.get('sentiment_score', 0.5),
+            "risk_keywords": analysis_result.get('risk_factors', [])[:10],  # 상위 10개
+            "emotional_state": determine_emotional_state(analysis_result.get('sentiment_score', 0.5)),
+            "confidence_score": min(0.9, max(0.1, len(analysis_result.get('keywords', [])) / 20)),  # 키워드 수 기반 신뢰도
+            "text_analysis_summary": f"JD-R 모델 기반 분석 - 위험도: {analysis_result.get('risk_level', 'MEDIUM')}, 키워드: {len(analysis_result.get('keywords', []))}개",
+            "analysis_timestamp": datetime.now().isoformat(),
+            # 추가 상세 정보
+            "detailed_analysis": {
+                "attrition_risk_score": analysis_result.get('attrition_risk_score', 0.5),
+                "risk_level": analysis_result.get('risk_level', 'MEDIUM'),
+                "keywords_count": len(analysis_result.get('keywords', [])),
+                "jd_r_indicators": analysis_result.get('jd_r_indicators', {})
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"감정 분석 오류 (직원 {employee_id}): {str(e)}")
+        return jsonify({
+            "sentiment_score": 0.5,
+            "risk_keywords": ["analysis_error"],
+            "emotional_state": "neutral",
+            "confidence_score": 0.1,
+            "text_analysis_summary": f"분석 중 오류 발생: {str(e)}",
+            "analysis_timestamp": datetime.now().isoformat()
+        }), 200  # 오류가 있어도 200으로 반환하여 워크플로우 중단 방지
+
+def determine_emotional_state(sentiment_score):
+    """감정 점수를 기반으로 감정 상태 결정"""
+    if sentiment_score >= 0.7:
+        return "positive"
+    elif sentiment_score >= 0.4:
+        return "neutral_positive"
+    elif sentiment_score >= 0.3:
+        return "neutral"
+    else:
+        return "negative"
+
 @app.route('/analyze/batch_csv', methods=['POST'])
 def generate_batch_csv():
     """
