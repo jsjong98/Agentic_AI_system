@@ -21,6 +21,29 @@ import warnings
 import logging
 warnings.filterwarnings('ignore')
 
+def safe_json_serialize(obj):
+    """
+    NaN, Infinity 값을 안전하게 처리하는 JSON 직렬화 함수
+    """
+    if isinstance(obj, dict):
+        return {k: safe_json_serialize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [safe_json_serialize(item) for item in obj]
+    elif isinstance(obj, (np.ndarray,)):
+        return safe_json_serialize(obj.tolist())
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return obj
+    else:
+        return obj
+
 # 하이퍼파라미터 최적화를 위한 Optuna import
 try:
     import optuna
@@ -1091,13 +1114,20 @@ def predict():
                     pred_class = np.argmax(interpretation['predictions'][0])
                     pred_prob = interpretation['probabilities'][0][1]  # 퇴사 확률 (Temperature Scaling 적용됨)
                     
+                    # NaN 값 처리
+                    if np.isnan(pred_prob) or np.isinf(pred_prob):
+                        pred_prob = 0.0
+                    
+                    # 안전한 float 변환
+                    safe_pred_prob = float(pred_prob)
+                    
                     predictions.append({
                         'employee_id': int(emp_id),
-                        'attrition_probability': float(pred_prob),
+                        'attrition_probability': safe_pred_prob,
                         'predicted_class': int(pred_class),
-                        'risk_level': 'High' if pred_prob > 0.7 else 'Medium' if pred_prob > 0.3 else 'Low',
+                        'risk_level': 'High' if safe_pred_prob > 0.7 else 'Medium' if safe_pred_prob > 0.3 else 'Low',
                         'feature_importance': {
-                            name: float(importance) 
+                            name: float(importance) if not (np.isnan(importance) or np.isinf(importance)) else 0.0
                             for name, importance in zip(
                                 processor.feature_columns, 
                                 interpretation['feature_importance']
@@ -1111,16 +1141,23 @@ def predict():
         
         logger.info(f"🎉 Chronos {analysis_type} 분석 완료 - 총 {len(predictions)}명 예측 완료")
         
-        return jsonify({
+        # 안전한 평균 계산 (빈 리스트 처리)
+        avg_prob = np.mean([p['attrition_probability'] for p in predictions]) if predictions else 0.0
+        
+        response_data = {
             'predictions': predictions,
             'summary': {
                 'total_employees': len(predictions),
                 'high_risk_count': sum(1 for p in predictions if p['risk_level'] == 'High'),
                 'medium_risk_count': sum(1 for p in predictions if p['risk_level'] == 'Medium'),
                 'low_risk_count': sum(1 for p in predictions if p['risk_level'] == 'Low'),
-                'average_attrition_probability': np.mean([p['attrition_probability'] for p in predictions])
+                'average_attrition_probability': avg_prob
             }
-        })
+        }
+        
+        # NaN 값 안전 처리
+        safe_response = safe_json_serialize(response_data)
+        return jsonify(safe_response)
         
     except Exception as e:
         print(f"❌ 예측 오류: {str(e)}")
@@ -1612,10 +1649,13 @@ def batch_analysis():
                 print(f"Sequence importance 계산 실패: {e}")
                 sequence_importance = {}
             
+            # NaN 값 처리
+            safe_pred = float(pred) if not (np.isnan(pred) or np.isinf(pred)) else 0.0
+            
             results.append({
                 'employee_id': str(emp_id),
-                'risk_score': float(pred),
-                'predicted_attrition': int(pred > 0.5),
+                'risk_score': safe_pred,
+                'predicted_attrition': int(safe_pred > 0.5),
                 'confidence': 0.8,  # Chronos 기본 신뢰도
                 'sequence_length': processor.sequence_length,
                 'features_used': processor.feature_dim,
@@ -1623,8 +1663,8 @@ def batch_analysis():
                     'attention_weights': xai_info.get('attention_weights', {}),
                     'sequence_importance': sequence_importance,
                     'trend_analysis': {
-                        'prediction_trend': 'increasing' if pred > 0.5 else 'stable',
-                        'confidence_level': 'high' if abs(pred - 0.5) > 0.3 else 'medium'
+                        'prediction_trend': 'increasing' if safe_pred > 0.5 else 'stable',
+                        'confidence_level': 'high' if abs(safe_pred - 0.5) > 0.3 else 'medium'
                     }
                 },
                 'model_metadata': {
@@ -1637,7 +1677,7 @@ def batch_analysis():
         
         print(f"✅ Chronos 배치 분석 완료: {len(results)}명 예측")
         
-        return jsonify({
+        response_data = {
             "success": True,
             "message": f"Chronos 배치 분석 완료: Post 데이터 학습 → {len(results)}명 Batch 예측",
             "agent": "chronos",
@@ -1651,7 +1691,11 @@ def batch_analysis():
                 "feature_dim": len(processor.feature_columns),
                 "model_type": "GRU_CNN_Hybrid with Post-Data Hyperparameter Optimization"
             }
-        })
+        }
+        
+        # NaN 값 안전 처리
+        safe_response = safe_json_serialize(response_data)
+        return jsonify(safe_response)
         
     except Exception as e:
         print(f"❌ Chronos 배치 분석 실패: {str(e)}")
