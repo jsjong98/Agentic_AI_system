@@ -199,6 +199,15 @@ class SentioTextProcessor:
         sentiment_score = (positive_count - negative_count + total_count) / (2 * total_count)
         return max(0.0, min(1.0, sentiment_score))
     
+    def _calculate_risk_level(self, attrition_risk_score: float) -> str:
+        """퇴직 위험 점수를 기반으로 위험 레벨 계산"""
+        if attrition_risk_score >= 0.7:
+            return "HIGH"
+        elif attrition_risk_score >= 0.4:
+            return "MEDIUM"
+        else:
+            return "LOW"
+    
     def calculate_attrition_risk_score(self, text: str, keywords: List[str]) -> Tuple[float, List[str]]:
         """퇴직 위험 점수 계산"""
         if not text or not keywords:
@@ -260,17 +269,23 @@ class SentioTextProcessor:
                     weekly_survey=""
                 )
                 
-                return {
-                    "keywords": jdr_result.get('detected_keywords', []),
-                    "sentiment_score": jdr_result.get('sentiment_score', 0.5),
-                    "attrition_risk_score": jdr_result.get('psychological_risk_score', 0.5),
-                    "risk_factors": jdr_result.get('job_demands_matches', []) + jdr_result.get('job_resources_deficiency_matches', []),
-                    "keyword_count": len(jdr_result.get('detected_keywords', [])),
-                    "text_length": len(text),
-                    "jd_r_indicators": jdr_result.get('jd_r_indicators', {}),
-                    "risk_level": jdr_result.get('risk_level', 'MEDIUM'),
-                    "attrition_prediction": jdr_result.get('attrition_prediction', 0)
-                }
+                # jdr_result가 딕셔너리인지 확인
+                if isinstance(jdr_result, dict):
+                    return {
+                        "keywords": jdr_result.get('detected_keywords', []),
+                        "sentiment_score": jdr_result.get('sentiment_score', 0.5),
+                        "attrition_risk_score": jdr_result.get('psychological_risk_score', 0.5),
+                        "risk_factors": jdr_result.get('job_demands_matches', []) + jdr_result.get('job_resources_deficiency_matches', []),
+                        "keyword_count": len(jdr_result.get('detected_keywords', [])),
+                        "text_length": len(text),
+                        "jd_r_indicators": jdr_result.get('jd_r_indicators', {}),
+                        "risk_level": jdr_result.get('risk_level', 'MEDIUM'),
+                        "attrition_prediction": jdr_result.get('attrition_prediction', 0)
+                    }
+                else:
+                    # jdr_result가 딕셔너리가 아닌 경우 로그 출력하고 fallback 사용
+                    logger.warning(f"JD-R 분석 결과가 예상과 다른 타입입니다: {type(jdr_result)}, 값: {jdr_result}")
+                    # fallback으로 넘어감
             
             # 기존 방식 (fallback)
             else:
@@ -283,11 +298,15 @@ class SentioTextProcessor:
                 # 퇴직 위험 점수 계산
                 attrition_risk_score, risk_factors = self.calculate_attrition_risk_score(text, keywords)
                 
+                # 위험 레벨 계산
+                risk_level = self._calculate_risk_level(attrition_risk_score)
+                
                 return {
                     "keywords": keywords,
                     "sentiment_score": sentiment_score,
                     "attrition_risk_score": attrition_risk_score,
                     "risk_factors": risk_factors,
+                    "risk_level": risk_level,
                     "keyword_count": len(keywords),
                     "text_length": len(text)
                 }
@@ -299,6 +318,7 @@ class SentioTextProcessor:
                 "sentiment_score": 0.5,
                 "attrition_risk_score": 0.5,
                 "risk_factors": [],
+                "risk_level": "MEDIUM",  # 기본값으로 MEDIUM 설정
                 "keyword_count": 0,
                 "text_length": len(text) if text else 0
             }

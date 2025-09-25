@@ -666,11 +666,45 @@ def analyze_sentiment():
             analysis_type = data.get('analysis_type', 'batch')
             employees_data = [{'employee_id': employee_id, 'text_data': data.get('text_data', {})}]
         elif 'employees' in data:
-            # 배치 분석
-            employees_data = data['employees']
+            # 배치 분석 - CSV 파일에서 직원 데이터 읽어오기
+            employee_ids = data['employees']
             analysis_type = data.get('analysis_type', 'batch')
-            if not employees_data:
+            if not employee_ids:
                 return jsonify({"error": "employees 배열이 비어있습니다."}), 400
+            
+            # CSV 파일에서 해당 직원들의 데이터 읽어오기
+            try:
+                csv_path = get_sentio_data_paths(analysis_type)['hr_data']
+                if os.path.exists(csv_path):
+                    df = pd.read_csv(csv_path)
+                    employees_data = []
+                    for emp_id in employee_ids:
+                        # EmployeeNumber 컬럼으로 검색 (CSV 파일의 실제 컬럼명)
+                        emp_row = df[df['EmployeeNumber'] == int(emp_id)] if 'EmployeeNumber' in df.columns else df[df['employee_id'] == int(emp_id)] if df['employee_id'].dtype != 'object' else df[df['employee_id'] == emp_id]
+                        if not emp_row.empty:
+                            row_data = emp_row.iloc[0].to_dict()
+                            # 여러 텍스트 컬럼을 합쳐서 사용
+                            text_parts = []
+                            for col in ['SELF_REVIEW_text', 'PEER_FEEDBACK_text', 'WEEKLY_SURVEY_text', 'text']:
+                                if col in row_data and pd.notna(row_data[col]):
+                                    text_parts.append(str(row_data[col]))
+                            combined_text = ' '.join(text_parts) if text_parts else f"직원 {emp_id}의 기본 텍스트 데이터"
+                            
+                            employees_data.append({
+                                'employee_id': emp_id,
+                                'text_data': combined_text
+                            })
+                        else:
+                            employees_data.append({
+                                'employee_id': emp_id,
+                                'text_data': f"직원 {emp_id}의 기본 텍스트 데이터"
+                            })
+                else:
+                    # CSV 파일이 없으면 기본 데이터로 구성
+                    employees_data = [{'employee_id': emp_id, 'text_data': f"직원 {emp_id}의 기본 텍스트 데이터"} for emp_id in employee_ids]
+            except Exception as e:
+                logger.warning(f"CSV 데이터 읽기 실패: {e}, 기본 데이터 사용")
+                employees_data = [{'employee_id': emp_id, 'text_data': f"직원 {emp_id}의 기본 텍스트 데이터"} for emp_id in employee_ids]
         else:
             return jsonify({"error": "employee_id 또는 employees 배열이 필요합니다."}), 400
         
@@ -752,25 +786,47 @@ def analyze_sentiment():
                     employee_id=employee_id,
                     text_type="comprehensive"
                 )
-                logger.info(f"✅ 직원 {employee_id} 분석 완료 - 키워드: {len(analysis_result.get('keywords', []))}개, 위험도: {analysis_result.get('risk_level', 'N/A')}")
+                logger.info(f"🔍 분석 결과 타입: {type(analysis_result)}, 값: {analysis_result}")
+                
+                # analysis_result가 딕셔너리인지 확인
+                if not isinstance(analysis_result, dict):
+                    logger.error(f"❌ 분석 결과가 딕셔너리가 아닙니다: {type(analysis_result)}")
+                    raise ValueError(f"분석 결과 타입 오류: {type(analysis_result)}")
+                
+                # 안전한 로깅
+                if isinstance(analysis_result, dict):
+                    keywords_count = len(analysis_result.get('keywords', []))
+                    risk_level = analysis_result.get('risk_level', 'N/A')
+                else:
+                    keywords_count = 0
+                    risk_level = 'N/A'
+                logger.info(f"✅ 직원 {employee_id} 분석 완료 - 키워드: {keywords_count}개, 위험도: {risk_level}")
+                
+                # 안전한 값 추출
+                sentiment_score = analysis_result.get('sentiment_score', 0.5) if isinstance(analysis_result, dict) else 0.5
+                risk_factors = analysis_result.get('risk_factors', []) if isinstance(analysis_result, dict) else []
+                keywords = analysis_result.get('keywords', []) if isinstance(analysis_result, dict) else []
+                risk_level = analysis_result.get('risk_level', 'MEDIUM') if isinstance(analysis_result, dict) else 'MEDIUM'
+                attrition_risk_score = analysis_result.get('attrition_risk_score', 0.5) if isinstance(analysis_result, dict) else 0.5
+                jd_r_indicators = analysis_result.get('jd_r_indicators', {}) if isinstance(analysis_result, dict) else {}
                 
                 # 개별 결과 생성
                 individual_result = {
                     "employee_id": employee_id,
-                    "sentiment_score": analysis_result.get('sentiment_score', 0.5),
-                    "risk_keywords": analysis_result.get('risk_factors', [])[:10],
-                    "emotional_state": determine_emotional_state(analysis_result.get('sentiment_score', 0.5)),
-                    "confidence_score": min(0.9, max(0.1, len(analysis_result.get('keywords', [])) / 20)),
-                    "text_analysis_summary": f"JD-R 모델 기반 분석 - 위험도: {analysis_result.get('risk_level', 'MEDIUM')}, 키워드: {len(analysis_result.get('keywords', []))}개{' (분석 타입: ' + analysis_type + ')' if not use_llm else ''}",
+                    "sentiment_score": sentiment_score,
+                    "risk_keywords": risk_factors[:10],
+                    "emotional_state": determine_emotional_state(sentiment_score),
+                    "confidence_score": min(0.9, max(0.1, len(keywords) / 20)),
+                    "text_analysis_summary": f"JD-R 모델 기반 분석 - 위험도: {risk_level}, 키워드: {len(keywords)}개{' (분석 타입: ' + analysis_type + ')' if not use_llm else ''}",
                     "analysis_timestamp": datetime.now().isoformat(),
                     "detailed_analysis": {
-                        "attrition_risk_score": analysis_result.get('attrition_risk_score', 0.5),
-                        "risk_level": analysis_result.get('risk_level', 'MEDIUM'),
-                        "keywords_count": len(analysis_result.get('keywords', [])),
-                        "jd_r_indicators": analysis_result.get('jd_r_indicators', {})
+                        "attrition_risk_score": attrition_risk_score,
+                        "risk_level": risk_level,
+                        "keywords_count": len(keywords),
+                        "jd_r_indicators": jd_r_indicators
                     },
                     # PostAnalysis.js에서 기대하는 필드 추가
-                    "psychological_risk_score": analysis_result.get('attrition_risk_score', 0.5)
+                    "psychological_risk_score": attrition_risk_score
                 }
                 
                 analysis_results.append(individual_result)
