@@ -1,0 +1,320 @@
+services:
+  # =============================================================================
+  # 🤖 Structura Agent - 정형 데이터 ML 분석
+  # =============================================================================
+  structura:
+    build: 
+      context: ./app/Structura
+      dockerfile: Dockerfile
+    container_name: agentic-structura
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    volumes:
+      - structura_models:/app/models
+      - structura_cache:/app/cache
+      - structura_logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STRUCTURA_PORT=5001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # 🧠 Cognita Agent - 네트워크 관계 분석
+  # =============================================================================
+  cognita:
+    build: 
+      context: ./app/Cognita
+      dockerfile: Dockerfile
+    container_name: agentic-cognita
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    volumes:
+      - cognita_cache:/app/cache
+      - cognita_logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - COGNITA_PORT=5002
+      - NEO4J_URI=bolt://54.162.43.24:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=resident-success-moss
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # ⏰ Chronos Agent - 시계열 딥러닝 분석
+  # =============================================================================
+  chronos:
+    build: 
+      context: ./app/Chronos
+      dockerfile: Dockerfile
+    container_name: agentic-chronos
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    volumes:
+      - chronos_models:/app/models
+      - chronos_cache:/app/cache
+      - chronos_logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CHRONOS_PORT=5003
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # 💭 Sentio Agent - 텍스트 감정 분석
+  # =============================================================================
+  sentio:
+    build: 
+      context: ./app/Sentio
+      dockerfile: Dockerfile
+    container_name: agentic-sentio
+    restart: unless-stopped
+    ports:
+      - "5004:5004"
+    volumes:
+      - sentio_cache:/app/cache
+      - sentio_models:/app/models
+      - sentio_logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SENTIO_PORT=5004
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}  # .env 파일에서 주입
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # 🏛️ Agora Agent - 시장 분석 + LLM
+  # =============================================================================
+  agora:
+    build: 
+      context: ./app/Agora
+      dockerfile: Dockerfile
+    container_name: agentic-agora
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    volumes:
+      - agora_data:/app/data
+      - agora_cache:/app/cache
+      - agora_logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - AGORA_PORT=5005
+      - CHROME_BIN=/usr/bin/chromium-browser
+      - CHROMEDRIVER_PATH=/usr/bin/chromedriver
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}  # .env 파일에서 주입
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # 👑 Supervisor Agent - LangGraph 워크플로우 관리 (메인 API)
+  # =============================================================================
+  supervisor:
+    build: 
+      context: ./app/Supervisor
+      dockerfile: Dockerfile
+    container_name: agentic-supervisor
+    restart: unless-stopped
+    ports:
+      - "5006:5006"
+    volumes:
+      - supervisor_logs:/app/logs
+      - supervisor_cache:/app/cache
+      - supervisor_uploads:/app/uploads
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SUPERVISOR_PORT=5006
+      # 워커 에이전트 URL (Docker 네트워크 내부 통신)
+      - STRUCTURA_URL=http://structura:5001
+      - COGNITA_URL=http://cognita:5002
+      - CHRONOS_URL=http://chronos:5003
+      - SENTIO_URL=http://sentio:5004
+      - AGORA_URL=http://agora:5005
+      - INTEGRATION_URL=http://integration:5007
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}  # .env 파일에서 주입
+    depends_on:
+      structura:
+        condition: service_healthy
+      cognita:
+        condition: service_healthy
+      chronos:
+        condition: service_healthy
+      sentio:
+        condition: service_healthy
+      agora:
+        condition: service_healthy
+      integration:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # 🔗 Integration Agent - 결과 통합 및 최적화
+  # =============================================================================
+  integration:
+    build: 
+      context: ./app/Integration
+      dockerfile: Dockerfile
+    container_name: agentic-integration
+    restart: unless-stopped
+    ports:
+      - "5007:5007"
+    volumes:
+      - integration_results:/app/results
+      - integration_cache:/app/cache
+      - integration_logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - INTEGRATION_PORT=5007
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}  # .env 파일에서 주입
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # 🌐 React Dashboard - 프론트엔드 서비스
+  # =============================================================================
+  dashboard:
+    build: 
+      context: ./Dashboard
+      dockerfile: Dockerfile
+    container_name: agentic-dashboard
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      supervisor:
+        condition: service_healthy
+    environment:
+      # React 환경 변수 (빌드 시점에 설정됨)
+      - REACT_APP_API_BASE_URL=http://localhost:5006
+      - REACT_APP_SUPERVISOR_URL=http://localhost:5006
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - agentic-network
+
+# =============================================================================
+# 📦 볼륨 설정 - 에이전트별 데이터 영속성
+# =============================================================================
+volumes:
+  # Structura 볼륨
+  structura_models:
+    driver: local
+  structura_cache:
+    driver: local
+  structura_logs:
+    driver: local
+  
+  # Cognita 볼륨
+  cognita_cache:
+    driver: local
+  cognita_logs:
+    driver: local
+  
+  # Chronos 볼륨
+  chronos_models:
+    driver: local
+  chronos_cache:
+    driver: local
+  chronos_logs:
+    driver: local
+  
+  # Sentio 볼륨
+  sentio_cache:
+    driver: local
+  sentio_models:
+    driver: local
+  sentio_logs:
+    driver: local
+  
+  # Agora 볼륨
+  agora_data:
+    driver: local
+  agora_cache:
+    driver: local
+  agora_logs:
+    driver: local
+  
+  # Supervisor 볼륨
+  supervisor_logs:
+    driver: local
+  supervisor_cache:
+    driver: local
+  supervisor_uploads:
+    driver: local
+  
+  # Integration 볼륨
+  integration_results:
+    driver: local
+  integration_cache:
+    driver: local
+  integration_logs:
+    driver: local
+
+# =============================================================================
+# 🌐 네트워크 설정
+# =============================================================================
+networks:
+  agentic-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

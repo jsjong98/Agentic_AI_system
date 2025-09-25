@@ -1030,19 +1030,32 @@ def bayesian_optimization():
         # 2. 베이지안 최적화를 위한 목적 함수 정의
         from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, roc_auc_score
         
+        # 모든 에이전트 예측 결과의 공통 길이 찾기
+        min_length = min(len(predictions) for predictions in agent_predictions.values())
+        print(f"🔧 공통 길이로 조정: {min_length}개 (원래: {len(employee_ids)}개)")
+        
+        # employee_ids와 actual_labels를 공통 길이로 조정
+        employee_ids = employee_ids[:min_length]
+        actual_labels = actual_labels[:min_length]
+        
+        # 모든 에이전트 예측을 공통 길이로 조정
+        for agent_name in agent_predictions.keys():
+            agent_predictions[agent_name] = agent_predictions[agent_name][:min_length]
+        
         def objective_function(weights):
             """가중치 조합의 F1-Score 계산"""
             # 가중치 정규화 (합이 1이 되도록)
             weights = np.array(weights)
             weights = weights / weights.sum()
             
-            # 앙상블 예측 계산
-            ensemble_scores = np.zeros(len(employee_ids))
+            # 앙상블 예측 계산 (이제 모든 배열이 같은 길이)
+            ensemble_scores = np.zeros(min_length)
             agent_names = list(agent_predictions.keys())
             
             for i, agent_name in enumerate(agent_names):
                 if i < len(weights):  # 가중치가 있는 에이전트만
-                    ensemble_scores += np.array(agent_predictions[agent_name]) * weights[i]
+                    agent_pred = np.array(agent_predictions[agent_name])
+                    ensemble_scores += agent_pred * weights[i]
             
             # 최적 임계값 찾기 (ROC 곡선 기반)
             from sklearn.metrics import roc_curve
@@ -1146,7 +1159,7 @@ def bayesian_optimization():
             })()
         
         # 4. 최적 가중치로 앙상블 예측 및 임계값 계산
-        ensemble_scores = np.zeros(len(employee_ids))
+        ensemble_scores = np.zeros(min_length)
         for agent_name, predictions in agent_predictions.items():
             weight_key = f'{agent_name}_weight'
             if weight_key in optimal_weights:
@@ -1208,21 +1221,23 @@ def bayesian_optimization():
         
         # 최적화된 결과를 Total_score.csv 형식으로 저장
         try:
-            # 최적 가중치로 앙상블 점수 계산
-            final_ensemble_scores = np.zeros(len(employee_ids))
+            # 최적 가중치로 앙상블 점수 계산 (이미 크기가 조정된 데이터 사용)
+            final_ensemble_scores = np.zeros(min_length)
             agent_names = list(agent_predictions.keys())
             
-            for i, agent_name in enumerate(agent_names):
+            for agent_name in agent_names:
                 weight_key = f'{agent_name}_weight'
                 if weight_key in optimal_weights:
-                    final_ensemble_scores += np.array(agent_predictions[agent_name]) * optimal_weights[weight_key]
+                    agent_pred = np.array(agent_predictions[agent_name])
+                    final_ensemble_scores += agent_pred * optimal_weights[weight_key]
             
             # 최종 예측 결과
             final_predictions = (final_ensemble_scores >= optimal_ensemble_threshold).astype(int)
             
-            # Total_score.csv 형식으로 최종 결과 DataFrame 생성
+            # Total_score.csv 형식으로 최종 결과 DataFrame 생성 (조정된 길이 사용)
             final_results = []
-            for i, emp_id in enumerate(employee_ids):
+            for i in range(min_length):  # 조정된 길이만큼만 반복
+                emp_id = employee_ids[i]
                 row = {'employee_id': emp_id}
                 
                 # 각 에이전트 점수 (Total_score.csv 컬럼명)
@@ -1235,9 +1250,8 @@ def bayesian_optimization():
                 }
                 
                 for agent_name, predictions in agent_predictions.items():
-                    if i < len(predictions):
-                        column_name = agent_name_mapping.get(agent_name.lower(), f'{agent_name}_score')
-                        row[column_name] = predictions[i]
+                    column_name = agent_name_mapping.get(agent_name.lower(), f'{agent_name}_score')
+                    row[column_name] = predictions[i]  # 이미 크기가 조정되었으므로 안전
                 
                 # 앙상블 점수 및 예측 결과 추가
                 row['ensemble_score'] = final_ensemble_scores[i]

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Card,
   Row,
@@ -68,6 +68,8 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   const [historyManageVisible, setHistoryManageVisible] = useState(false);
   const [typingMessageId, setTypingMessageId] = useState(null);
   const [typingText, setTypingText] = useState('');
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // 초기 로드 상태 추가
+  const [userHasSentMessage, setUserHasSentMessage] = useState(false); // 사용자 메시지 전송 여부
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingIntervalRef = useRef(null);
@@ -91,13 +93,14 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       timestamp: new Date().toISOString()
     };
 
-    // 환영 메시지도 타이핑 효과로 표시
+    // 환영 메시지도 타이핑 효과로 표시 (초기 로드 시에는 스크롤하지 않음)
     setTimeout(() => {
       startTypingEffect(welcomeMessage.id, welcomeContent, () => {
         setChatMessages([welcomeMessage]);
-      });
+        setIsInitialLoad(false); // 초기 로드 완료
+      }, false); // 스크롤하지 않음
     }, 500); // 0.5초 후 타이핑 시작
-  }, [predictionHistory]);
+  }, [predictionHistory]); // startTypingEffect는 컴포넌트 내부 함수로 안정적이므로 dependency에서 제외
 
   // 전역 배치 결과가 업데이트될 때 예측 히스토리도 업데이트
   useEffect(() => {
@@ -118,8 +121,8 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
 
   // 채팅 스크롤 자동 이동 (스마트 스크롤)
   useEffect(() => {
-    // 메시지가 추가될 때만 스크롤 (초기 로드 제외)
-    if (chatMessages.length > 1) {
+    // 초기 로드가 완료되고, 사용자가 메시지를 보낸 후에만 스크롤
+    if (!isInitialLoad && userHasSentMessage && chatMessages.length > 1) {
       const chatContainer = chatEndRef.current?.parentElement;
       if (chatContainer) {
         const { scrollTop, scrollHeight, clientHeight } = chatContainer;
@@ -131,14 +134,14 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
         }
       }
     }
-  }, [chatMessages]);
+  }, [chatMessages, isInitialLoad, userHasSentMessage]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // 타이핑 효과 함수
-  const startTypingEffect = (messageId, fullText, onComplete) => {
+  const startTypingEffect = useCallback((messageId, fullText, onComplete, shouldScroll = true) => {
     // 기존 타이핑 효과가 있다면 중단
     if (typingIntervalRef.current) {
       clearTimeout(typingIntervalRef.current);
@@ -156,8 +159,10 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
         setTypingText(fullText.substring(0, currentIndex + 1));
         currentIndex++;
         
-        // 자동 스크롤 (타이핑 중에도)
-        setTimeout(() => scrollToBottom(), 10);
+        // 자동 스크롤 (타이핑 중에도) - shouldScroll이 true이고 사용자가 메시지를 보낸 후에만
+        if (shouldScroll && userHasSentMessage && !isInitialLoad) {
+          setTimeout(() => scrollToBottom(), 10);
+        }
         
         // 문장 부호나 줄바꿈에서 약간 더 긴 지연
         let delay = baseTypingSpeed;
@@ -184,7 +189,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
     
     // 타이핑 시작
     typingIntervalRef.current = setTimeout(typeNextChar, baseTypingSpeed);
-  };
+  }, [userHasSentMessage, isInitialLoad]);
 
   // 컴포넌트 언마운트 시 타이핑 효과 정리
   useEffect(() => {
@@ -218,6 +223,9 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   // 실제 LLM API 호출
   const handleSendMessage = async () => {
     if (!currentMessage.trim()) return;
+
+    // 사용자가 메시지를 보냈음을 표시
+    setUserHasSentMessage(true);
 
     const userMessage = {
       id: Date.now(),
@@ -275,10 +283,10 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
         isFallback: !!data.fallback_response
       };
 
-      // 타이핑 효과로 응답 표시
+      // 타이핑 효과로 응답 표시 (사용자 메시지 후이므로 스크롤 허용)
       startTypingEffect(botResponse.id, responseContent, () => {
         setChatMessages(prev => [...prev, botResponse]);
-      });
+      }, true);
       
       // fallback 응답인 경우 경고 메시지 표시
       if (data.fallback_response) {
@@ -293,10 +301,10 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       const fallbackContent = `⚠️ AI 서버 연결에 실패했습니다. 기본 응답을 제공합니다.\n\n${fallbackResponse.content}`;
       fallbackResponse.content = fallbackContent;
       
-      // 타이핑 효과로 fallback 응답 표시
+      // 타이핑 효과로 fallback 응답 표시 (사용자 메시지 후이므로 스크롤 허용)
       startTypingEffect(fallbackResponse.id, fallbackContent, () => {
         setChatMessages(prev => [...prev, fallbackResponse]);
-      });
+      }, true);
       
       message.warning('AI 서버에 연결할 수 없습니다. 기본 응답을 제공합니다.');
     } finally {

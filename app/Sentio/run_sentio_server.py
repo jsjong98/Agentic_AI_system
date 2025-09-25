@@ -23,12 +23,21 @@ def main():
     
     try:
         # Flask 앱 import 및 실행
-        from sentio_flask_backend import app
+        from sentio_flask_backend import app, initialize_system
         
         print("✅ Sentio 모듈 로드 완료")
-        print("🌐 서버 주소: http://localhost:5003")
-        print("📚 API 문서: http://localhost:5003/")
-        print("🔍 헬스체크: http://localhost:5003/health")
+        
+        # 시스템 초기화 (중요!)
+        print("🔧 Sentio 시스템 초기화 중...")
+        if initialize_system():
+            print("✅ 시스템 초기화 완료")
+        else:
+            print("❌ 시스템 초기화 실패")
+            print("⚠️ 일부 기능이 제한될 수 있습니다.")
+        
+        print("🌐 서버 주소: http://localhost:5004")
+        print("📚 API 문서: http://localhost:5004/")
+        print("🔍 헬스체크: http://localhost:5004/health")
         print("=" * 60)
         
         # 서버 실행

@@ -1,8 +1,0 @@
-{
-  "employee_id": "1",
-  "sentio_analysis": {
-    "sentiment_score": -0.2,
-    "risk_keywords": ["stress", "workload"],
-    "emotional_state": "neutral_negative"
-  }
-}

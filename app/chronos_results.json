@@ -1,8 +1,0 @@
-{
-  "employee_id": "1",
-  "chronos_analysis": {
-    "trend_score": 0.65,
-    "prediction_confidence": 0.78,
-    "time_series_pattern": "declining"
-  }
-}

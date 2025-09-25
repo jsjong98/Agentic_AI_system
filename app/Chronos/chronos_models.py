@@ -140,43 +140,86 @@ class GRU_CNN_HybridModel(nn.Module):
         
         return scaled_logits
     
-    def get_attention_weights(self):
+    def get_attention_weights(self, x=None):
         """
-        마지막 forward pass의 attention weights를 반환합니다.
+        Attention weights를 반환합니다.
+        x가 제공되면 해당 입력에 대한 attention을 계산하고,
+        그렇지 않으면 마지막 forward pass의 attention을 반환합니다.
         """
-        return {
-            'temporal_attention': self.last_temporal_attention,
-            'feature_importance': self.last_feature_importance
-        }
+        if x is not None:
+            # 새로운 입력에 대한 attention 계산
+            self.eval()
+            with torch.no_grad():
+                gru_out, _ = self.gru(x)
+                attention_weights = self.attention(gru_out)
+                return attention_weights.squeeze(-1)  # (batch_size, sequence_length)
+        else:
+            # 마지막 forward pass의 결과 반환
+            return {
+                'temporal_attention': self.last_temporal_attention,
+                'feature_importance': self.last_feature_importance
+            }
     
     def interpret_prediction(self, x, feature_names: List[str] = None):
         """
         예측에 대한 해석 정보를 제공합니다.
         """
         self.eval()
+        
+        # 먼저 예측 수행 (gradient 없이)
         with torch.no_grad():
             output = self.forward(x)
             probabilities = F.softmax(output, dim=1)
             
             # Temporal attention 가져오기
             temporal_attention = self.last_temporal_attention.cpu().numpy() if self.last_temporal_attention is not None else None
+        
+        # Feature importance 계산 (더 안전한 방법 사용)
+        try:
+            # 새로운 텐서를 생성하여 gradient 계산
+            x_for_grad = x.clone().detach().requires_grad_(True)
             
-            # 간단한 feature importance (gradient 기반)
-            x.requires_grad_(True)
-            output_for_grad = self.forward(x)
-            grad = torch.autograd.grad(output_for_grad[:, 1].sum(), x, create_graph=False)[0]
+            # 모델을 train 모드로 변경하고 gradient 계산
+            original_training = self.training
+            self.train()
+            output_for_grad = self.forward(x_for_grad)
+            
+            # 이진 분류의 경우 positive class (index 1)에 대한 gradient 계산
+            if output_for_grad.shape[1] > 1:
+                target_output = output_for_grad[:, 1].sum()
+            else:
+                target_output = output_for_grad.sum()
+            
+            # Gradient 계산
+            grad = torch.autograd.grad(target_output, x_for_grad, 
+                                     create_graph=False, retain_graph=False)[0]
+            
+            # Feature importance 계산 (시간축과 배치축에 대해 평균)
             feature_importance = torch.mean(torch.abs(grad), dim=(0, 1)).cpu().numpy()
-            feature_importance = feature_importance / np.sum(feature_importance)
             
-            interpretation = {
-                'predictions': output.cpu().numpy(),
-                'probabilities': probabilities.cpu().numpy(),
-                'feature_importance': feature_importance,
-                'temporal_attention': temporal_attention,
-                'feature_names': feature_names if feature_names else [f'Feature_{i}' for i in range(self.input_size)]
-            }
+            # 정규화
+            if np.sum(feature_importance) > 0:
+                feature_importance = feature_importance / np.sum(feature_importance)
+            else:
+                feature_importance = np.ones(self.input_size) / self.input_size
+                
+            # 원래 모드로 복원
+            self.train(original_training)
             
-            return interpretation
+        except Exception as e:
+            print(f"⚠️ Feature importance 계산 실패: {e}")
+            # 기본값으로 균등 분포 사용
+            feature_importance = np.ones(self.input_size) / self.input_size
+        
+        interpretation = {
+            'predictions': output.cpu().numpy(),
+            'probabilities': probabilities.cpu().numpy(),
+            'feature_importance': feature_importance,
+            'temporal_attention': temporal_attention,
+            'feature_names': feature_names if feature_names else [f'Feature_{i}' for i in range(self.input_size)]
+        }
+        
+        return interpretation
 
 class ChronosModelTrainer:
     """

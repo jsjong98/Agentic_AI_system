@@ -356,6 +356,14 @@ class GRU_CNN_HybridModel(nn.Module):
         combined_features = torch.cat([gru_features, cnn_features], dim=1)
         output = self.classifier(combined_features)
         return output
+    
+    def get_attention_weights(self, x):
+        """Attention weights 추출 (Feature Importance용)"""
+        self.eval()
+        with torch.no_grad():
+            gru_out, _ = self.gru(x)
+            attention_weights = self.attention(gru_out)
+            return attention_weights.squeeze(-1)  # (batch_size, sequence_length)
 
 # ============================================================================
 # 시간 기반 데이터 분할 함수
@@ -425,10 +433,10 @@ if __name__ == "__main__":
         aggregation_unit='week'
     )
     
-    # 데이터 로딩
+    # 데이터 로딩 (실제 파일명으로 수정)
     ts_sample, personas_sample = processor.load_data(
-        'data/IBM_HR_timeseries.csv', 
-        'data/IBM_HR_personas_assigned.csv'
+        '../data/IBM_HR_timeseries.csv', 
+        '../data/IBM_HR_personas_assigned.csv'
     )
     
     # 전처리
@@ -838,6 +846,224 @@ def predict_all_employees_and_save_fixed(processor, model, scaler, sequence_leng
     return predictions_df
 
 # ============================================================================
+# Feature Importance 분석 함수들 (Attention & Gradient 기반)
+# ============================================================================
+
+def calculate_attention_importance(model, X_test, feature_names):
+    """Attention 기반 Feature Importance 계산"""
+    print("🔍 Attention 기반 Feature Importance 계산 중...")
+    print("=" * 50)
+    
+    # PyTorch 텐서로 변환
+    if isinstance(X_test, np.ndarray):
+        X_tensor = torch.FloatTensor(X_test).to(device)
+    else:
+        X_tensor = X_test.to(device)
+    
+    # Attention weights 추출
+    attention_weights = model.get_attention_weights(X_tensor)  # (batch_size, sequence_length)
+    attention_weights_np = attention_weights.cpu().numpy()
+    
+    # 시간 단계별 평균 attention 계산
+    mean_attention_by_timestep = np.mean(attention_weights_np, axis=0)  # (sequence_length,)
+    
+    # 각 피처에 대한 전체 attention 중요도 (모든 시간 단계에서 동일하게 적용)
+    # 실제로는 GRU의 hidden state에 기반하므로, 모든 피처가 각 시점의 attention에 기여
+    feature_attention_importance = np.tile(mean_attention_by_timestep, (len(feature_names), 1)).T
+    
+    # 각 피처의 전체 시간에 대한 평균 attention 중요도
+    overall_attention_importance = np.mean(feature_attention_importance, axis=0)
+    
+    # 결과 정리
+    attention_importance_df = pd.DataFrame({
+        'feature': feature_names,
+        'attention_importance': overall_attention_importance
+    }).sort_values('attention_importance', ascending=False)
+    
+    print(f"✅ Attention Importance 계산 완료")
+    print(f"   상위 10개 중요 피처 (Attention 기준):")
+    for idx, row in attention_importance_df.head(10).iterrows():
+        print(f"   {row['feature']}: {row['attention_importance']:.4f}")
+    
+    # 시간별 attention weights도 반환
+    return attention_importance_df, attention_weights_np, mean_attention_by_timestep
+
+def calculate_gradient_based_importance(model, X_test, feature_names, max_samples=100):
+    """Gradient 기반 Feature Importance 계산 (더 정확한 방법)"""
+    print("🔍 Gradient 기반 Feature Importance 계산 중...")
+    print("=" * 50)
+    
+    # 샘플 수 제한
+    if len(X_test) > max_samples:
+        sample_indices = np.random.choice(len(X_test), max_samples, replace=False)
+        X_sample = X_test[sample_indices]
+    else:
+        X_sample = X_test
+    
+    # PyTorch 텐서로 변환 (gradient 계산을 위해 requires_grad=True)
+    if isinstance(X_sample, np.ndarray):
+        X_tensor = torch.FloatTensor(X_sample).to(device)
+    else:
+        X_tensor = X_sample.to(device)
+    
+    X_tensor.requires_grad_(True)
+    
+    model.eval()
+    
+    # Forward pass
+    outputs = model(X_tensor)
+    
+    # 퇴사 클래스(1)에 대한 확률
+    probs = F.softmax(outputs, dim=1)
+    attrition_probs = probs[:, 1]
+    
+    # 각 샘플에 대한 gradient 계산
+    gradients_list = []
+    
+    for i in range(len(attrition_probs)):
+        # 개별 샘플에 대한 gradient 계산
+        if X_tensor.grad is not None:
+            X_tensor.grad.zero_()
+        
+        attrition_probs[i].backward(retain_graph=True)
+        
+        # Gradient의 절댓값을 중요도로 사용
+        sample_gradient = torch.abs(X_tensor.grad[i]).detach().cpu().numpy()
+        gradients_list.append(sample_gradient)
+    
+    # 모든 샘플의 gradient 평균
+    mean_gradients = np.mean(gradients_list, axis=0)  # (sequence_length, n_features)
+    
+    # 각 피처의 전체 시간에 대한 평균 gradient 중요도
+    feature_gradient_importance = np.mean(mean_gradients, axis=0)
+    
+    # 결과 정리
+    gradient_importance_df = pd.DataFrame({
+        'feature': feature_names,
+        'gradient_importance': feature_gradient_importance
+    }).sort_values('gradient_importance', ascending=False)
+    
+    print(f"✅ Gradient Importance 계산 완료")
+    print(f"   상위 10개 중요 피처 (Gradient 기준):")
+    for idx, row in gradient_importance_df.head(10).iterrows():
+        print(f"   {row['feature']}: {row['gradient_importance']:.4f}")
+    
+    return gradient_importance_df, mean_gradients
+
+
+def plot_feature_importance(attention_importance_df, gradient_importance_df=None, top_n=15, save_path=None):
+    """Feature Importance 시각화 (Attention & Gradient 기반)"""
+    print("📊 Feature Importance 시각화 중...")
+    
+    # 사용 가능한 방법 수 계산
+    methods = [attention_importance_df]
+    method_names = ['Attention']
+    
+    if gradient_importance_df is not None:
+        methods.append(gradient_importance_df)
+        method_names.append('Gradient')
+    
+    n_methods = len(methods)
+    
+    # 그래프 설정
+    fig, axes = plt.subplots(1, n_methods, figsize=(6*n_methods, 8))
+    if n_methods == 1:
+        axes = [axes]
+    
+    # 각 방법별 플롯
+    for i, (method_df, method_name) in enumerate(zip(methods, method_names)):
+        if method_name == 'Attention':
+            top_features = method_df.head(top_n)
+            y_values = top_features['attention_importance']
+            xlabel = 'Attention Importance'
+        else:  # Gradient
+            top_features = method_df.head(top_n)
+            y_values = top_features['gradient_importance']
+            xlabel = 'Gradient Importance'
+        
+        axes[i].barh(range(len(top_features)), y_values)
+        axes[i].set_yticks(range(len(top_features)))
+        axes[i].set_yticklabels(top_features['feature'])
+        axes[i].set_xlabel(xlabel)
+        axes[i].set_title(f'Top {top_n} Features - {method_name}')
+        axes[i].grid(axis='x', alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"💾 Feature Importance 그래프 저장: {save_path}")
+    
+    plt.show()
+    
+    return fig
+
+def plot_attention_heatmap(attention_weights, feature_names, top_samples=20, save_path=None):
+    """Attention weights 히트맵 시각화"""
+    print("📊 Attention Heatmap 시각화 중...")
+    
+    # 상위 샘플만 선택
+    sample_attention = attention_weights[:top_samples]
+    
+    # 히트맵 생성
+    fig, ax = plt.subplots(figsize=(15, 8))
+    
+    im = ax.imshow(sample_attention, cmap='YlOrRd', aspect='auto')
+    
+    # 축 설정
+    ax.set_xlabel('Time Step (Week)')
+    ax.set_ylabel('Sample')
+    ax.set_title(f'Attention Weights Heatmap (Top {top_samples} Samples)')
+    
+    # 컬러바 추가
+    plt.colorbar(im, ax=ax, label='Attention Weight')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"💾 Attention Heatmap 저장: {save_path}")
+    
+    plt.show()
+    
+    return fig
+
+def save_feature_importance_results(attention_importance_df, gradient_importance_df=None,
+                                  save_path='data/feature_importance_results.csv'):
+    """Feature Importance 결과를 CSV로 저장 (Attention & Gradient 기반)"""
+    print("💾 Feature Importance 결과 저장 중...")
+    
+    # 기본 데이터프레임으로 시작
+    merged_df = attention_importance_df.copy()
+    
+    # Gradient 결과 병합
+    if gradient_importance_df is not None:
+        merged_df = pd.merge(merged_df, gradient_importance_df[['feature', 'gradient_importance']], 
+                           on='feature', how='outer')
+    
+    # 순위 추가
+    merged_df['attention_rank'] = merged_df['attention_importance'].rank(ascending=False)
+    if 'gradient_importance' in merged_df.columns:
+        merged_df['gradient_rank'] = merged_df['gradient_importance'].rank(ascending=False)
+        
+        # 평균 순위 계산
+        merged_df['average_rank'] = (merged_df['attention_rank'] + merged_df['gradient_rank']) / 2
+        merged_df = merged_df.sort_values('average_rank')
+    else:
+        merged_df = merged_df.sort_values('attention_rank')
+    
+    # 저장
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    merged_df.to_csv(save_path, index=False, encoding='utf-8-sig')
+    
+    print(f"✅ Feature Importance 결과 저장 완료: {save_path}")
+    print(f"   저장된 피처 수: {len(merged_df)}개")
+    
+    return merged_df
+
+# ============================================================================
 # 전체 파이프라인 실행
 # ============================================================================
 
@@ -876,6 +1102,50 @@ if __name__ == "__main__":
     
     # 최종 평가
     final_results = evaluate_final_model(best_model, X_test_tensor, y_test_tensor)
+    
+    # Feature Importance 분석 (Attention & Gradient 기반)
+    print("\n" + "="*70)
+    print("🔍 효율적인 Feature Importance 분석 시작")
+    print("="*70)
+    
+    # 1. Attention 기반 Feature Importance (가장 효율적)
+    attention_importance_df, attention_weights, mean_attention = calculate_attention_importance(
+        best_model, X_test_tensor.cpu().numpy(), processor.feature_columns
+    )
+    
+    # 2. Gradient 기반 Feature Importance (정확한 방법)
+    gradient_importance_df, gradient_by_timestep = calculate_gradient_based_importance(
+        best_model, X_test_tensor.cpu().numpy(), processor.feature_columns, max_samples=50
+    )
+    
+    # Feature Importance 시각화
+    plot_feature_importance(
+        attention_importance_df, gradient_importance_df,
+        top_n=15, save_path='data/feature_importance_analysis.png'
+    )
+    
+    # Attention Heatmap 시각화
+    plot_attention_heatmap(
+        attention_weights, processor.feature_columns, top_samples=20,
+        save_path='data/attention_heatmap.png'
+    )
+    
+    # Feature Importance 결과 저장
+    feature_importance_results = save_feature_importance_results(
+        attention_importance_df, gradient_importance_df,
+        save_path='data/feature_importance_results.csv'
+    )
+    
+    print(f"\n✅ Feature Importance 분석 완료!")
+    print(f"\n📊 상위 5개 중요 피처:")
+    
+    print(f"\n🎯 Attention 기반:")
+    for idx, row in attention_importance_df.head(5).iterrows():
+        print(f"   {idx+1}. {row['feature']}: {row['attention_importance']:.4f}")
+    
+    print(f"\n🔍 Gradient 기반:")
+    for idx, row in gradient_importance_df.head(5).iterrows():
+        print(f"   {idx+1}. {row['feature']}: {row['gradient_importance']:.4f}")
     
     # 전체 직원 예측 및 저장
     print("\n" + "="*70)

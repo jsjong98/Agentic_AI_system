@@ -20,6 +20,10 @@ from typing import Dict, List, Optional, Tuple, Any
 from collections import Counter, defaultdict
 import re
 import traceback
+from dotenv import load_dotenv
+
+# .env 파일 로드 (OpenAI API 키 등)
+load_dotenv()
 
 # 로컬 모듈 import
 from sentio_processor import SentioTextProcessor
@@ -30,12 +34,31 @@ from sentio_generator import SentioTextGenerator
 app = Flask(__name__)
 CORS(app)
 
-# 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# 로깅 설정 - 파일과 콘솔 모두 출력
+log_dir = "../../logs"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "sentio_server.log")
+
+# 로거 설정
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# 파일 핸들러
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+
+# 콘솔 핸들러  
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# 포맷터
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# 핸들러 추가
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 # 전역 변수
 text_processor = None
@@ -45,48 +68,68 @@ text_generator = None
 # 데이터 경로 설정 - uploads 디렉토리에서 찾기
 def get_sentio_data_paths(analysis_type='batch'):
     """uploads 디렉토리에서 Sentio 데이터 파일 찾기"""
-    uploads_dir = f"../uploads/sentio/{analysis_type}"
+    uploads_dir = f"app/uploads/Sentio/{analysis_type}"
     data_paths = {
         'hr_data': None,
         'text_data': None,
         'sample_texts': None
     }
     
+    print(f"🔍 Sentio 데이터 경로 확인: {uploads_dir}")
+    
     if os.path.exists(uploads_dir):
         files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
         if files:
             # 가장 최근 파일 사용 (타임스탬프 기준)
             files.sort(reverse=True)
+            print(f"📁 발견된 파일들: {files}")
             
-            # 파일들을 분류
-            for file in files:
-                file_path = os.path.join(uploads_dir, file)
-                if 'text' in file.lower():
-                    if data_paths['text_data'] is None:
-                        data_paths['text_data'] = file_path
-                    if data_paths['sample_texts'] is None:
-                        data_paths['sample_texts'] = file_path
-                elif data_paths['hr_data'] is None:
-                    data_paths['hr_data'] = file_path
+            # 가장 최신 파일을 모든 용도로 사용 (Sentio 데이터는 통합 파일)
+            latest_file = files[0]
+            latest_file_path = os.path.join(uploads_dir, latest_file)
+            
+            data_paths['hr_data'] = latest_file_path
+            data_paths['text_data'] = latest_file_path  
+            data_paths['sample_texts'] = latest_file_path
+            
+            print(f"✅ 최신 파일 사용: {latest_file}")
     
     # batch에 파일이 없으면 post 디렉토리 확인
     if analysis_type == 'batch' and not any(data_paths.values()):
+        print("🔄 batch 디렉토리에 파일이 없어서 post 디렉토리 확인 중...")
         post_paths = get_sentio_data_paths('post')
         for key, value in post_paths.items():
             if data_paths[key] is None:
                 data_paths[key] = value
     
-    # 기본값으로 fallback
-    if data_paths['hr_data'] is None:
-        data_paths['hr_data'] = '../../data/IBM_HR.csv'
-    if data_paths['text_data'] is None:
-        data_paths['text_data'] = '../../data/IBM_HR_text.csv'
-    if data_paths['sample_texts'] is None:
-        data_paths['sample_texts'] = '../../sample_hr_texts.csv'
-        
+    # 기본값으로 fallback (파일이 없는 경우에만)
+    if not any(data_paths.values()):
+        print("⚠️ uploads 디렉토리에 파일이 없어서 기본 경로 사용")
+        if data_paths['hr_data'] is None:
+            data_paths['hr_data'] = 'data/IBM_HR.csv'
+        if data_paths['text_data'] is None:
+            data_paths['text_data'] = 'data/IBM_HR_text.csv'
+        if data_paths['sample_texts'] is None:
+            data_paths['sample_texts'] = 'sample_hr_texts.csv'
+    
+    print(f"📊 최종 데이터 경로: {data_paths}")
     return data_paths
 
-DATA_PATH = get_sentio_data_paths()
+# 초기화 시 데이터가 있는 디렉토리를 찾아서 사용
+def find_available_sentio_data():
+    """사용 가능한 Sentio 데이터 경로 찾기"""
+    # post 디렉토리 먼저 확인 (사후 분석 데이터가 더 최신)
+    for analysis_type in ['post', 'batch']:
+        paths = get_sentio_data_paths(analysis_type)
+        if any(paths.values()) and any(os.path.exists(path) for path in paths.values() if path):
+            print(f"✅ {analysis_type} 디렉토리에서 데이터 발견")
+            return paths
+    
+    # 둘 다 없으면 기본값 반환
+    print("⚠️ uploads 디렉토리에 데이터가 없어서 기본 경로 사용")
+    return get_sentio_data_paths('batch')
+
+DATA_PATH = find_available_sentio_data()
 
 MODEL_PATH = 'app/Sentio/models'
 os.makedirs(MODEL_PATH, exist_ok=True)
@@ -121,17 +164,36 @@ def initialize_system():
     try:
         logger.info("Sentio 시스템 초기화 시작...")
         
-        # 키워드 분석기 초기화 (선택적)
+        # 키워드 분석기 초기화 (필수 - 점수 계산을 위해 반드시 필요)
+        keyword_analyzer = None
         try:
-            if os.path.exists(DATA_PATH['sample_texts']):
-                keyword_analyzer = SentioKeywordAnalyzer(DATA_PATH['sample_texts'])
-                keyword_analyzer.load_data()
-                logger.info("✅ 키워드 분석기 초기화 완료")
+            sample_texts_path = DATA_PATH['sample_texts']
+            print(f"🔍 키워드 분석기 초기화 시도: {sample_texts_path}")
+            
+            if sample_texts_path and os.path.exists(sample_texts_path):
+                print(f"📁 파일 존재 확인됨: {sample_texts_path}")
+                keyword_analyzer = SentioKeywordAnalyzer(sample_texts_path)
+                
+                # 데이터 로드 시도
+                load_success = keyword_analyzer.load_data()
+                print(f"📊 데이터 로드 결과: {load_success}")
+                
+                if load_success:
+                    logger.info("✅ 키워드 분석기 초기화 완료")
+                    print(f"📊 키워드 분석기 데이터 로드 성공: {sample_texts_path}")
+                    print(f"📈 퇴직자: {len(keyword_analyzer.resigned_data)}명, 재직자: {len(keyword_analyzer.stayed_data)}명")
+                else:
+                    logger.error("❌ 키워드 분석기 데이터 로드 실패 - 점수 계산 불가")
+                    keyword_analyzer = None
             else:
-                logger.info("⚠️ 텍스트 데이터 파일이 없습니다. 파일 업로드 후 분석 가능합니다.")
+                logger.error(f"❌ 텍스트 데이터 파일이 없습니다: {sample_texts_path}")
                 keyword_analyzer = None
+                
         except Exception as e:
-            logger.warning(f"⚠️ 키워드 분석기 초기화 실패: {e}")
+            logger.error(f"❌ 키워드 분석기 초기화 실패: {e}")
+            print(f"❌ 키워드 분석기 오류: {str(e)}")
+            import traceback
+            print(f"상세 오류: {traceback.format_exc()}")
             keyword_analyzer = None
         
         # 텍스트 프로세서 초기화 (analyzer 연결)
@@ -555,7 +617,7 @@ def generate_comprehensive_report():
         use_llm = data.get('use_llm', analysis_type not in ['batch', 'post'])
         
         if not keyword_analyzer:
-            return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다."}), 500
+            return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다. JD-R 모델 기반 점수 계산이 불가능합니다. 서버를 재시작하거나 데이터 파일을 확인해주세요."}), 500
         
         # 종합 레포트 생성
         comprehensive_report = keyword_analyzer.generate_individual_comprehensive_report(
@@ -623,17 +685,39 @@ def analyze_sentiment():
             print(f"🔄 Sentio: {analysis_type} 분석을 위한 데이터 재로드")
             DATA_PATH = new_data_paths
             
-            # 키워드 분석기 재초기화
+            # 키워드 분석기 재초기화 (필수 - 점수 계산을 위해 반드시 필요)
             try:
-                if new_data_paths['sample_texts'] and os.path.exists(new_data_paths['sample_texts']):
-                    keyword_analyzer = SentioKeywordAnalyzer(new_data_paths['sample_texts'])
-                    keyword_analyzer.load_data()
-                    text_processor = SentioTextProcessor(analyzer=keyword_analyzer)
-                    print(f"✅ Sentio {analysis_type} 데이터 재로드 완료")
+                sample_texts_path = new_data_paths['sample_texts']
+                logger.info(f"🔍 {analysis_type} 분석용 키워드 분석기 재초기화: {sample_texts_path}")
+                
+                if sample_texts_path and os.path.exists(sample_texts_path):
+                    logger.info(f"📁 {analysis_type} 파일 존재 확인됨: {sample_texts_path}")
+                    keyword_analyzer = SentioKeywordAnalyzer(sample_texts_path)
+                    
+                    load_success = keyword_analyzer.load_data()
+                    logger.info(f"📊 {analysis_type} 데이터 로드 결과: {load_success}")
+                    
+                    if load_success:
+                        text_processor = SentioTextProcessor(analyzer=keyword_analyzer)
+                        logger.info(f"✅ Sentio {analysis_type} 키워드 분석기 재로드 완료")
+                        logger.info(f"📈 {analysis_type} 퇴직자: {len(keyword_analyzer.resigned_data)}명, 재직자: {len(keyword_analyzer.stayed_data)}명")
+                    else:
+                        logger.error(f"❌ Sentio {analysis_type} 키워드 분석기 데이터 로드 실패 - 점수 계산 불가")
+                        keyword_analyzer = None
+                        text_processor = SentioTextProcessor(analyzer=None)
+                else:
+                    logger.warning(f"❌ {analysis_type} 분석용 텍스트 데이터 파일 없음: {sample_texts_path}")
+                    keyword_analyzer = None
+                    text_processor = SentioTextProcessor(analyzer=None)
+                    
             except Exception as e:
-                print(f"⚠️ Sentio 데이터 재로드 실패: {e}")
+                logger.error(f"❌ Sentio {analysis_type} 데이터 재로드 실패: {e}")
+                import traceback
+                logger.error(f"상세 오류: {traceback.format_exc()}")
+                keyword_analyzer = None
+                text_processor = SentioTextProcessor(analyzer=None)
         
-        print(f"📊 Sentio {analysis_type} 분석 시작 - {len(employees_data)}명")
+        logger.info(f"📊 Sentio {analysis_type} 분석 시작 - {len(employees_data)}명")
         
         if not text_processor:
             return jsonify({"error": "텍스트 프로세서가 초기화되지 않았습니다."}), 500
@@ -661,12 +745,14 @@ def analyze_sentiment():
                 combined_text = f"직원 {employee_id}의 기본 텍스트 데이터"
             
             try:
+                logger.info(f"🔍 직원 {employee_id} 텍스트 분석 시작 (길이: {len(combined_text)}자)")
                 # 실제 텍스트 분석 수행
                 analysis_result = text_processor.analyze_text(
                     text=combined_text,
                     employee_id=employee_id,
                     text_type="comprehensive"
                 )
+                logger.info(f"✅ 직원 {employee_id} 분석 완료 - 키워드: {len(analysis_result.get('keywords', []))}개, 위험도: {analysis_result.get('risk_level', 'N/A')}")
                 
                 # 개별 결과 생성
                 individual_result = {
@@ -703,6 +789,8 @@ def analyze_sentiment():
                     "psychological_risk_score": 0.5
                 })
         
+        logger.info(f"🎉 Sentio {analysis_type} 분석 완료 - 총 {len(analysis_results)}명 처리")
+        
         # 단일 직원인 경우 기존 형식으로 반환
         if len(employees_data) == 1:
             return jsonify(analysis_results[0])
@@ -716,7 +804,9 @@ def analyze_sentiment():
         })
         
     except Exception as e:
-        logger.error(f"감정 분석 오류 (직원 {employee_id}): {str(e)}")
+        # employee_id가 정의되지 않은 경우를 대비
+        emp_id = locals().get('employee_id', 'unknown')
+        logger.error(f"감정 분석 오류 (직원 {emp_id}): {str(e)}")
         return jsonify({
             "sentiment_score": 0.5,
             "risk_keywords": ["analysis_error"],
@@ -754,7 +844,7 @@ def generate_batch_csv():
         output_filename = data.get('output_filename', 'sentio_batch_analysis.csv')
         
         if not keyword_analyzer:
-            return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다."}), 500
+            return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다. CSV 배치 분석 기능을 사용할 수 없습니다."}), 500
         
         logger.info(f"배치 CSV 분석 시작: {len(text_data_list)}개 데이터")
         

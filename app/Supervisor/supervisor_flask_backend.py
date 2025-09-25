@@ -26,6 +26,7 @@ load_dotenv()
 from .langgraph_workflow import SupervisorWorkflow
 from .worker_integrator import DEFAULT_WORKER_CONFIGS
 from .agent_state import AgentState
+from .hierarchical_result_manager import hierarchical_result_manager
 
 # Flask 앱 생성
 app = Flask(__name__)
@@ -2361,6 +2362,90 @@ def get_batch_results(batch_id):
         }), 500
 
 
+@app.route('/api/statistics/group', methods=['GET'])
+def get_group_statistics():
+    """단체 통계 조회 API"""
+    try:
+        group_by = request.args.get('group_by', 'department')
+        department_filter = request.args.get('department')
+        
+        # 모든 부서의 인덱스 파일에서 통계 수집
+        departments = ['Human_Resources', 'Research_&_Development', 'Sales', 'Manufacturing', 'Information_Technology']
+        grouped_stats = {}
+        
+        for dept in departments:
+            try:
+                dept_stats = hierarchical_result_manager.get_department_statistics(dept)
+                if not dept_stats:
+                    continue
+                
+                # 부서별 인덱스 파일 읽기
+                dept_clean = hierarchical_result_manager._sanitize_folder_name(dept)
+                index_file = hierarchical_result_manager.base_output_dir / dept_clean / "department_index.json"
+                
+                if index_file.exists():
+                    with open(index_file, 'r', encoding='utf-8') as f:
+                        index_data = json.load(f)
+                    
+                    # 그룹화 기준에 따라 통계 생성
+                    if group_by == 'department':
+                        if department_filter is None or dept == department_filter:
+                            grouped_stats[dept] = {
+                                'total_employees': dept_stats.get('total_employees', 0),
+                                'high_risk': 0,  # 실제 위험도 계산 필요
+                                'medium_risk': 0,
+                                'low_risk': dept_stats.get('total_employees', 0),
+                                'avg_risk_score': 0.3,  # 기본값
+                                'common_risk_factors': {}
+                            }
+                    
+                    elif group_by == 'job_role':
+                        job_roles = index_data.get('job_roles', {})
+                        for role, employees in job_roles.items():
+                            if department_filter is None or dept == department_filter:
+                                grouped_stats[role] = {
+                                    'total_employees': len(employees),
+                                    'high_risk': 0,
+                                    'medium_risk': 0,
+                                    'low_risk': len(employees),
+                                    'avg_risk_score': 0.3,
+                                    'common_risk_factors': {}
+                                }
+                    
+                    elif group_by == 'job_level':
+                        positions = index_data.get('positions', {})
+                        for pos, employees in positions.items():
+                            if department_filter is None or dept == department_filter:
+                                grouped_stats[pos] = {
+                                    'total_employees': len(employees),
+                                    'high_risk': 0,
+                                    'medium_risk': 0,
+                                    'low_risk': len(employees),
+                                    'avg_risk_score': 0.3,
+                                    'common_risk_factors': {}
+                                }
+                        
+            except Exception as e:
+                logger.error(f"부서 {dept} 통계 처리 실패: {e}")
+                continue
+        
+        return jsonify({
+            'success': True,
+            'group_by': group_by,
+            'department_filter': department_filter,
+            'statistics': grouped_stats,
+            'generated_at': datetime.now().isoformat(),
+            'data_source': 'department_index'
+        })
+        
+    except Exception as e:
+        logger.error(f"Group statistics error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get group statistics: {str(e)}'
+        }), 500
+
+
 @app.route('/batch_export_csv/<batch_id>', methods=['GET'])
 def batch_export_csv(batch_id):
     """배치 처리 결과를 CSV로 내보내기"""
@@ -2589,6 +2674,30 @@ def analyze_employee_comprehensive(employee_data):
         except Exception as e:
             results['integration_error'] = str(e)
         
+        # 계층적 결과 관리자를 통한 결과 저장
+        try:
+            employee_id = employee_data.get('employee_id', 'unknown')
+            
+            # 에러가 있는 워커 결과 필터링 (저장용)
+            clean_worker_results = {}
+            for worker, result in worker_results.items():
+                if isinstance(result, dict) and 'error' not in result:
+                    clean_worker_results[worker] = result
+            
+            # 결과 저장 (에러가 없는 워커 결과만)
+            if clean_worker_results:
+                saved_path = hierarchical_result_manager.save_employee_result(
+                    employee_id=employee_id,
+                    employee_data=employee_data,
+                    worker_results=clean_worker_results
+                )
+                results['saved_path'] = saved_path
+                logger.info(f"직원 {employee_id} 분석 결과가 {saved_path}에 저장되었습니다.")
+            
+        except Exception as e:
+            logger.error(f"결과 저장 실패 (직원 {employee_data.get('employee_id')}): {e}")
+            results['save_error'] = str(e)
+        
         return results
         
     except Exception as e:
@@ -2765,6 +2874,8 @@ if __name__ == '__main__':
         print("    GET  /batch_status/<batch_id> - 배치 처리 상태 조회")
         print("    GET  /batch_results/<batch_id> - 배치 처리 결과 조회")
         print("    GET  /batch_export_csv/<batch_id> - 배치 처리 결과 CSV 내보내기")
+        print("  📊 통계 분석 기능:")
+        print("    GET  /api/statistics/group - 단체 통계 조회 (부서별/직무별/직급별)")
         
         # 서버 실행
         app.run(host='0.0.0.0', port=port, debug=debug)

@@ -108,7 +108,7 @@ const App = () => {
     {
       key: 'group-statistics',
       icon: <TeamOutlined />,
-      label: '📈 단체 통계',
+      label: '📊 단체 통계',
     },
     {
       key: 'cognita',
@@ -118,7 +118,7 @@ const App = () => {
     {
       key: 'post-analysis',
       icon: <BarChartOutlined />,
-      label: '📈 사후 분석',
+      label: '🔍 사후 분석',
     },
     {
       key: 'report-generation',
@@ -314,7 +314,7 @@ const App = () => {
              selectedKey === 'group-statistics' ? '단체 통계' :
              selectedKey === 'cognita' ? '개별 관계분석' :
              selectedKey === 'post-analysis' ? '사후 분석' :
-             selectedKey === 'export' ? '결과 내보내기' : '대시보드'}
+             selectedKey === 'report-generation' ? '보고서 출력' : '대시보드'}
           </Title>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
