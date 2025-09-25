@@ -21,8 +21,8 @@
   },
   "Sales Executive_서울_20250925": {
     "data": {
-      "job_postings": 203,
-      "avg_salary": 5420384,
+      "job_postings": 161,
+      "avg_salary": 5303007,
       "salary_range": {
         "min": 3500000,
         "max": 8000000
@@ -37,12 +37,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:28:36.941849"
+    "timestamp": "2025-09-25T15:06:09.273756"
   },
   "Research Scientist_서울_20250925": {
     "data": {
-      "job_postings": 197,
-      "avg_salary": 6294250,
+      "job_postings": 222,
+      "avg_salary": 6049099,
       "salary_range": {
         "min": 4000000,
         "max": 9500000
@@ -57,12 +57,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:29:11.017870"
+    "timestamp": "2025-09-25T15:06:42.493722"
   },
   "Laboratory Technician_서울_20250925": {
     "data": {
-      "job_postings": 89,
-      "avg_salary": 3150060,
+      "job_postings": 76,
+      "avg_salary": 3085141,
       "salary_range": {
         "min": 2500000,
         "max": 4500000
@@ -77,12 +77,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:29:22.363094"
+    "timestamp": "2025-09-25T15:06:53.009046"
   },
   "Manufacturing Director_서울_20250925": {
     "data": {
-      "job_postings": 162,
-      "avg_salary": 5519780,
+      "job_postings": 186,
+      "avg_salary": 5838178,
       "salary_range": {
         "min": 4200000,
         "max": 8500000
@@ -97,12 +97,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:29:49.226755"
+    "timestamp": "2025-09-25T15:07:16.529435"
   },
   "Healthcare Representative_서울_20250925": {
     "data": {
-      "job_postings": 277,
-      "avg_salary": 3721226,
+      "job_postings": 318,
+      "avg_salary": 3792824,
       "salary_range": {
         "min": 2800000,
         "max": 5500000
@@ -117,12 +117,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:30:08.481943"
+    "timestamp": "2025-09-25T15:07:36.480440"
   },
   "Manager_서울_20250925": {
     "data": {
-      "job_postings": 355,
-      "avg_salary": 5216073,
+      "job_postings": 349,
+      "avg_salary": 5065326,
       "salary_range": {
         "min": 3800000,
         "max": 7500000
@@ -137,12 +137,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:30:38.516721"
+    "timestamp": "2025-09-25T15:08:12.136243"
   },
   "Sales Representative_서울_20250925": {
     "data": {
-      "job_postings": 349,
-      "avg_salary": 3950031,
+      "job_postings": 312,
+      "avg_salary": 3786730,
       "salary_range": {
         "min": 2800000,
         "max": 5500000
@@ -157,12 +157,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:30:58.316556"
+    "timestamp": "2025-09-25T15:08:29.098598"
   },
   "Research Director_서울_20250925": {
     "data": {
-      "job_postings": 63,
-      "avg_salary": 7148476,
+      "job_postings": 54,
+      "avg_salary": 7345616,
       "salary_range": {
         "min": 5500000,
         "max": 10000000
@@ -177,12 +177,12 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:31:14.998675"
+    "timestamp": "2025-09-25T15:08:48.825887"
   },
   "Human Resources_서울_20250925": {
     "data": {
-      "job_postings": 156,
-      "avg_salary": 4209891,
+      "job_postings": 127,
+      "avg_salary": 4016506,
       "salary_range": {
         "min": 3200000,
         "max": 6000000
@@ -197,6 +197,6 @@
       ],
       "data_source": "Simulation"
     },
-    "timestamp": "2025-09-25T02:31:29.537499"
+    "timestamp": "2025-09-25T15:09:20.503250"
   }
 }

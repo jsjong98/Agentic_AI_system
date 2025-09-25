@@ -12,11 +12,9 @@ import {
   Upload,
   message,
   Progress,
-  Table,
   Statistic,
   Tag,
   Modal,
-  Spin,
   Slider,
   Radio
 } from 'antd';
@@ -36,7 +34,7 @@ import {
   HistoryOutlined,
   SaveOutlined
 } from '@ant-design/icons';
-import ThresholdCalculator from './ThresholdCalculator';
+// import ThresholdCalculator from './ThresholdCalculator'; // 현재 사용하지 않음
 
 const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
@@ -75,7 +73,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
   };
   
   // 데이터 관련 상태
-  const [historicalData, setHistoricalData] = useState(null);
+  // const [historicalData, setHistoricalData] = useState(null); // 현재 사용하지 않음
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState(null);
   const [analysisProgress, setAnalysisProgress] = useState({
@@ -86,6 +84,22 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     agora: 0,
     overall: 0
   });
+
+  // 전체 진행률 계산 함수
+  const calculateOverallProgress = (progress) => {
+    const agents = ['structura', 'cognita', 'chronos', 'sentio', 'agora'];
+    const totalProgress = agents.reduce((sum, agent) => sum + (progress[agent] || 0), 0);
+    return Math.round(totalProgress / agents.length);
+  };
+
+  // 진행률 업데이트 헬퍼 함수
+  const updateAgentProgress = (agentName, progressValue) => {
+    setAnalysisProgress(prev => {
+      const newProgress = { ...prev, [agentName]: progressValue };
+      const overallProgress = calculateOverallProgress(newProgress);
+      return { ...newProgress, overall: overallProgress };
+    });
+  };
   
   // 각 에이전트별 데이터 상태 (BatchAnalysis와 동일)
   const [agentFiles, setAgentFiles] = useState({
@@ -97,7 +111,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
   });
   
   // Neo4j 연결 설정 (Cognita용)
-  const [neo4jConfig, setNeo4jConfig] = useState({
+  const [neo4jConfig] = useState({
     uri: 'bolt://44.212.67.74:7687',
     username: 'neo4j',
     password: 'legs-augmentations-cradle'
@@ -105,7 +119,8 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
   const [neo4jConnected, setNeo4jConnected] = useState(false);
   const [neo4jTesting, setNeo4jTesting] = useState(false);
 
-  // 배치 처리 완료 대기 함수
+  // 배치 처리 완료 대기 함수 (현재 사용하지 않음)
+  /*
   const waitForBatchCompletion = async (batchId) => {
     const maxWaitTime = 30 * 60 * 1000; // 30분 최대 대기
     const pollInterval = 5000; // 5초마다 확인
@@ -119,7 +134,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
           const statusData = await statusResponse.json();
           console.log(`📊 배치 상태 (${batchId}):`, statusData);
           
-          // 진행률 업데이트
+          // 진행률 업데이트 - 서버에서 받은 전체 진행률 사용
           if (statusData.progress !== undefined) {
             setAnalysisProgress(prev => ({ ...prev, overall: statusData.progress }));
           }
@@ -151,6 +166,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     
     throw new Error('배치 처리 시간 초과 (30분)');
   };
+  */
 
   // 컴포넌트 로드 시 초기화 작업
   useEffect(() => {
@@ -212,7 +228,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     // 컴포넌트 로드 후 1초 뒤에 자동 테스트
     const timer = setTimeout(autoTestNeo4jConnection, 1000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [neo4jConfig]);
   
   // 최적화 결과 상태
   const [optimizationResults, setOptimizationResults] = useState({
@@ -553,7 +569,8 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
 
       // 3. BatchAnalysis 방식 사용 (파일 업로드 방식)
       console.log('📤 파일 업로드 방식으로 전체 파이프라인 처리 중...');
-      setAnalysisProgress(prev => ({ ...prev, overall: 20 }));
+      // 분석 시작 시 structura 진행률을 10%로 설정
+      updateAgentProgress('structura', 10);
       
       // 요청 데이터 준비 - Supervisor 서버 형식에 맞게 수정
       // employee_ids 리스트 추출 (다양한 컬럼명 시도)
@@ -659,10 +676,19 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       
       // 전체 진행률 계산 함수
       const updateOverallProgress = () => {
-        const activeAgents = expectedAgents.filter(agent => agentConfig[`use_${agent}`]);
-        const completedAgents = Object.keys(agentResults).length;
-        const overallProgress = Math.round((completedAgents / activeAgents.length) * 100);
-        setAnalysisProgress(prev => ({ ...prev, overall: overallProgress }));
+        // const activeAgents = expectedAgents.filter(agent => agentConfig[`use_${agent}`]); // 현재 사용하지 않음
+        // 완료된 에이전트들의 진행률을 100%로 업데이트하고 전체 진행률 계산
+        // const completedAgents = Object.keys(agentResults).length; // 현재 사용하지 않음
+        const newProgress = { ...analysisProgress };
+        
+        // 완료된 에이전트들을 100%로 설정
+        Object.keys(agentResults).forEach(agentName => {
+          newProgress[agentName] = 100;
+        });
+        
+        // 전체 진행률 계산
+        const overallProgress = calculateOverallProgress(newProgress);
+        setAnalysisProgress(prev => ({ ...prev, ...newProgress, overall: overallProgress }));
       };
       
       for (const agentName of expectedAgents) {
@@ -673,24 +699,24 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             console.log('🧠 Structura: RandomForest 개별 모델 학습 중...');
             console.log('   - 특성 선택 및 전처리...');
             await new Promise(resolve => setTimeout(resolve, 5000));
-            setAnalysisProgress(prev => ({ ...prev, structura: 30 }));
+            updateAgentProgress('structura', 30);
             
             console.log('   - RandomForest 모델 학습...');
             await new Promise(resolve => setTimeout(resolve, 8000));
-            setAnalysisProgress(prev => ({ ...prev, structura: 60 }));
+            updateAgentProgress('structura', 60);
             
             console.log('   - Optuna 하이퍼파라미터 최적화 (n_estimators, max_depth, learning_rate 등)...');
             await new Promise(resolve => setTimeout(resolve, 15000));
-            setAnalysisProgress(prev => ({ ...prev, structura: 70 }));
+            updateAgentProgress('structura', 70);
             
             console.log('   - 모델 준비 완료, API 호출 대기 중...');
-            setAnalysisProgress(prev => ({ ...prev, structura: 80 }));
+            updateAgentProgress('structura', 80);
             
           } else if (agentName === 'cognita') {
             if (neo4jConnected) {
               console.log('🕸️ Cognita: Neo4j 그래프 분석 준비 중...');
               console.log('   - 직원 관계 그래프 구축 및 분석 준비...');
-              setAnalysisProgress(prev => ({ ...prev, cognita: 5 }));
+              updateAgentProgress('cognita', 5);
             } else {
               console.log('⚠️ Cognita: Neo4j 연결 안됨, 건너뜀');
               continue;
@@ -700,7 +726,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             if (agentFiles.chronos) {
               console.log('📈 Chronos: 시계열 모델 준비 중...');
               console.log('   - 시계열 데이터 전처리 및 모델 준비...');
-              setAnalysisProgress(prev => ({ ...prev, chronos: 5 }));
+              updateAgentProgress('chronos', 5);
             } else {
               console.log('⚠️ Chronos: 데이터 없음, 건너뜀');
               continue;
@@ -710,7 +736,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             if (agentFiles.sentio) {
               console.log('💭 Sentio: 감정 분석 모델 준비 중...');
               console.log('   - 텍스트 전처리 및 모델 준비...');
-              setAnalysisProgress(prev => ({ ...prev, sentio: 5 }));
+              updateAgentProgress('sentio', 5);
             } else {
               console.log('⚠️ Sentio: 데이터 없음, 건너뜀');
               continue;
@@ -720,7 +746,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             if (agentFiles.agora) {
               console.log('📊 Agora: 시장 분석 모델 준비 중...');
               console.log('   - 경제 지표 데이터 수집 및 모델 준비...');
-              setAnalysisProgress(prev => ({ ...prev, agora: 5 }));
+              updateAgentProgress('agora', 5);
             } else {
               console.log('⚠️ Agora: 데이터 없음, 건너뜀');
               continue;
@@ -737,7 +763,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             if (agentName === 'structura') {
               // 실제 Structura API 호출 시작
               console.log(`🔄 Structura: ${masterAttritionData.length}명 배치 예측 시작...`);
-              setAnalysisProgress(prev => ({ ...prev, structura: 90 }));
+              updateAgentProgress('structura', 90);
               
               // Structura API 호출
               const response = await fetch('http://localhost:5001/api/predict/batch', {
@@ -759,20 +785,20 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   risk_score: pred.attrition_probability,
                   predicted_attrition: pred.attrition_prediction,
                   confidence: pred.confidence_score,
-                  actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber == pred.employee_number)?.Attrition === 'Yes' ? 1 : 0
+                  actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === pred.employee_number)?.Attrition === 'Yes' ? 1 : 0
                 }));
                 
                 // API 호출 완료 후 100%로 설정
                 console.log(`✅ Structura: ${predictions.length}명 배치 예측 완료!`);
-                setAnalysisProgress(prev => ({ ...prev, structura: 100 }));
+                updateAgentProgress('structura', 100);
               } else {
                 console.error('❌ Structura API 호출 실패:', response.status);
-                setAnalysisProgress(prev => ({ ...prev, structura: 100 })); // 실패해도 완료로 표시
+                updateAgentProgress('structura', 100); // 실패해도 완료로 표시
               }
             } else if (agentName === 'chronos') {
               // Chronos API 호출
               console.log(`🔄 Chronos: ${employeeIds.length}명 시계열 예측 시작...`);
-              setAnalysisProgress(prev => ({ ...prev, chronos: 10 }));
+              updateAgentProgress('chronos', 10);
               
               const response = await fetch('http://localhost:5003/api/predict', {
                 method: 'POST',
@@ -790,14 +816,14 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   risk_score: pred.attrition_probability,
                   predicted_attrition: pred.predicted_class,
                   confidence: pred.confidence || 0.8,
-                  actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber == pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
+                  actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
                 }));
                 
                 console.log(`✅ Chronos: ${predictions.length}명 시계열 예측 완료!`);
-                setAnalysisProgress(prev => ({ ...prev, chronos: 100 }));
+                updateAgentProgress('chronos', 100);
               } else {
                 console.error('❌ Chronos API 호출 실패:', response.status);
-                setAnalysisProgress(prev => ({ ...prev, chronos: 100 })); // 실패해도 완료로 표시
+                updateAgentProgress('chronos', 100); // 실패해도 완료로 표시
               }
             } else if (agentName === 'cognita') {
               // Cognita API - 전체 직원 분석 (샘플링 제거)
@@ -821,7 +847,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   // 실시간 진행률 업데이트 (10명마다)
                   if ((i + 1) % 10 === 0 || i === employeeIds.length - 1) {
                     const progress = Math.floor(((i + 1) / employeeIds.length) * 100);
-                    setAnalysisProgress(prev => ({ ...prev, cognita: progress }));
+                    updateAgentProgress('cognita', progress);
                     console.log(`Cognita: ${i + 1}/${employeeIds.length}명 분석 완료 (${progress}%)`);
                   }
                 } catch (error) {
@@ -833,7 +859,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             } else if (agentName === 'sentio') {
               // Sentio API 호출 - 전체 직원 분석 (샘플링 제거)
               console.log(`Sentio: 전체 ${masterAttritionData.length}명 배치 분석 시작...`);
-              setAnalysisProgress(prev => ({ ...prev, sentio: 10 }));
+              updateAgentProgress('sentio', 10);
               
               const response = await fetch('http://localhost:5004/analyze_sentiment', {
                 method: 'POST',
@@ -854,14 +880,14 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   risk_score: pred.psychological_risk_score, // 종합 점수로 다시 수정
                   predicted_attrition: pred.psychological_risk_score > 0.5 ? 1 : 0,
                   confidence: 0.8,
-                  actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber == pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
+                  actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
                 })) || [];
                 
                 console.log(`✅ Sentio: ${predictions.length}명 배치 분석 완료!`);
-                setAnalysisProgress(prev => ({ ...prev, sentio: 100 }));
+                updateAgentProgress('sentio', 100);
               } else {
                 console.error('❌ Sentio API 호출 실패:', response.status);
-                setAnalysisProgress(prev => ({ ...prev, sentio: 100 })); // 실패해도 완료로 표시
+                updateAgentProgress('sentio', 100); // 실패해도 완료로 표시
               }
             } else if (agentName === 'agora') {
               // Agora API - 전체 직원 분석 (샘플링 제거)
@@ -896,7 +922,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   // 실시간 진행률 업데이트 (10명마다)
                   if ((i + 1) % 10 === 0 || i === employeeIds.length - 1) {
                     const progress = Math.floor(((i + 1) / employeeIds.length) * 100);
-                    setAnalysisProgress(prev => ({ ...prev, agora: progress }));
+                    updateAgentProgress('agora', progress);
                     console.log(`Agora: ${i + 1}/${employeeIds.length}명 분석 완료 (${progress}%)`);
                   }
                 } catch (error) {
@@ -1309,7 +1335,8 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     }
   };
 
-  // 위험도 분류 기준 조정 함수
+  // 위험도 분류 기준 조정 함수 (현재 사용하지 않음)
+  /*
   const adjustRiskClassification = async (newThresholds) => {
     if (!optimizationResults || !optimizationResults.saved_files) {
       message.error('먼저 Bayesian Optimization을 완료해주세요.');
@@ -1347,10 +1374,12 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       message.error(`위험도 분류 조정 실패: ${error.message}`);
     }
   };
+  */
 
   // 개별 에이전트 분석 함수들은 전체 파이프라인으로 대체됨
 
-  // 성능 평가 함수
+  // 성능 평가 함수 (현재 사용하지 않음)
+  /*
   const calculatePerformanceMetrics = (actual, predictions) => {
     if (!actual || !predictions || actual.length === 0 || predictions.length === 0) {
       console.warn('성능 평가 데이터 부족:', { actual: actual?.length, predictions: predictions?.length });
@@ -1447,6 +1476,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       total_samples: matched.length
     };
   };
+  */
 
   return (
     <div style={{ padding: '24px' }}>

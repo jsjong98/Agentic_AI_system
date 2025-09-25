@@ -18,6 +18,7 @@ from datetime import datetime
 import traceback
 from typing import Dict, List, Any
 import warnings
+import logging
 warnings.filterwarnings('ignore')
 
 # 하이퍼파라미터 최적화를 위한 Optuna import
@@ -80,96 +81,95 @@ CORS(app)
 # 파일 업로드 크기 제한을 300MB로 설정
 app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024  # 300MB
 
+# 로깅 설정 - 파일과 콘솔 모두 출력
+log_dir = "../../logs"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "chronos_server.log")
+
+# 로거 설정
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# 파일 핸들러
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+
+# 콘솔 핸들러  
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# 포맷터
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# 핸들러 추가
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
 # 전역 변수
 processor = None
 model = None
 visualizer = None
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# 모듈 import 시 자동 초기화 (함수 정의 후에 실행하기 위해 나중에 호출)
+
 # 데이터 경로 설정 - uploads 디렉토리에서 찾기
 def get_chronos_data_paths(analysis_type='batch'):
     """uploads 디렉토리에서 Chronos 데이터 파일 찾기"""
-    uploads_dir = f"../uploads/chronos/{analysis_type}"
+    uploads_dir = "app/uploads/Chronos"
+    post_dir = "app/uploads/Chronos/post"
+    batch_dir = "app/uploads/Chronos/batch"
+    
     data_paths = {
         'timeseries': None,
         'personas': None
     }
     
-    if os.path.exists(uploads_dir):
-        files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
-        if files:
-            # 가장 최근 파일 사용 (타임스탬프 기준)
-            files.sort(reverse=True)
-            
-            # 파일들을 분류
-            for file in files:
-                file_path = os.path.join(uploads_dir, file)
-                if 'timeseries' in file.lower() and data_paths['timeseries'] is None:
-                    data_paths['timeseries'] = file_path
-                elif 'persona' in file.lower() and data_paths['personas'] is None:
-                    data_paths['personas'] = file_path
-                elif data_paths['personas'] is None:  # 일반 HR 데이터를 페르소나로 간주
-                    data_paths['personas'] = file_path
+    logger.info(f"🔍 Chronos 데이터 경로 탐색 중... (분석 타입: {analysis_type})")
     
-    # batch에 파일이 없으면 post 디렉토리 확인
-    if analysis_type == 'batch' and (data_paths['timeseries'] is None or data_paths['personas'] is None):
-        post_paths = get_chronos_data_paths('post')
-        if data_paths['timeseries'] is None:
-            data_paths['timeseries'] = post_paths['timeseries']
-        if data_paths['personas'] is None:
-            data_paths['personas'] = post_paths['personas']
+    # 분석 타입에 따른 디렉토리 우선순위 설정
+    if analysis_type == 'post':
+        search_dirs = [post_dir, uploads_dir]
+    elif analysis_type == 'batch':
+        search_dirs = [batch_dir, post_dir, uploads_dir]
+    else:
+        search_dirs = [uploads_dir, post_dir, batch_dir]
+    
+    # 각 디렉토리에서 파일 찾기
+    for search_dir in search_dirs:
+        if os.path.exists(search_dir):
+            files = [f for f in os.listdir(search_dir) if f.endswith('.csv')]
+            if files:
+                # 가장 최근 파일 사용 (타임스탬프 기준)
+                files.sort(reverse=True)
+                latest_file = os.path.join(search_dir, files[0])
+                data_paths['timeseries'] = latest_file
+                logger.info(f"📁 {search_dir}에서 최신 파일 발견: {files[0]}")
+                break
+    
+    # latest 파일 확인
+    if data_paths['timeseries'] is None and os.path.exists(uploads_dir):
+        latest_timeseries = os.path.join(uploads_dir, 'latest_timeseries.csv')
+        if os.path.exists(latest_timeseries):
+            data_paths['timeseries'] = latest_timeseries
+            print(f"📁 latest 파일 사용: {latest_timeseries}")
     
     # 기본값으로 fallback
     if data_paths['timeseries'] is None:
         data_paths['timeseries'] = 'data/IBM_HR_timeseries.csv'
+        print(f"⚠️ 업로드된 파일 없음, 기본 경로 사용: {data_paths['timeseries']}")
+    
     if data_paths['personas'] is None:
         data_paths['personas'] = 'data/IBM_HR_personas_assigned.csv'
         
     return data_paths
 
-DATA_PATH = get_chronos_data_paths()
+DATA_PATH = get_chronos_data_paths('post')
 
 MODEL_PATH = 'app/Chronos/models'
 os.makedirs(MODEL_PATH, exist_ok=True)
-
-def initialize_system():
-    """
-    시스템 초기화
-    """
-    global processor, model, visualizer
-    
-    try:
-        print("🚀 Chronos 시스템 초기화 중...")
-        
-        # 개선된 프로세서 및 시각화 도구 초기화
-        processor = ProperTimeSeriesProcessor(sequence_length=50, aggregation_unit='week')
-        visualizer = ChronosVisualizer()
-        
-        # 데이터 로드 및 전처리
-        if os.path.exists(DATA_PATH['timeseries']) and os.path.exists(DATA_PATH['personas']):
-            processor.load_data(DATA_PATH['timeseries'], DATA_PATH['personas'])
-            processor.detect_columns()
-            processor.preprocess_data()
-            processor.identify_features()
-            print("✅ 데이터 로드 및 전처리 완료")
-        else:
-            print("⚠️ 데이터 파일을 찾을 수 없습니다. 학습된 모델만 사용 가능합니다.")
-        
-        # 기존 모델 로드 시도
-        model_file = os.path.join(MODEL_PATH, 'chronos_attention_model.pth')
-        if os.path.exists(model_file):
-            load_model()
-            print("✅ 기존 모델 로드 완료")
-        else:
-            print("ℹ️ 기존 모델이 없습니다. 새로운 모델을 학습해주세요.")
-            
-        print("🎉 Chronos 시스템 초기화 완료!")
-        return True
-        
-    except Exception as e:
-        print(f"❌ 시스템 초기화 실패: {str(e)}")
-        traceback.print_exc()
-        return False
 
 def load_model():
     """
@@ -210,6 +210,76 @@ def load_model():
         print(f"❌ 모델 로드 실패: {str(e)}")
         return False
 
+def initialize_system():
+    """
+    시스템 초기화
+    """
+    global processor, model, visualizer, DATA_PATH
+    
+    try:
+        logger.info("🚀 Chronos 시스템 초기화 중...")
+        
+        # 데이터 경로 업데이트 (업로드된 파일 확인 - post 우선)
+        DATA_PATH = get_chronos_data_paths('post')
+        logger.info(f"📁 데이터 경로: {DATA_PATH}")
+        
+        # 개선된 프로세서 및 시각화 도구 초기화
+        processor = ProperTimeSeriesProcessor(sequence_length=50, aggregation_unit='week')
+        visualizer = ChronosVisualizer()
+        
+        # 데이터 로드 및 전처리
+        if os.path.exists(DATA_PATH['timeseries']):
+            # personas 파일이 있으면 사용, 없으면 None
+            personas_path = DATA_PATH['personas'] if DATA_PATH['personas'] and os.path.exists(DATA_PATH['personas']) else None
+            processor.load_data(DATA_PATH['timeseries'], personas_path)
+            processor.detect_columns()
+            processor.preprocess_data()
+            processor.identify_features()
+            
+            # processed_data 속성을 생성하기 위해 시퀀스 생성 호출
+            try:
+                processor.create_proper_sequences()
+                logger.info("✅ 데이터 로드, 전처리 및 시퀀스 생성 완료")
+            except Exception as e:
+                logger.warning(f"⚠️ 시퀀스 생성 실패: {e}")
+                # processed_data 속성을 수동으로 설정
+                if hasattr(processor, 'ts_data') and processor.ts_data is not None:
+                    processor.processed_data = processor.ts_data
+                logger.info("✅ 데이터 로드 및 전처리 완료 (시퀀스 생성 제외)")
+        else:
+            logger.warning("⚠️ 시계열 데이터 파일을 찾을 수 없습니다. 학습된 모델만 사용 가능합니다.")
+        
+        # 기존 모델 로드 시도
+        model_file = os.path.join(MODEL_PATH, 'chronos_attention_model.pth')
+        if os.path.exists(model_file):
+            load_model()
+            print("✅ 기존 모델 로드 완료")
+        else:
+            print("ℹ️ 기존 모델이 없습니다. 새로운 모델을 학습해주세요.")
+            
+        logger.info("🎉 Chronos 시스템 초기화 완료!")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ 시스템 초기화 실패: {str(e)}")
+        traceback.print_exc()
+        return False
+
+# 모듈 import 시 자동 초기화 실행
+def _auto_initialize():
+    """모듈이 import될 때 자동으로 시스템 초기화"""
+    global processor, model, visualizer
+    if processor is None:
+        try:
+            print("🔄 Chronos 모듈 import 시 자동 초기화 중...")
+            initialize_system()
+        except Exception as e:
+            print(f"⚠️ 자동 초기화 실패: {e}")
+
+# 자동 초기화 실행
+_auto_initialize()
+
+
 def save_model(model, processor, additional_info=None):
     """
     모델 저장
@@ -236,7 +306,7 @@ def save_model(model, processor, additional_info=None):
         torch.save(checkpoint, model_file)
         
         # 스케일러 저장
-        joblib.save(processor.scaler, scaler_file)
+        joblib.dump(processor.scaler, scaler_file)
         
         print("✅ 모델 및 스케일러 저장 완료")
         return True
@@ -295,7 +365,22 @@ def home():
                 
                 <div class="endpoint">
                     <span class="method">GET</span> <strong>/api/feature_importance</strong>
-                    <p>Feature importance 시각화</p>
+                    <p>전체 평균 Feature importance 시각화</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method">GET</span> <strong>/api/employee_feature_importance</strong>
+                    <p>직원별 Attention & Gradient Feature Importance 비교</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method">GET</span> <strong>/api/employee_attention_heatmap</strong>
+                    <p>직원별 Attention Weights 히트맵</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method">GET</span> <strong>/api/feature_importance_distribution</strong>
+                    <p>Feature Importance 분포 분석</p>
                 </div>
                 
                 <div class="endpoint">
@@ -314,8 +399,11 @@ def home():
                 <ol>
                     <li><strong>모델 학습:</strong> POST /api/train으로 모델을 먼저 학습시키세요</li>
                     <li><strong>예측 수행:</strong> POST /api/predict로 직원들의 퇴사 확률을 예측하세요</li>
-                    <li><strong>결과 분석:</strong> GET /api/feature_importance로 중요한 피처들을 확인하세요</li>
-                    <li><strong>개별 분석:</strong> GET /api/employee_timeline/{id}로 개별 직원을 분석하세요</li>
+                    <li><strong>전체 분석:</strong> GET /api/feature_importance로 전체 평균 중요 피처들을 확인하세요</li>
+                    <li><strong>직원별 분석:</strong> GET /api/employee_feature_importance로 각 직원별 Attention & Gradient 중요도를 비교하세요</li>
+                    <li><strong>시간별 패턴:</strong> GET /api/employee_attention_heatmap으로 직원별 시간대별 집중도를 확인하세요</li>
+                    <li><strong>분포 분석:</strong> GET /api/feature_importance_distribution으로 피처 중요도 분포를 분석하세요</li>
+                    <li><strong>개별 분석:</strong> GET /api/employee_timeline/{id}로 개별 직원을 상세 분석하세요</li>
                 </ol>
             </div>
         </div>
@@ -349,7 +437,10 @@ def get_status():
             'model_loaded': model is not None,
             'data_available': processor is not None and processor.ts_data is not None,
             'device': str(device),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'data_paths': DATA_PATH,
+            'timeseries_exists': os.path.exists(DATA_PATH['timeseries']) if DATA_PATH['timeseries'] else False,
+            'personas_exists': os.path.exists(DATA_PATH['personas']) if DATA_PATH['personas'] else False
         }
         
         if processor:
@@ -373,15 +464,22 @@ def upload_timeseries_data():
         if 'file' not in request.files:
             return jsonify({
                 "success": False,
-                "error": "파일이 업로드되지 않았습니다."
+                "error": "시계열 파일이 업로드되지 않았습니다."
             }), 400
         
         file = request.files['file']
         if file.filename == '':
             return jsonify({
                 "success": False,
-                "error": "파일이 선택되지 않았습니다."
+                "error": "시계열 파일이 선택되지 않았습니다."
             }), 400
+            
+        # personas 파일 확인 (선택사항)
+        personas_file = None
+        if 'personas_file' in request.files:
+            personas_file = request.files['personas_file']
+            if personas_file.filename == '':
+                personas_file = None
         
         # 파일 확장자 확인
         if not file.filename.lower().endswith('.csv'):
@@ -430,17 +528,34 @@ def upload_timeseries_data():
         try:
             df = pd.read_csv(file_path)
             
-            # 필수 컬럼 확인
-            required_columns = ['employee_id', 'week']
-            missing_columns = [col for col in required_columns if col not in df.columns]
+            # 필수 컬럼 확인 및 자동 생성
+            required_columns = ['employee_id']
             
-            if missing_columns:
+            # employee_id 컬럼 확인
+            if 'employee_id' not in df.columns:
                 return jsonify({
                     "success": False,
-                    "error": f"필수 컬럼이 누락되었습니다: {', '.join(missing_columns)}",
-                    "required_columns": required_columns,
+                    "error": "필수 컬럼이 누락되었습니다: employee_id",
+                    "required_columns": ['employee_id', 'week 또는 date'],
                     "found_columns": list(df.columns)
                 }), 400
+            
+            # week 컬럼이 없으면 date 컬럼에서 생성
+            if 'week' not in df.columns:
+                if 'date' in df.columns:
+                    print("📅 date 컬럼에서 week 컬럼 자동 생성 중...")
+                    df['date'] = pd.to_datetime(df['date'])
+                    df['year'] = df['date'].dt.year
+                    df['week'] = df['date'].dt.isocalendar().week
+                    df['week'] = df['year'].astype(str) + '-W' + df['week'].astype(str).str.zfill(2)
+                    print(f"✅ week 컬럼 생성 완료")
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": "week 또는 date 컬럼이 필요합니다",
+                        "required_columns": ['employee_id', 'week 또는 date'],
+                        "found_columns": list(df.columns)
+                    }), 400
             
             # 시계열 데이터 형식 확인
             unique_employees = df['employee_id'].nunique()
@@ -491,8 +606,12 @@ def train_model():
     global model
     
     try:
-        if processor is None or processor.ts_data is None:
-            return jsonify({'error': '데이터가 로드되지 않았습니다.'}), 400
+        # 프로세서가 없거나 데이터가 없으면 다시 초기화
+        if processor is None or not hasattr(processor, 'ts_data') or processor.ts_data is None:
+            print("🔄 데이터가 없어서 시스템을 다시 초기화합니다...")
+            success = initialize_system()
+            if not success or processor is None or not hasattr(processor, 'ts_data') or processor.ts_data is None:
+                return jsonify({'error': '데이터가 로드되지 않았습니다. 먼저 데이터를 업로드해주세요.'}), 400
         
         # 요청 파라미터 파싱
         params = request.get_json() or {}
@@ -923,7 +1042,7 @@ def predict():
         current_data_paths = get_chronos_data_paths()
         
         if new_data_paths != current_data_paths:
-            print(f"🔄 Chronos: {analysis_type} 분석을 위한 데이터 재로드")
+            logger.info(f"🔄 Chronos: {analysis_type} 분석을 위한 데이터 재로드")
             DATA_PATH = new_data_paths
             
             # 데이터 재로드 필요 시 processor 재초기화
@@ -934,11 +1053,11 @@ def predict():
                     processor.detect_columns()
                     processor.preprocess_data()
                     processor.identify_features()
-                    print(f"✅ Chronos {analysis_type} 데이터 재로드 완료")
+                    logger.info(f"✅ Chronos {analysis_type} 데이터 재로드 완료")
                 except Exception as e:
-                    print(f"⚠️ Chronos 데이터 재로드 실패: {e}")
+                    logger.warning(f"⚠️ Chronos 데이터 재로드 실패: {e}")
         
-        print(f"📊 Chronos {analysis_type} 분석 시작")
+        logger.info(f"📊 Chronos {analysis_type} 분석 시작")
         
         if not employee_ids:
             # 모든 직원 예측
@@ -990,6 +1109,8 @@ def predict():
         # 결과 정렬 (퇴사 확률 높은 순)
         predictions.sort(key=lambda x: x['attrition_probability'], reverse=True)
         
+        logger.info(f"🎉 Chronos {analysis_type} 분석 완료 - 총 {len(predictions)}명 예측 완료")
+        
         return jsonify({
             'predictions': predictions,
             'summary': {
@@ -1009,7 +1130,7 @@ def predict():
 @app.route('/api/feature_importance')
 def get_feature_importance():
     """
-    Feature importance 시각화
+    Feature importance 시각화 (전체 평균)
     """
     try:
         if model is None:
@@ -1022,11 +1143,11 @@ def get_feature_importance():
         model.eval()
         feature_importances = []
         
-        with torch.no_grad():
-            for i in range(0, len(X_tensor), 32):  # 배치 처리
-                batch = X_tensor[i:i+32]
-                interpretation = model.interpret_prediction(batch, processor.feature_columns)
-                feature_importances.append(interpretation['feature_importance'])
+        # gradient 계산을 위해 torch.no_grad() 제거
+        for i in range(0, len(X_tensor), 32):  # 배치 처리
+            batch = X_tensor[i:i+32]
+            interpretation = model.interpret_prediction(batch, processor.feature_columns)
+            feature_importances.append(interpretation['feature_importance'])
         
         # 평균 계산
         avg_importance = np.mean(feature_importances, axis=0)
@@ -1042,6 +1163,119 @@ def get_feature_importance():
         
     except Exception as e:
         print(f"❌ Feature importance 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/employee_feature_importance')
+def get_employee_feature_importance():
+    """
+    직원별 Attention & Gradient 기반 Feature Importance 시각화
+    """
+    try:
+        if model is None:
+            return jsonify({'error': '모델이 로드되지 않았습니다.'}), 400
+        
+        if processor is None or processor.processed_data is None:
+            return jsonify({'error': '데이터가 로드되지 않았습니다.'}), 400
+        
+        print("🚀 직원별 Feature Importance 분석 시작")
+        
+        # 시퀀스 데이터 생성
+        X, y, employee_ids = processor.create_proper_sequences()
+        
+        # 직원별 Attention 중요도 계산
+        attention_results = visualizer.calculate_attention_importance_per_employee(
+            model, X, y, employee_ids, processor.feature_columns, device
+        )
+        
+        # 직원별 Gradient 중요도 계산
+        gradient_results = visualizer.calculate_gradient_importance_per_employee(
+            model, X, y, employee_ids, processor.feature_columns, device, max_samples_per_employee=5
+        )
+        
+        # 직원별 비교 시각화
+        comparison_html = visualizer.plot_employee_feature_importance_comparison(
+            attention_results, gradient_results, processor.feature_columns,
+            top_employees=10, top_features=10
+        )
+        
+        return comparison_html, 200, {'Content-Type': 'text/html'}
+        
+    except Exception as e:
+        print(f"❌ 직원별 Feature importance 오류: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/employee_attention_heatmap')
+def get_employee_attention_heatmap():
+    """
+    직원별 Attention Weights 히트맵
+    """
+    try:
+        if model is None:
+            return jsonify({'error': '모델이 로드되지 않았습니다.'}), 400
+        
+        if processor is None or processor.processed_data is None:
+            return jsonify({'error': '데이터가 로드되지 않았습니다.'}), 400
+        
+        print("🚀 직원별 Attention Heatmap 생성 시작")
+        
+        # 시퀀스 데이터 생성
+        X, y, employee_ids = processor.create_proper_sequences()
+        
+        # 직원별 Attention 중요도 계산
+        attention_results = visualizer.calculate_attention_importance_per_employee(
+            model, X, y, employee_ids, processor.feature_columns, device
+        )
+        
+        # Attention 히트맵 생성
+        heatmap_html = visualizer.plot_employee_attention_heatmap(
+            attention_results, processor.feature_columns, employee_ids_to_show=25
+        )
+        
+        return heatmap_html, 200, {'Content-Type': 'text/html'}
+        
+    except Exception as e:
+        print(f"❌ Attention Heatmap 오류: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/feature_importance_distribution')
+def get_feature_importance_distribution():
+    """
+    Feature Importance 분포 분석
+    """
+    try:
+        if model is None:
+            return jsonify({'error': '모델이 로드되지 않았습니다.'}), 400
+        
+        if processor is None or processor.processed_data is None:
+            return jsonify({'error': '데이터가 로드되지 않았습니다.'}), 400
+        
+        print("🚀 Feature Importance 분포 분석 시작")
+        
+        # 시퀀스 데이터 생성
+        X, y, employee_ids = processor.create_proper_sequences()
+        
+        # 직원별 Attention 중요도 계산
+        attention_results = visualizer.calculate_attention_importance_per_employee(
+            model, X, y, employee_ids, processor.feature_columns, device
+        )
+        
+        # 직원별 Gradient 중요도 계산
+        gradient_results = visualizer.calculate_gradient_importance_per_employee(
+            model, X, y, employee_ids, processor.feature_columns, device, max_samples_per_employee=3
+        )
+        
+        # 분포 분석 시각화
+        distribution_html = visualizer.plot_feature_importance_distribution(
+            attention_results, gradient_results, processor.feature_columns
+        )
+        
+        return distribution_html, 200, {'Content-Type': 'text/html'}
+        
+    except Exception as e:
+        print(f"❌ Feature Importance 분포 분석 오류: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/model_analysis')
@@ -1149,74 +1383,234 @@ def batch_analysis():
         
         # 1단계: Post 데이터로 모델 학습
         post_data_paths = get_chronos_data_paths('post')
-        if not post_data_paths['main_data'] or not os.path.exists(post_data_paths['main_data']):
+        if not post_data_paths['timeseries'] or not os.path.exists(post_data_paths['timeseries']):
             return jsonify({"error": "Post 분석 데이터가 없습니다. 먼저 사후 분석을 수행해주세요."}), 400
         
-        print(f"📚 Post 데이터로 모델 학습: {post_data_paths['main_data']}")
+        print(f"📚 Post 데이터로 모델 학습: {post_data_paths['timeseries']}")
         
         # Post 데이터로 시스템 초기화
         DATA_PATH = post_data_paths
-        processor = ChronosDataProcessor(DATA_PATH)
+        processor = ProperTimeSeriesProcessor(sequence_length=50, aggregation_unit='week')
         
         # 데이터 로드 및 전처리
-        processor.load_data()
+        processor.load_data(post_data_paths['timeseries'], post_data_paths.get('personas'))
+        processor.detect_columns()
         processor.preprocess_data()
+        processor.identify_features()
         
-        # 모델 학습 (하이퍼파라미터 최적화 포함)
-        model = ChronosLSTMModel(
-            input_dim=processor.feature_dim,
-            sequence_length=processor.sequence_length
+        # Post 데이터로 모델 학습 (하이퍼파라미터 최적화 포함)
+        print("🔧 Post 데이터로 모델 학습 및 하이퍼파라미터 최적화 시작")
+        
+        # 시퀀스 생성
+        X, y, employee_ids = processor.create_proper_sequences()
+        
+        # 직원 기반 분할
+        from chronos_processor_fixed import employee_based_train_test_split
+        X_train, X_test, y_train, y_test = employee_based_train_test_split(
+            X, y, employee_ids, test_ratio=0.2
         )
         
-        # 학습 실행
-        training_result = model.train(
-            processor.X_train, 
-            processor.y_train,
-            processor.X_val,
-            processor.y_val,
-            optimize_hyperparameters=True  # 하이퍼파라미터 최적화 활성화
-        )
+        # 하이퍼파라미터 최적화 수행
+        if OPTUNA_AVAILABLE:
+            print("🚀 Post 데이터 기반 베이지안 하이퍼파라미터 최적화 시작")
+            
+            def objective(trial):
+                # 하이퍼파라미터 제안
+                gru_hidden = trial.suggest_categorical('gru_hidden', [16, 32, 64, 128])
+                cnn_filters = trial.suggest_categorical('cnn_filters', [8, 16, 32, 64])
+                dropout = trial.suggest_float('dropout', 0.1, 0.5)
+                trial_lr = trial.suggest_loguniform('learning_rate', 1e-4, 1e-2)
+                trial_batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
+                
+                try:
+                    # 모델 생성
+                    trial_model = create_hybrid_model(
+                        input_size=len(processor.feature_columns),
+                        gru_hidden=gru_hidden,
+                        cnn_filters=cnn_filters,
+                        kernel_sizes=[2, 3],
+                        dropout=dropout
+                    )
+                    trial_model.to(device)
+                    
+                    # 데이터 로더 (배치 크기 적용)
+                    from torch.utils.data import TensorDataset, DataLoader
+                    train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
+                    test_dataset = TensorDataset(torch.FloatTensor(X_test), torch.LongTensor(y_test))
+                    
+                    trial_train_loader = DataLoader(train_dataset, batch_size=trial_batch_size, shuffle=True)
+                    trial_test_loader = DataLoader(test_dataset, batch_size=trial_batch_size, shuffle=False)
+                    
+                    # 트레이너 설정
+                    from chronos_models import ChronosModelTrainer
+                    import torch.optim as optim
+                    import torch.nn as nn
+                    
+                    trial_trainer = ChronosModelTrainer(trial_model, device)
+                    trial_optimizer = optim.Adam(trial_model.parameters(), lr=trial_lr)
+                    trial_criterion = nn.CrossEntropyLoss()
+                    
+                    # 학습 (30 에포크로 제한)
+                    best_val_acc = 0
+                    patience = 5
+                    patience_counter = 0
+                    
+                    for epoch in range(30):
+                        train_loss, train_acc = trial_trainer.train_epoch(trial_train_loader, trial_optimizer, trial_criterion)
+                        test_results = trial_trainer.evaluate(trial_test_loader, trial_criterion)
+                        val_acc = test_results['accuracy']
+                        
+                        if val_acc > best_val_acc:
+                            best_val_acc = val_acc
+                            patience_counter = 0
+                        else:
+                            patience_counter += 1
+                            if patience_counter >= patience:
+                                break
+                        
+                        # Optuna pruning
+                        trial.report(val_acc, epoch)
+                        if trial.should_prune():
+                            raise optuna.TrialPruned()
+                    
+                    return best_val_acc
+                    
+                except Exception as e:
+                    print(f"Trial 실패: {str(e)}")
+                    return 0.0
+            
+            # Optuna Study 실행
+            study = optuna.create_study(
+                direction='maximize',
+                sampler=optuna.samplers.TPESampler(seed=42),
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=5)
+            )
+            
+            n_optimization_trials = 30  # 배치 분석용으로 30회로 제한
+            print(f"🚀 {n_optimization_trials}회 베이지안 최적화 시행...")
+            study.optimize(objective, n_trials=n_optimization_trials, timeout=1200)  # 20분 타임아웃
+            
+            # 최적 하이퍼파라미터로 모델 생성
+            best_params = study.best_params
+            print(f"✅ 최적 하이퍼파라미터: {best_params}")
+            
+            model = create_hybrid_model(
+                input_size=len(processor.feature_columns),
+                gru_hidden=best_params['gru_hidden'],
+                cnn_filters=best_params['cnn_filters'],
+                kernel_sizes=[2, 3],
+                dropout=best_params['dropout']
+            )
+            model.to(device)
+            
+            # 최적 설정으로 최종 학습
+            from torch.utils.data import TensorDataset, DataLoader
+            from chronos_models import ChronosModelTrainer
+            import torch.optim as optim
+            import torch.nn as nn
+            
+            train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
+            train_loader = DataLoader(train_dataset, batch_size=best_params['batch_size'], shuffle=True)
+            
+            trainer = ChronosModelTrainer(model, device)
+            optimizer = optim.Adam(model.parameters(), lr=best_params['learning_rate'])
+            criterion = nn.CrossEntropyLoss()
+            
+            # 최종 학습
+            for epoch in range(50):
+                train_loss, train_acc = trainer.train_epoch(train_loader, optimizer, criterion)
+                if epoch % 10 == 0:
+                    print(f"최종 학습 Epoch {epoch+1}/50 - Acc: {train_acc:.4f}")
+            
+            training_result = {
+                "message": "Post 데이터 기반 하이퍼파라미터 최적화 완료", 
+                "best_params": best_params,
+                "best_score": study.best_value,
+                "epochs": 50
+            }
+        else:
+            # Optuna 없는 경우 고정 파라미터로 학습
+            print("⚙️ 고정 하이퍼파라미터로 Post 데이터 학습")
+            model = create_hybrid_model(
+                input_size=len(processor.feature_columns),
+                gru_hidden=32,
+                cnn_filters=16,
+                dropout=0.2
+            )
+            model.to(device)
+            
+            from torch.utils.data import TensorDataset, DataLoader
+            from chronos_models import ChronosModelTrainer
+            import torch.optim as optim
+            import torch.nn as nn
+            
+            train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
+            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+            
+            trainer = ChronosModelTrainer(model, device)
+            optimizer = optim.Adam(model.parameters(), lr=0.001)
+            criterion = nn.CrossEntropyLoss()
+            
+            for epoch in range(50):
+                train_loss, train_acc = trainer.train_epoch(train_loader, optimizer, criterion)
+                if epoch % 10 == 0:
+                    print(f"학습 Epoch {epoch+1}/50 - Acc: {train_acc:.4f}")
+            
+            training_result = {"message": "Post 데이터 기반 고정 파라미터 학습 완료", "epochs": 50}
         print(f"✅ Chronos 모델 학습 완료: {training_result}")
         
         # 2단계: Batch 데이터로 예측
         batch_data_paths = get_chronos_data_paths('batch')
-        if not batch_data_paths['main_data'] or not os.path.exists(batch_data_paths['main_data']):
+        if not batch_data_paths['timeseries'] or not os.path.exists(batch_data_paths['timeseries']):
             return jsonify({"error": "Batch 분석 데이터가 없습니다. 먼저 배치 데이터를 업로드해주세요."}), 400
         
-        print(f"🔮 Batch 데이터로 예측 수행: {batch_data_paths['main_data']}")
+        print(f"🔮 Batch 데이터로 예측 수행: {batch_data_paths['timeseries']}")
         
         # Batch 데이터 로드 및 전처리
-        batch_processor = ChronosDataProcessor(batch_data_paths)
-        batch_processor.load_data()
+        batch_processor = ProperTimeSeriesProcessor(sequence_length=50, aggregation_unit='week')
+        batch_processor.load_data(batch_data_paths['timeseries'], batch_data_paths.get('personas'))
+        batch_processor.detect_columns()
         batch_processor.preprocess_data()
+        batch_processor.identify_features()
+        
+        # Batch 데이터 시퀀스 생성
+        X_batch, y_batch, batch_employee_ids = batch_processor.create_proper_sequences()
         
         # 예측 수행
-        predictions = model.predict(batch_processor.X_test)
+        model.eval()
+        X_batch_tensor = torch.FloatTensor(X_batch).to(device)
+        
+        with torch.no_grad():
+            outputs = model(X_batch_tensor)
+            probabilities = torch.softmax(outputs, dim=1)
+            predictions = probabilities[:, 1].cpu().numpy()  # 퇴사 확률
         
         # 결과 포맷팅
         results = []
-        employee_ids = batch_processor.data['EmployeeNumber'].unique() if 'EmployeeNumber' in batch_processor.data.columns else range(len(predictions))
         
-        for i, (emp_id, pred) in enumerate(zip(employee_ids, predictions)):
-            # XAI 정보 생성 (Attention weights, sequence importance 등)
+        for i, (emp_id, pred) in enumerate(zip(batch_employee_ids, predictions)):
+            # XAI 정보 생성 (Attention weights)
             xai_info = {}
-            if hasattr(model, 'get_attention_weights') and i < len(batch_processor.X_test):
-                try:
-                    attention_weights = model.get_attention_weights(batch_processor.X_test[i:i+1])
-                    xai_info['attention_weights'] = attention_weights.tolist() if hasattr(attention_weights, 'tolist') else attention_weights
-                except Exception as e:
-                    print(f"Attention weights 추출 실패: {e}")
+            try:
+                # 개별 샘플에 대한 attention weights 추출
+                sample_tensor = X_batch_tensor[i:i+1]
+                attention_weights = model.get_attention_weights(sample_tensor)
+                xai_info['attention_weights'] = attention_weights.cpu().numpy().tolist()
+            except Exception as e:
+                print(f"Attention weights 추출 실패: {e}")
+                xai_info['attention_weights'] = []
             
-            # 시퀀스 중요도 계산
+            # 시퀀스 중요도 계산 (간단한 방식)
             sequence_importance = {}
-            if i < len(batch_processor.X_test):
-                try:
-                    # 각 시점별 중요도 계산 (간단한 gradient 기반)
-                    sequence_data = batch_processor.X_test[i]
-                    for t in range(len(sequence_data)):
-                        sequence_importance[f'timestep_{t}'] = float(abs(pred - 0.5) * (t + 1) / len(sequence_data))
-                except Exception as e:
-                    print(f"Sequence importance 계산 실패: {e}")
+            try:
+                sequence_length = X_batch.shape[1]
+                for t in range(sequence_length):
+                    # 시간 가중치 적용 (최근 시점일수록 높은 가중치)
+                    time_weight = (t + 1) / sequence_length
+                    sequence_importance[f'timestep_{t}'] = float(pred * time_weight)
+            except Exception as e:
+                print(f"Sequence importance 계산 실패: {e}")
+                sequence_importance = {}
             
             results.append({
                 'employee_id': str(emp_id),
@@ -1234,10 +1628,10 @@ def batch_analysis():
                     }
                 },
                 'model_metadata': {
-                    'model_type': 'LSTM',
+                    'model_type': 'GRU_CNN_Hybrid',
                     'sequence_length': processor.sequence_length,
-                    'feature_dimensions': processor.feature_dim,
-                    'training_optimized': True
+                    'feature_dimensions': len(processor.feature_columns),
+                    'training_optimized': True  # Post 데이터로 하이퍼파라미터 최적화 수행
                 }
             })
         
@@ -1247,15 +1641,15 @@ def batch_analysis():
             "success": True,
             "message": f"Chronos 배치 분석 완료: Post 데이터 학습 → {len(results)}명 Batch 예측",
             "agent": "chronos",
-            "training_data_path": post_data_paths['main_data'],
-            "prediction_data_path": batch_data_paths['main_data'],
+            "training_data_path": post_data_paths['timeseries'],
+            "prediction_data_path": batch_data_paths['timeseries'],
             "total_predictions": len(results),
             "predictions": results,
             "model_info": {
-                "training_samples": len(processor.data) if processor.data is not None else 0,
+                "training_samples": len(X_train),
                 "sequence_length": processor.sequence_length,
-                "feature_dim": processor.feature_dim,
-                "model_type": "LSTM with Hyperparameter Optimization"
+                "feature_dim": len(processor.feature_columns),
+                "model_type": "GRU_CNN_Hybrid with Post-Data Hyperparameter Optimization"
             }
         })
         

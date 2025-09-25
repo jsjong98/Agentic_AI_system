@@ -33,11 +33,18 @@ except ImportError as e:
     AGORA_AVAILABLE = False
 
 # 로깅 설정
+import io
+
+# Windows 콘솔 UTF-8 설정
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('agora_api.log'),
+        logging.FileHandler('agora_api.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )

@@ -1,0 +1,143 @@
+services:
+  # =============================================================================
+  # 🤖 Agentic AI System - 백엔드 서비스 (모든 에이전트 통합)
+  # =============================================================================
+  agentic-backend:
+    build: 
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: agentic-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"  # Structura Agent
+      - "5002:5002"  # Cognita Agent  
+      - "5003:5003"  # Chronos Agent
+      - "5004:5004"  # Sentio Agent
+      - "5005:5005"  # Agora Agent
+      - "5006:5006"  # Supervisor Agent (메인 API)
+      - "5007:5007"  # Integration Agent
+    volumes:
+      - agentic_models:/app/models
+      - agentic_uploads:/app/uploads
+      - agentic_cache:/app/cache
+      - agentic_results:/app/results
+      - agentic_logs:/app/logs
+      - agentic_temp:/app/temp
+      - agentic_data:/app/data
+      # 각 에이전트별 전용 볼륨
+      - structura_models:/app/Structura/models
+      - cognita_cache:/app/Cognita/cache
+      - chronos_models:/app/Chronos/models
+      - sentio_cache:/app/Sentio/cache
+      - agora_data:/app/Agora/data
+      - supervisor_logs:/app/Supervisor/logs
+      - integration_results:/app/Integration/results
+    environment:
+      # GPU 설정
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Flask 환경 설정
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      # 에이전트 포트 설정
+      - STRUCTURA_PORT=5001
+      - COGNITA_PORT=5002
+      - CHRONOS_PORT=5003
+      - SENTIO_PORT=5004
+      - AGORA_PORT=5005
+      - SUPERVISOR_PORT=5006
+      - INTEGRATION_PORT=5007
+      # Neo4j 설정 (Cognita용)
+      - NEO4J_URI=bolt://YOUR_NEO4J_HOST:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=YOUR_NEO4J_PASSWORD
+      # OpenAI API 설정 (Sentio, Agora, Supervisor, Integration용)
+      # - OPENAI_API_KEY=your-api-key-here  # 실제 사용 시 설정 필요
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - agentic-network
+
+  # =============================================================================
+  # 🌐 React Dashboard - 프론트엔드 서비스
+  # =============================================================================
+  agentic-dashboard:
+    build: 
+      context: ./Dashboard
+      dockerfile: Dockerfile
+    container_name: agentic-dashboard
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      agentic-backend:
+        condition: service_healthy
+    environment:
+      # React 환경 변수 (빌드 시점에 설정됨)
+      - REACT_APP_API_BASE_URL=http://localhost:5006
+      - REACT_APP_SUPERVISOR_URL=http://localhost:5006
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - agentic-network
+
+# =============================================================================
+# 📦 볼륨 설정 - 데이터 영속성
+# =============================================================================
+volumes:
+  # 공통 볼륨
+  agentic_models:
+    driver: local
+  agentic_uploads:
+    driver: local
+  agentic_cache:
+    driver: local
+  agentic_results:
+    driver: local
+  agentic_logs:
+    driver: local
+  agentic_temp:
+    driver: local
+  agentic_data:
+    driver: local
+  
+  # 에이전트별 전용 볼륨
+  structura_models:
+    driver: local
+  cognita_cache:
+    driver: local
+  chronos_models:
+    driver: local
+  sentio_cache:
+    driver: local
+  agora_data:
+    driver: local
+  supervisor_logs:
+    driver: local
+  integration_results:
+    driver: local
+
+# =============================================================================
+# 🌐 네트워크 설정
+# =============================================================================
+networks:
+  agentic-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
