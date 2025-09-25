@@ -6,7 +6,7 @@
 
 ## 🌟 주요 특징
 
-- **🤖 에이전틱 아키텍처**: 5개 AI 에이전트가 협력하여 분석
+- **🤖 에이전틱 아키텍처**: Supervisor가 5개 워커 에이전트를 관리하고 Integration이 최종 레포트 생성
 - **🔍 다차원 분석**: 정형 + 관계형 + 시계열 + 텍스트 + 시장 데이터 통합 분석
 - **⚡ 실시간 처리**: 개별 직원부터 전체 조직까지 즉시 분석
 - **🔬 설명 가능한 AI**: SHAP, LIME, Attention 기반 투명한 의사결정
@@ -22,52 +22,50 @@
 
 ```
                     ┌─────────────────────────────────────┐
-                    │      🎯 Agentic Master Server      │
-                    │         (포트: 8000)              │
-                    │      통합 조정 및 결과 합성         │
+                    │      🎯 Supervisor Agent           │
+                    │         (포트: 5006)              │
+                    │   LangGraph 워크플로우 관리         │
                     └─────────────────────────────────────┘
                                     │
-        ┌───────────┬───────────┬───────────┬───────────┬───────────┬───────────┐
-        │           │           │           │           │           │           │
-┌───────▼───────┐ ┌─▼─────┐ ┌──▼──┐ ┌─────▼─────┐ ┌───▼───┐ ┌──▼──┐
-│  🏢 Structura  │ │🕸️Cognita│ │⏰Chronos│ │📝 Sentio │ │🌍Agora│ │🎯Supervisor│
-│   워커 에이전트  │ │워커 에이전트│ │워커 에이전트│ │ 워커 에이전트│ │워커 에이전트│ │워커 에이전트│
-│  (포트: 5001)  │ │(포트:5000)│ │(포트:5002)│ │(포트: 5003)│ │(포트:5004)│ │(포트:5005)│
-│               │ │         │ │         │ │           │ │         │ │         │
-│ 정형 데이터 분석 │ │관계형 데이터│ │시계열 데이터│ │텍스트 감정 │ │외부 시장 │ │워커 통합 │
-│ XGBoost + xAI │ │Neo4j+   │ │GRU+CNN+ │ │NLP+GPT-5│ │분석+GPT-5│ │LangGraph+│
-│ SHAP + LIME   │ │Graph    │ │Attention│ │키워드+생성│ │LLM 해석 │ │GPT-5 워크플로우│
-└───────────────┘ └─────────┘ └─────────┘ └───────────┘ └─────────┘ └─────────┘
-        │               │           │           │           │           │
-        ▼               ▼           ▼           ▼           ▼           ▼
-┌───────────────┐ ┌─────────────┐ ┌─────────┐ ┌───────────┐ ┌─────────┐ ┌─────────┐
-│ 📊 IBM HR CSV │ │🗄️ Neo4j    │ │📈 시계열│ │📝 HR      │ │🌐 채용  │ │🔧 최종  │
-│   데이터셋     │ │Graph DB    │ │CSV 데이터│ │텍스트     │ │공고 API │ │통합 분석│
-└───────────────┘ └─────────────┘ └─────────┘ └───────────┘ └─────────┘ └─────────┘
-                                                                            │
-                                                                            ▼
-                                                              ┌─────────────────────┐
-                                                              │  🎯 Integration     │
-                                                              │  (포트: 5007)      │
-                                                              │  최종 종합 레포트   │
-                                                              │  GPT-5 기반 분석   │
-                                                              └─────────────────────┘
+        ┌───────────┬───────────┬───────────┬───────────┬───────────┐
+        │           │           │           │           │           │
+┌───────▼───────┐ ┌─▼─────┐ ┌──▼──┐ ┌─────▼─────┐ ┌───▼───┐
+│  🏢 Structura  │ │🕸️Cognita│ │⏰Chronos│ │📝 Sentio │ │🌍Agora│
+│   워커 에이전트  │ │워커 에이전트│ │워커 에이전트│ │ 워커 에이전트│ │워커 에이전트│
+│  (포트: 5001)  │ │(포트:5002)│ │(포트:5003)│ │(포트: 5004)│ │(포트:5005)│
+│               │ │         │ │         │ │           │ │         │
+│ 정형 데이터 분석 │ │관계형 데이터│ │시계열 데이터│ │텍스트 감정 │ │외부 시장 │
+│ XGBoost + xAI │ │Neo4j+   │ │GRU+CNN+ │ │NLP+GPT-5│ │분석+GPT-5│
+│ SHAP + LIME   │ │Graph    │ │Attention│ │키워드+생성│ │LLM 해석 │
+└───────────────┘ └─────────┘ └─────────┘ └───────────┘ └─────────┘
+        │               │           │           │           │
+        ▼               ▼           ▼           ▼           ▼
+┌───────────────┐ ┌─────────────┐ ┌─────────┐ ┌───────────┐ ┌─────────┐
+│ 📊 IBM HR CSV │ │🗄️ Neo4j    │ │📈 시계열│ │📝 HR      │ │🌐 채용  │
+│   데이터셋     │ │Graph DB    │ │CSV 데이터│ │텍스트     │ │공고 API │
+└───────────────┘ └─────────────┘ └─────────┘ └───────────┘ └─────────┘
+                                    │
+                                    ▼
+                    ┌─────────────────────────────────────┐
+                    │      🎯 Integration System         │
+                    │         (포트: 5007)              │
+                    │   GPT-5 기반 최종 종합 레포트       │
+                    └─────────────────────────────────────┘
 ```
 
 ---
 
 ## 🚀 빠른 시작
 
-### 1️⃣ 통합 시스템 실행 (권장)
+### 1️⃣ 백엔드 서버 실행 (권장)
 
 ```bash
 # 1. 저장소 클론
 git clone <repository-url>
 cd Agentic_AI_system
 
-# 2. 통합 의존성 설치
-cd app
-pip install -r requirements_agentic.txt
+# 2. Anaconda 환경 활성화 (필수)
+conda activate nlp
 
 # 3. 환경 변수 설정
 export NEO4J_URI="bolt://54.162.43.24:7687"
@@ -75,19 +73,33 @@ export NEO4J_USERNAME="neo4j"
 export NEO4J_PASSWORD="resident-success-moss"
 export OPENAI_API_KEY="your-gpt5nano-api-key"  # Sentio, Agora, Supervisor, Integration용
 
-# 4. 통합 마스터 서버 실행 🚀
-python run_agentic_system.py
+# 4. 모든 백엔드 서버 실행 🚀
+C:/Users/OJH/anaconda3/envs/nlp/python.exe start_all_services_simple.py
 ```
 
-**접속**: http://localhost:8000 (통합 마스터 서버)
+**실행되는 서버들**:
+- **Supervisor (포트 5006)**: LangGraph 워크플로우 관리 (최상위 관리자)
+- **Structura (포트 5001)**: 정형 데이터 ML 분석
+- **Cognita (포트 5002)**: 네트워크 관계 분석  
+- **Chronos (포트 5003)**: 시계열 딥러닝 분석
+- **Sentio (포트 5004)**: 텍스트 감정 분석
+- **Agora (포트 5005)**: 시장 분석 + LLM
+- **Integration (포트 5007)**: 최종 종합 레포트 생성
 
-### 2️⃣ 시스템 테스트
+### 2️⃣ 프론트엔드 실행
 
 ```bash
 # 별도 터미널에서 실행
-cd app
-python test_agentic_system.py
+cd Dashboard
+npm install
+npm start
 ```
+
+**접속**: http://localhost:3000 (React 대시보드)
+
+### 3️⃣ 상세 실행 가이드
+
+전체 실행 가이드는 **[Launch.md](app/Launch.md)** 파일을 참조하세요.
 
 ---
 
@@ -174,7 +186,7 @@ python test_agentic_system.py
 
 ### 🕸️ Cognita - 관계형 데이터 분석 에이전트
 
-**포트**: `5000` | **기술**: Neo4j + Graph Analytics
+**포트**: `5002` | **기술**: Neo4j + Graph Analytics
 
 #### 🎯 주요 기능
 - **사회적 네트워크 분석**: 직원 간 관계 패턴 분석
@@ -198,7 +210,7 @@ python test_agentic_system.py
 
 ### ⏰ Chronos - 시계열 데이터 분석 에이전트
 
-**포트**: `5002` | **기술**: GRU+CNN+Attention 하이브리드 딥러닝
+**포트**: `5003` | **기술**: GRU+CNN+Attention 하이브리드 딥러닝
 
 #### 🎯 주요 기능
 - **시계열 패턴 분석**: 직원 행동 패턴의 시간적 변화 추적
@@ -223,7 +235,7 @@ python test_agentic_system.py
 
 ### 📝 Sentio - 텍스트 감정 분석 에이전트
 
-**포트**: `5003` | **기술**: NLP + 키워드 분석 + GPT-5-nano 텍스트 생성
+**포트**: `5004` | **기술**: NLP + 키워드 분석 + GPT-5-nano 텍스트 생성
 
 #### 🎯 주요 기능
 - **텍스트 감정 분석**: HR 텍스트의 감정 점수 및 퇴직 위험 탐지
@@ -250,7 +262,7 @@ python test_agentic_system.py
 
 ### 🌍 Agora - 외부 시장 분석 에이전트
 
-**포트**: `5004` | **기술**: 시장 데이터 분석 + 경쟁력 평가 + GPT-5-nano LLM 해석
+**포트**: `5005` | **기술**: 시장 데이터 분석 + 경쟁력 평가 + GPT-5-nano LLM 해석
 
 #### 🎯 주요 기능
 - **시장 압력 지수 계산**: 외부 시장의 채용 수요 및 경쟁 상황 분석
@@ -274,31 +286,6 @@ python test_agentic_system.py
 - `GET /market/report/<job_role>` - 직무별 시장 보고서
 - `GET /market/trends` - 전체 시장 트렌드
 - `POST /market/competitive_analysis` - 경쟁력 분석
-
----
-
-### 🎯 Supervisor - 워커 통합 관리 에이전트
-
-**포트**: `5005` | **기술**: LangGraph + GPT-5-nano 워크플로우
-
-#### 🎯 주요 기능
-- **워커 에이전트 통합**: 5개 워커 에이전트의 결과를 종합 분석
-- **LangGraph 워크플로우**: 복잡한 분석 프로세스 자동화
-- **GPT-5-nano 기반 의사결정**: 지능형 워크플로우 관리
-- **결과 합성**: 다중 에이전트 결과의 통합 및 우선순위 결정
-- **품질 관리**: 분석 결과의 일관성 및 품질 보장
-
-#### 📊 성능 지표
-- **워크플로우 처리**: 복잡한 다단계 분석 자동화
-- **결과 합성**: 5개 에이전트 결과 통합 분석
-- **의사결정 지원**: LLM 기반 지능형 판단
-- **환경변수 지원**: .env 파일을 통한 API 키 관리
-
-#### 🔗 주요 API
-- `POST /api/analyze/comprehensive` - 종합 분석 워크플로우
-- `POST /api/synthesize/results` - 결과 합성 및 우선순위 결정
-- `GET /api/workflow/status` - 워크플로우 상태 조회
-- `POST /api/workflow/custom` - 맞춤형 워크플로우 실행
 
 ---
 
@@ -338,7 +325,7 @@ python test_agentic_system.py
 ### 통합 API 사용 예시
 
 ```javascript
-// 🤖 개별 직원 통합 분석 (6개 워커 에이전트 + Supervisor + Integration)
+// 🤖 개별 직원 통합 분석 (Supervisor → 5개 워커 에이전트 → Integration)
 const analyzeEmployeeIntegrated = async (employeeData, textData) => {
   // 📋 데이터 형식 예시
   const employeeData = {
@@ -366,34 +353,26 @@ const analyzeEmployeeIntegrated = async (employeeData, textData) => {
     text_type: "SELF_REVIEW"
   };
 
-  const response = await fetch('http://localhost:8000/api/analyze/individual', {
+  const response = await fetch('http://localhost:5006/analyze_employee', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      ...employeeData,
-      text_data: textData,
-      market_data: { use_llm: true },   // GPT-5-nano 시장 분석
-      use_structura: true,  // 정형 데이터 분석
-      use_cognita: true,    // 관계형 데이터 분석 (Neo4j 연결 필요)
-      use_sentio: true,     // 텍스트 감정 분석 (GPT-5-nano)
-      use_chronos: true,    // 시계열 데이터 분석
-      use_agora: true,      // 외부 시장 분석 (GPT-5-nano)
-      use_supervisor: true, // Supervisor 워크플로우
-      use_integration: true // Integration 최종 레포트
+      employee_id: employeeData.EmployeeNumber,
+      session_id: `session_${Date.now()}`,
+      employee_data: employeeData,
+      text_data: textData
     })
   });
   
   const result = await response.json();
   
-  // 🔍 통합 결과 활용
-  console.log('Structura 결과:', result.structura_result);
-  console.log('Cognita 결과:', result.cognita_result);
-  console.log('Sentio 결과:', result.sentio_result);
-  console.log('Chronos 결과:', result.chronos_result);
-  console.log('Agora 결과:', result.agora_result);
-  console.log('Supervisor 결과:', result.supervisor_result);
-  console.log('Integration 레포트:', result.integration_report);
-  console.log('통합 분석:', result.combined_analysis);
+  // 🔍 Supervisor를 통한 통합 결과 활용
+  console.log('최종 레포트:', result.final_report);
+  console.log('위험 점수:', result.final_report.risk_score);
+  console.log('위험 등급:', result.final_report.risk_grade);
+  console.log('이탈 확률:', result.final_report.attrition_probability);
+  console.log('권장사항:', result.final_report.recommendations);
+  console.log('실행 요약:', result.execution_summary);
   
   return result;
 };
@@ -441,15 +420,13 @@ const generateIntegrationReport = async (employeeId, agentScores) => {
   return response.json();
 };
 
-// 🎯 Supervisor 워크플로우 실행
-const runSupervisorWorkflow = async (workflowType, inputData) => {
-  const response = await fetch('http://localhost:5005/api/analyze/comprehensive', {
+// 🎯 배치 분석
+const batchAnalyze = async (employeeIds) => {
+  const response = await fetch('http://localhost:5006/batch_analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      workflow_type: workflowType,
-      input_data: inputData,
-      use_llm: true  // GPT-5-nano 워크플로우
+      employee_ids: employeeIds
     })
   });
   return response.json();
@@ -466,25 +443,20 @@ const useAgenticAI = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  const baseURL = 'http://localhost:8000/api';
+  const baseURL = 'http://localhost:5006';
   
-  // 🤖 통합 직원 분석 (6개 워커 에이전트 + Supervisor + Integration)
+  // 🤖 Supervisor를 통한 통합 직원 분석 (5개 워커 → Integration)
   const analyzeEmployee = async (employeeData, textData) => {
     try {
       setLoading(true);
-      const response = await fetch(`${baseURL}/analyze/individual`, {
+      const response = await fetch(`${baseURL}/analyze_employee`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...employeeData,
-          text_data: textData,
-          use_structura: true,
-          use_cognita: true,
-          use_sentio: true,    // GPT-5-nano 텍스트 분석
-          use_chronos: true,
-          use_agora: true,     // GPT-5-nano 시장 분석
-          use_supervisor: true, // LangGraph 워크플로우
-          use_integration: true // GPT-5-nano 최종 레포트
+          employee_id: employeeData.EmployeeNumber,
+          session_id: `session_${Date.now()}`,
+          employee_data: employeeData,
+          text_data: textData
         })
       });
       const result = await response.json();
@@ -502,7 +474,7 @@ const useAgenticAI = () => {
   const analyzeTextOnly = async (text, employeeId) => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5003/analyze/text', {
+      const response = await fetch('http://localhost:5004/analyze/text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -552,34 +524,32 @@ const useAgenticAI = () => {
 
 ## 📊 시스템 비교
 
-| 특징 | 🏢 Structura | 🕸️ Cognita | ⏰ Chronos | 📝 Sentio | 🌍 Agora | 🎯 Supervisor | 🎯 Integration |
-|------|-------------|------------|-----------|-----------|-----------|--------------|---------------|
-| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 | 시계열 패턴 | 텍스트 감정 분석 | 외부 시장 분석 | 워커 통합 관리 | 최종 종합 레포트 |
-| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB | 시계열 CSV | HR 텍스트 데이터 | 채용 공고 API | 워커 결과 통합 | 에이전트 점수 |
-| **주요 기술** | XGBoost + xAI | Graph Analytics | GRU+CNN+Attention | NLP + GPT-5-nano | 시장 분석 + GPT-5-nano | LangGraph + GPT-5-nano | GPT-5-nano 레포트 |
-| **포트** | 5001 | 5000 | 5002 | 5003 | 5004 | 5005 | 5007 |
-| **예측 대상** | 이직 확률 | 관계형 위험도 | 시계열 기반 예측 | 퇴직 위험 신호 | 시장 압력 지수 | 워크플로우 관리 | 종합 위험도 분석 |
-| **설명 가능성** | SHAP, LIME | 네트워크 분석 | Attention 메커니즘 | 키워드 + LLM 분석 | 시장 + LLM 해석 | LLM 기반 합성 | LLM 기반 레포트 |
-| **분석 범위** | 개별 중심 | 조직/팀 중심 | 시간적 패턴 중심 | 텍스트 중심 | 시장 중심 | 통합 워크플로우 | 개별 맞춤 레포트 |
-| **실시간성** | 즉시 예측 | 실시간 관계 분석 | 딥러닝 예측 | 실시간 텍스트 분석 | 실시간 시장 분석 | 워크플로우 자동화 | 실시간 레포트 생성 |
-| **성능** | 0.1초/명 | 0.82초/명 | 딥러닝 기반 | GPT-5-nano 기반 | GPT-5-nano 기반 | LangGraph 기반 | GPT-5-nano 기반 |
+| 특징 | 🏢 Structura | 🕸️ Cognita | ⏰ Chronos | 📝 Sentio | 🌍 Agora | 🎯 Integration |
+|------|-------------|------------|-----------|-----------|-----------|---------------|
+| **분석 방식** | 개별 직원 데이터 | 관계형 네트워크 | 시계열 패턴 | 텍스트 감정 분석 | 외부 시장 분석 | 최종 종합 레포트 |
+| **데이터 소스** | CSV (IBM HR) | Neo4j 그래프 DB | 시계열 CSV | HR 텍스트 데이터 | 채용 공고 API | 에이전트 점수 |
+| **주요 기술** | XGBoost + xAI | Graph Analytics | GRU+CNN+Attention | NLP + GPT-5-nano | 시장 분석 + GPT-5-nano | GPT-5-nano 레포트 |
+| **포트** | 5001 | 5002 | 5003 | 5004 | 5005 | 5007 |
+| **예측 대상** | 이직 확률 | 관계형 위험도 | 시계열 기반 예측 | 퇴직 위험 신호 | 시장 압력 지수 | 종합 위험도 분석 |
+| **설명 가능성** | SHAP, LIME | 네트워크 분석 | Attention 메커니즘 | 키워드 + LLM 분석 | 시장 + LLM 해석 | LLM 기반 레포트 |
+| **분석 범위** | 개별 중심 | 조직/팀 중심 | 시간적 패턴 중심 | 텍스트 중심 | 시장 중심 | 개별 맞춤 레포트 |
+| **실시간성** | 즉시 예측 | 실시간 관계 분석 | 딥러닝 예측 | 실시간 텍스트 분석 | 실시간 시장 분석 | 실시간 레포트 생성 |
+| **성능** | 0.1초/명 | 0.82초/명 | 딥러닝 기반 | GPT-5-nano 기반 | GPT-5-nano 기반 | GPT-5-nano 기반 |
 
 ---
 
 ## 🔧 주요 API 엔드포인트
 
-### 🎯 통합 마스터 서버 (포트 8000) - 권장
+### 🎯 Supervisor Agent (포트 5006) - 최상위 관리자
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|------------|------|
-| `GET` | `/api/health` | 시스템 전체 상태 확인 |
-| `GET` | `/api/workers/status` | 워커 에이전트 상태 조회 |
-| `POST` | `/api/analyze/individual` | **개별 직원 통합 분석** (5개 워커 동시) |
-| `POST` | `/api/analyze/department` | **부서별 통합 분석** (5개 워커 동시) |
-| `GET` | `/api/task/{task_id}/result` | 작업 결과 조회 |
-| `GET` | `/api/results/employee/{id}` | **직원 결과 조회** (저장된 모든 결과) |
-| `GET` | `/api/results/employee/{id}/visualizations` | **직원 시각화 목록** (PNG 파일들) |
-| `GET` | `/api/results/department/{name}/report` | **부서별 종합 보고서** |
+| `GET` | `/health` | 시스템 전체 상태 확인 |
+| `GET` | `/worker_health_check` | 워커 에이전트 상태 조회 |
+| `POST` | `/analyze_employee` | **개별 직원 통합 분석** (5개 워커 + Integration) |
+| `POST` | `/batch_analyze` | **배치 분석** (여러 직원 동시) |
+| `GET` | `/get_workflow_status/{session_id}` | 워크플로우 상태 조회 |
+| `GET` | `/list_active_sessions` | 활성 세션 목록 |
 
 ### 🏢 Structura 워커 (포트 5001)
 
@@ -591,7 +561,7 @@ const useAgenticAI = () => {
 | `POST` | `/api/explain` | 예측 설명 (xAI) |
 | `GET` | `/api/feature-importance` | 피처 중요도 |
 
-### 🕸️ Cognita 워커 (포트 5000)
+### 🕸️ Cognita 워커 (포트 5002)
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|------------|------|
@@ -601,7 +571,7 @@ const useAgenticAI = () => {
 | `GET` | `/api/analyze/employee/{id}` | 직원 분석 |
 | `POST` | `/api/analyze/department` | 부서 분석 |
 
-### ⏰ Chronos 워커 (포트 5002)
+### ⏰ Chronos 워커 (포트 5003)
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|------------|------|
@@ -612,7 +582,7 @@ const useAgenticAI = () => {
 | `GET` | `/api/visualize/attention` | Attention 시각화 |
 | `GET` | `/api/visualize/features` | 피처 중요도 시각화 |
 
-### 📝 Sentio 워커 (포트 5003)
+### 📝 Sentio 워커 (포트 5004)
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|------------|------|
@@ -623,7 +593,7 @@ const useAgenticAI = () => {
 | `POST` | `/generate/text` | 텍스트 생성 |
 | `GET` | `/data/personas` | 페르소나 정보 |
 
-### 🌍 Agora 워커 (포트 5004)
+### 🌍 Agora 워커 (포트 5005)
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|------------|------|
@@ -634,17 +604,6 @@ const useAgenticAI = () => {
 | `GET` | `/market/report/<job_role>` | 직무별 시장 보고서 |
 | `GET` | `/market/trends` | 전체 시장 트렌드 |
 | `POST` | `/market/competitive_analysis` | 경쟁력 분석 |
-
-### 🎯 Supervisor 워커 (포트 5005)
-
-| 메서드 | 엔드포인트 | 설명 |
-|--------|------------|------|
-| `GET` | `/health` | 서버 상태 확인 |
-| `POST` | `/api/analyze/comprehensive` | 종합 분석 워크플로우 (LangGraph) |
-| `POST` | `/api/synthesize/results` | 결과 합성 및 우선순위 결정 |
-| `GET` | `/api/workflow/status` | 워크플로우 상태 조회 |
-| `POST` | `/api/workflow/custom` | 맞춤형 워크플로우 실행 |
-| `GET` | `/api/agents/status` | 워커 에이전트 상태 조회 |
 
 ### 🎯 Integration 시스템 (포트 5007)
 
@@ -1194,4 +1153,4 @@ cat app/Integration/.env
 **버전**: 1.6.0 (Supervisor & Integration Complete)  
 **최종 업데이트**: 2025년  
 **기술 스택**: Python, Flask, XGBoost, Neo4j, PyTorch, GPT-5-nano, LangGraph, 시장 분석 API, React  
-**아키텍처**: Multi-Agent AI System (6 Workers + Supervisor + Integration)  
+**아키텍처**: Multi-Agent AI System (Supervisor + 5 Workers + Integration)  
