@@ -578,72 +578,71 @@ def batch_analyze():
         agents = ['structura', 'cognita', 'chronos', 'sentio', 'agora']
         agent_results = {}
         
-        try:
-            for agent_idx, agent_name in enumerate(agents):
-                logger.info(f"Starting {agent_name} analysis for {len(employee_ids)} employees")
-                app.batch_progress[batch_id]['current_agent'] = agent_name
-                
-                # 각 에이전트별로 모든 직원 처리
-                agent_results[agent_name] = []
-                
-                for emp_idx, employee_id in enumerate(employee_ids):
-                    logger.info(f"{agent_name}: Processing employee {emp_idx+1}/{len(employee_ids)}: {employee_id}")
-                    
-                    try:
-                        # 개별 에이전트 분석 (employee_id만 전달)
-                        result = analyze_single_agent_sync(agent_name, employee_id, data)
-                        agent_results[agent_name].append({
-                            'employee_id': employee_id,
-                            'success': True,
-                            'result': result
-                        })
-                    except Exception as e:
-                        logger.error(f"{agent_name} error for employee {employee_id}: {e}")
-                        agent_results[agent_name].append({
-                            'employee_id': employee_id,
-                            'success': False,
-                            'error': str(e)
-                        })
-                    
-                    # 에이전트별 진행률 업데이트
-                    agent_progress = ((emp_idx + 1) / len(employee_ids)) * 100
-                    app.batch_progress[batch_id]['agent_progress'][agent_name] = agent_progress
-                    
-                    # 전체 진행률 업데이트
-                    overall_progress = ((agent_idx * len(employee_ids) + emp_idx + 1) / (len(agents) * len(employee_ids))) * 100
-                    app.batch_progress[batch_id]['overall_progress'] = overall_progress
-                
-                logger.info(f"{agent_name} analysis completed for all employees")
+        for agent_idx, agent_name in enumerate(agents):
+            logger.info(f"Starting {agent_name} analysis for {len(employee_ids)} employees")
+            app.batch_progress[batch_id]['current_agent'] = agent_name
             
-            # 결과 통합 (에이전트별 결과를 직원별로 재구성)
-            batch_results = []
-            successful_count = 0
+            # 각 에이전트별로 모든 직원 처리
+            agent_results[agent_name] = []
             
-            for employee_id in employee_ids:
-                employee_result = {
-                    'employee_id': employee_id,
-                    'success': True,
-                    'agent_results': {}
-                }
+            for emp_idx, employee_id in enumerate(employee_ids):
+                logger.info(f"{agent_name}: Processing employee {emp_idx+1}/{len(employee_ids)}: {employee_id}")
                 
-                # 각 에이전트 결과 수집
-                for agent_name in agents:
-                    agent_result = next((r for r in agent_results[agent_name] if r['employee_id'] == employee_id), None)
-                    if agent_result:
-                        employee_result['agent_results'][agent_name] = agent_result
-                        if not agent_result['success']:
-                            employee_result['success'] = False
+                try:
+                    # 개별 에이전트 분석 (employee_id만 전달)
+                    result = analyze_single_agent_sync(agent_name, employee_id, data)
+                    agent_results[agent_name].append({
+                        'employee_id': employee_id,
+                        'success': True,
+                        'result': result
+                    })
+                except Exception as e:
+                    logger.error(f"{agent_name} error for employee {employee_id}: {e}")
+                    agent_results[agent_name].append({
+                        'employee_id': employee_id,
+                        'success': False,
+                        'error': str(e)
+                    })
                 
-                batch_results.append(employee_result)
-                if employee_result['success']:
-                    successful_count += 1
+                # 에이전트별 진행률 업데이트
+                agent_progress = ((emp_idx + 1) / len(employee_ids)) * 100
+                app.batch_progress[batch_id]['agent_progress'][agent_name] = agent_progress
+                
+                # 전체 진행률 업데이트
+                overall_progress = ((agent_idx * len(employee_ids) + emp_idx + 1) / (len(agents) * len(employee_ids))) * 100
+                app.batch_progress[batch_id]['overall_progress'] = overall_progress
             
-            # 배치 완료 상태 업데이트
-            app.batch_progress[batch_id]['status'] = 'completed'
-            app.batch_progress[batch_id]['processed_employees'] = len(employee_ids)
-            app.batch_progress[batch_id]['end_time'] = datetime.now().isoformat()
+            logger.info(f"{agent_name} analysis completed for all employees")
+        
+        # 결과 통합 (에이전트별 결과를 직원별로 재구성)
+        batch_results = []
+        successful_count = 0
+        
+        for employee_id in employee_ids:
+            employee_result = {
+                'employee_id': employee_id,
+                'success': True,
+                'agent_results': {}
+            }
             
-            logger.info(f"Batch analysis completed: {successful_count}/{len(employee_ids)} successful")
+            # 각 에이전트 결과 수집
+            for agent_name in agents:
+                agent_result = next((r for r in agent_results[agent_name] if r['employee_id'] == employee_id), None)
+                if agent_result:
+                    employee_result['agent_results'][agent_name] = agent_result
+                    if not agent_result['success']:
+                        employee_result['success'] = False
+            
+            batch_results.append(employee_result)
+            if employee_result['success']:
+                successful_count += 1
+        
+        # 배치 완료 상태 업데이트
+        app.batch_progress[batch_id]['status'] = 'completed'
+        app.batch_progress[batch_id]['processed_employees'] = len(employee_ids)
+        app.batch_progress[batch_id]['end_time'] = datetime.now().isoformat()
+        
+        logger.info(f"Batch analysis completed: {successful_count}/{len(employee_ids)} successful")
             
         return jsonify({
             'success': True,
