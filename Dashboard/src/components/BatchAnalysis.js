@@ -1026,7 +1026,12 @@ const BatchAnalysis = ({
       progressInterval = setInterval(async () => {
         try {
           console.log('📊 진행률 조회 시도...');
-          const progressResponse = await fetch('http://localhost:5006/batch_status');  // 배치 상태 확인
+          // batch_id가 있을 때만 진행률 조회
+          if (!window.currentBatchId) {
+            return; // batch_id가 없으면 진행률 조회 불가
+          }
+          
+          const progressResponse = await fetch(`http://localhost:5006/batch_progress/${window.currentBatchId}`);
           console.log('📊 진행률 응답 상태:', progressResponse.status);
           
           if (progressResponse.ok) {
@@ -1034,27 +1039,28 @@ const BatchAnalysis = ({
             console.log('📊 진행률 데이터:', progressData);
             
             if (progressData.success) {
-              // 진행률을 0-100 범위로 정규화하고 소수점 둘째자리까지 표시
-              const normalizeProgress = (value) => {
-                if (typeof value === 'string' && value.includes('/')) {
-                  const [current, total] = value.split('/').map(Number);
-                  return total > 0 ? Math.min(100, (current / total) * 100) : 0;
-                }
-                return Math.min(100, Number(value) || 0);
-              };
+              const overallProgress = progressData.overall_progress || 0;
+              const currentAgent = progressData.current_agent;
+              const agentProgress = progressData.agent_progress || {};
+              
+              console.log(`📊 전체 진행률: ${overallProgress.toFixed(1)}%`);
+              console.log(`🔄 현재 에이전트: ${currentAgent}`);
+              console.log(`📈 에이전트별 진행률:`, agentProgress);
 
+              // 에이전트별 진행률 업데이트
               setAnalysisProgress({
-                structura: parseFloat(normalizeProgress(progressData.agent_progress?.structura).toFixed(2)),
-                cognita: parseFloat(normalizeProgress(progressData.agent_progress?.cognita).toFixed(2)),
-                chronos: parseFloat(normalizeProgress(progressData.agent_progress?.chronos).toFixed(2)),
-                sentio: parseFloat(normalizeProgress(progressData.agent_progress?.sentio).toFixed(2)),
-                agora: parseFloat(normalizeProgress(progressData.agent_progress?.agora).toFixed(2)),
-                overall: parseFloat(normalizeProgress(progressData.overall_progress).toFixed(2))
+                structura: parseFloat((agentProgress.structura || 0).toFixed(2)),
+                cognita: parseFloat((agentProgress.cognita || 0).toFixed(2)),
+                chronos: parseFloat((agentProgress.chronos || 0).toFixed(2)),
+                sentio: parseFloat((agentProgress.sentio || 0).toFixed(2)),
+                agora: parseFloat((agentProgress.agora || 0).toFixed(2)),
+                overall: parseFloat(overallProgress.toFixed(2))
               });
               
               // 분석 완료 시 폴링 중단
-              if (progressData.status === 'completed') {
+              if (progressData.completed || progressData.status === 'completed') {
                 clearInterval(progressInterval);
+                console.log('🎉 배치 분석 완료!');
               }
             }
           }
@@ -1157,6 +1163,12 @@ const BatchAnalysis = ({
       if (!batchResult.success) {
         console.error('❌ 배치 분석 오류:', batchResult.error);
         throw new Error(batchResult.error || '배치 분석 실패');
+      }
+
+      // batch_id 저장 (진행률 추적용)
+      if (batchResult.batch_id) {
+        window.currentBatchId = batchResult.batch_id;
+        console.log('📋 배치 ID 저장:', batchResult.batch_id);
       }
 
       // 결과 분석 로깅 (백엔드 응답 형식에 맞게 수정)
