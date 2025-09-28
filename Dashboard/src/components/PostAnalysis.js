@@ -305,17 +305,73 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       console.log(`- 총 라인 수: ${lines.length}`);
       console.log(`- 헤더: ${headers.join(', ')}`);
       
+      // 개선된 CSV 파싱 로직 - 따옴표와 줄바꿈 처리
+      const parseCSVLine = (line) => {
+        const values = [];
+        let current = '';
+        let inQuotes = false;
+        let i = 0;
+        
+        while (i < line.length) {
+          const char = line[i];
+          
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              // 이스케이프된 따옴표
+              current += '"';
+              i += 2;
+            } else {
+              // 따옴표 시작/끝
+              inQuotes = !inQuotes;
+              i++;
+            }
+          } else if (char === ',' && !inQuotes) {
+            // 쉼표 구분자 (따옴표 밖에서만)
+            values.push(current.trim());
+            current = '';
+            i++;
+          } else {
+            current += char;
+            i++;
+          }
+        }
+        
+        values.push(current.trim());
+        return values;
+      };
+      
+      // 멀티라인 레코드를 처리하기 위한 로직
+      let currentRecord = '';
+      let inQuotes = false;
+      
       for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line) {
-          const values = line.split(',');
-          const row = {};
-          headers.forEach((header, index) => {
-            row[header] = values[index]?.trim();
-          });
-          data.push(row);
-        } else {
-          skippedLines++;
+        const line = lines[i];
+        currentRecord += (currentRecord ? '\n' : '') + line;
+        
+        // 따옴표 상태 확인
+        for (let char of line) {
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          }
+        }
+        
+        // 레코드가 완성되었는지 확인 (따옴표가 모두 닫혔고, 컬럼 수가 맞는지)
+        if (!inQuotes) {
+          const values = parseCSVLine(currentRecord);
+          
+          if (values.length === headers.length) {
+            const row = {};
+            headers.forEach((header, index) => {
+              row[header] = values[index]?.replace(/^"|"$/g, '').trim(); // 앞뒤 따옴표 제거
+            });
+            data.push(row);
+            currentRecord = '';
+          } else if (currentRecord.trim() === '') {
+            // 빈 줄
+            skippedLines++;
+            currentRecord = '';
+          }
+          // 컬럼 수가 맞지 않으면 다음 라인과 합쳐서 계속 처리
         }
       }
       

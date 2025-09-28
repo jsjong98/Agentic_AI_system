@@ -21,6 +21,29 @@ warnings.filterwarnings('ignore')
 from typing import Dict, List, Any
 from dotenv import load_dotenv
 
+def safe_json_serialize(obj):
+    """
+    NaN, Infinity 값을 안전하게 처리하는 JSON 직렬화 함수
+    """
+    if isinstance(obj, dict):
+        return {k: safe_json_serialize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [safe_json_serialize(item) for item in obj]
+    elif isinstance(obj, (np.ndarray,)):
+        return safe_json_serialize(obj.tolist())
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return obj
+    else:
+        return obj
+
 from threshold_calculator import ThresholdCalculator, load_and_process_data
 from weight_optimizer import WeightOptimizer
 from report_generator import ReportGenerator
@@ -1320,7 +1343,8 @@ def bayesian_optimization():
         # current_results에 저장
         current_results['performance_summary'] = performance_summary
         
-        return jsonify({
+        # 안전한 JSON 직렬화를 위해 safe_json_serialize 사용
+        response_data = {
             'success': True,
             'message': '베이지안 최적화가 완료되었습니다.',
             'optimal_thresholds': optimal_thresholds,
@@ -1339,7 +1363,11 @@ def bayesian_optimization():
             'n_trials': len(optimization_history),
             'risk_distribution': risk_distribution,
             'total_employees': total_employees
-        })
+        }
+        
+        # NaN, Infinity 값 안전 처리
+        safe_response = safe_json_serialize(response_data)
+        return jsonify(safe_response)
         
     except Exception as e:
         return jsonify({

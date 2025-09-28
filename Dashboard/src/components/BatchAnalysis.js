@@ -974,6 +974,11 @@ const BatchAnalysis = ({
       return;
     }
 
+    if (!employeeData || employeeData.length === 0) {
+      message.error('직원 데이터가 로드되지 않았습니다. Structura 파일을 다시 업로드해주세요.');
+      return;
+    }
+
     // 2. 가중치 합계 검증
     const weightSum = integrationConfig.structura_weight + 
                      integrationConfig.cognita_weight + 
@@ -1082,55 +1087,96 @@ const BatchAnalysis = ({
         }
       }
 
+      // 직원 데이터에서 employee_id 추출 (다양한 필드명 지원)
+      console.log('🔍 직원 데이터 샘플:', employeeData.slice(0, 2)); // 디버깅용 로그
+      
+      const employee_ids = employeeData.map(emp => {
+        // 다양한 가능한 ID 필드명들을 시도
+        return emp.EmployeeNumber || emp.employee_id || emp.id || emp.Employee_ID || emp.employeeNumber;
+      }).filter(id => id !== undefined && id !== null && id !== '');
+      
+      if (employee_ids.length === 0) {
+        console.error('❌ 직원 데이터 구조:', employeeData.slice(0, 3));
+        throw new Error('유효한 직원 ID를 찾을 수 없습니다. 데이터 구조를 확인해주세요. 가능한 필드: EmployeeNumber, employee_id, id');
+      }
+
+      console.log(`📋 배치 분석 대상: ${employee_ids.length}명의 직원 (IDs: ${employee_ids.join(', ')})`);
+
+      // 요청 데이터 구성
+      const requestData = {
+        employee_ids: employee_ids, // 백엔드가 기대하는 형식으로 변경
+        employees: employeeData, // 추가 데이터로 전체 직원 정보도 포함
+        analysis_type: 'batch', // 배치 분석 타입 전달
+        ...agentConfig,
+        integration_config: integrationConfig,
+        neo4j_config: neo4jConnected ? neo4jConfig : null,
+        agent_files: {
+          structura: agentFiles.structura?.name,
+          chronos: agentFiles.chronos?.name,
+          sentio: agentFiles.sentio?.name,
+          agora: agentFiles.agora?.name
+        },
+        // 저장된 모델 정보 전달
+        trained_models: savedModelInfo?.saved_models || null,
+        use_trained_models: integrationConfig.use_trained_models
+      };
+
+      console.log('📤 서버로 전송할 데이터:', {
+        employee_ids: requestData.employee_ids,
+        employee_count: requestData.employees?.length,
+        analysis_type: requestData.analysis_type,
+        agent_files: requestData.agent_files
+      });
+
       const response = await fetch('http://localhost:5006/batch_analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          employees: employeeData,
-          analysis_type: 'batch', // 배치 분석 타입 전달
-          ...agentConfig,
-          integration_config: integrationConfig,
-          neo4j_config: neo4jConnected ? neo4jConfig : null,
-          agent_files: {
-            structura: agentFiles.structura?.name,
-            chronos: agentFiles.chronos?.name,
-            sentio: agentFiles.sentio?.name,
-            agora: agentFiles.agora?.name
-          },
-          // 저장된 모델 정보 전달
-          trained_models: savedModelInfo?.saved_models || null,
-          use_trained_models: integrationConfig.use_trained_models
-        })
+        body: JSON.stringify(requestData)
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage += ` - ${errorData.error}`;
+          }
+          console.error('❌ 서버 응답 오류:', errorData);
+        } catch (e) {
+          console.error('❌ 오류 응답 파싱 실패:', e);
+        }
+        throw new Error(errorMessage);
       }
 
       const batchResult = await response.json();
       
       console.log('📥 배치 분석 응답 받음:', batchResult);
       
-      if (batchResult.error) {
+      if (!batchResult.success) {
         console.error('❌ 배치 분석 오류:', batchResult.error);
-        throw new Error(batchResult.error);
+        throw new Error(batchResult.error || '배치 분석 실패');
       }
 
-      // 결과 분석 로깅
-      if (batchResult.results) {
-        const successCount = batchResult.results.filter(r => r.analysis_result && r.analysis_result.status === 'success').length;
-        const failureCount = batchResult.results.filter(r => r.analysis_result && r.analysis_result.status === 'failed').length;
+      // 결과 분석 로깅 (백엔드 응답 형식에 맞게 수정)
+      if (batchResult.batch_results) {
+        const successCount = batchResult.batch_results.filter(r => r.success).length;
+        const failureCount = batchResult.batch_results.filter(r => !r.success).length;
         console.log(`📈 분석 결과: 성공 ${successCount}명, 실패 ${failureCount}명`);
         
         // 실패한 케이스들 상세 로깅
-        const failures = batchResult.results.filter(r => r.analysis_result && r.analysis_result.status === 'failed');
+        const failures = batchResult.batch_results.filter(r => !r.success);
         if (failures.length > 0) {
           console.log('❌ 실패한 분석들:');
           failures.forEach((failure, index) => {
-            console.log(`  ${index + 1}. 직원 ${failure.employee_number}:`, failure.analysis_result);
+            console.log(`  ${index + 1}. 직원 ${failure.employee_id}:`, failure.error);
           });
+        }
+
+        // 요약 정보 로깅
+        if (batchResult.summary) {
+          console.log('📊 배치 분석 요약:', batchResult.summary);
         }
       }
 
@@ -1147,7 +1193,7 @@ const BatchAnalysis = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          analysis_results: batchResult.results,
+          analysis_results: batchResult.batch_results, // 수정된 응답 형식에 맞게 변경
           report_options: {
             include_recommendations: true,
             include_risk_analysis: true,
@@ -1234,7 +1280,8 @@ const BatchAnalysis = ({
       
       setAnalysisProgress(prev => ({ ...prev, overall: 100 }));
 
-      message.success(`통합 배치 분석 완료! ${batchResult.completed_employees}명의 직원 분석 및 Integration 보고서 생성이 완료되었습니다.`);
+      const completedCount = batchResult.summary?.successful_analyses || batchResult.batch_results?.filter(r => r.success).length || 0;
+      message.success(`통합 배치 분석 완료! ${completedCount}명의 직원 분석 및 Integration 보고서 생성이 완료되었습니다.`);
 
     } catch (error) {
       console.error('❌ 통합 배치 분석 실패:', error);
