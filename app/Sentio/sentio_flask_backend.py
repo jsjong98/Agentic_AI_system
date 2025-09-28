@@ -80,12 +80,13 @@ def get_sentio_data_paths(analysis_type='batch'):
     if os.path.exists(uploads_dir):
         files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
         if files:
-            # 가장 최근 파일 사용 (타임스탬프 기준)
-            files.sort(reverse=True)
-            print(f"📁 발견된 파일들: {files}")
+            # 가장 최근 파일 사용 (수정 시간 기준)
+            files_with_time = [(f, os.path.getmtime(os.path.join(uploads_dir, f))) for f in files]
+            files_with_time.sort(key=lambda x: x[1], reverse=True)  # 수정 시간 기준 내림차순
+            print(f"📁 발견된 파일들: {[f[0] for f in files_with_time]}")
             
             # 가장 최신 파일을 모든 용도로 사용 (Sentio 데이터는 통합 파일)
-            latest_file = files[0]
+            latest_file = files_with_time[0][0]
             latest_file_path = os.path.join(uploads_dir, latest_file)
             
             data_paths['hr_data'] = latest_file_path

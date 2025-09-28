@@ -440,13 +440,20 @@ def batch_analyze():
         
         data = request.get_json()
         if not data:
+            logger.error("No JSON data provided in batch_analyze request")
             return jsonify({
                 'success': False,
                 'error': 'No JSON data provided'
             }), 400
         
+        logger.info(f"Received batch_analyze request with keys: {list(data.keys())}")
+        
         employee_ids = data.get('employee_ids', [])
+        logger.info(f"Employee IDs received: {employee_ids}")
+        logger.info(f"Employee IDs type: {type(employee_ids)}")
+        
         if not employee_ids or not isinstance(employee_ids, list):
+            logger.error(f"Invalid employee_ids: {employee_ids} (type: {type(employee_ids)})")
             return jsonify({
                 'success': False,
                 'error': 'employee_ids list is required'
@@ -456,11 +463,12 @@ def batch_analyze():
         analysis_type = data.get('analysis_type', 'batch')
         logger.info(f"Analysis type: {analysis_type}")
         
-        max_batch_size = int(os.getenv('MAX_BATCH_SIZE', '10'))
+        max_batch_size = int(os.getenv('MAX_BATCH_SIZE', '2000'))  # 대용량 배치 분석을 위해 2000으로 증가
         if len(employee_ids) > max_batch_size:
+            logger.warning(f"Large batch size detected: {len(employee_ids)} employees (max: {max_batch_size})")
             return jsonify({
                 'success': False,
-                'error': f'Batch size exceeds maximum ({max_batch_size})'
+                'error': f'Batch size exceeds maximum ({max_batch_size}). 현재 요청: {len(employee_ids)}명'
             }), 400
         
         logger.info(f"Starting batch analysis for {len(employee_ids)} employees")
