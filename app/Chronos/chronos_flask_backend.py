@@ -1058,7 +1058,13 @@ def predict():
         
         # 요청 파라미터 파싱
         params = request.get_json() or {}
-        employee_ids = params.get('employee_ids', [])
+        
+        # employee_id 단일 요청 처리
+        if 'employee_id' in params:
+            employee_ids = [params['employee_id']]
+        else:
+            employee_ids = params.get('employee_ids', [])
+            
         analysis_type = params.get('analysis_type', 'batch')
         
         # 분석 타입에 따른 데이터 경로 확인 및 재로드

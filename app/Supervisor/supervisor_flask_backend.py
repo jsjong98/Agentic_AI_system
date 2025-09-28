@@ -395,33 +395,33 @@ def analyze_single_agent_sync(agent_name, employee_id, request_data):
     """개별 에이전트 분석 함수 (동기 버전)"""
     try:
         if agent_name == 'structura':
-            # Structura 분석
+            # Structura 분석 - employee_id로 batch 데이터에서 자동 처리
             url = f"{os.getenv('STRUCTURA_URL', 'http://localhost:5001')}/api/predict"
             response = requests.post(url, json={'employee_id': employee_id, **request_data})
             return response.json() if response.ok else {'error': f'Structura API error: {response.status_code}'}
             
         elif agent_name == 'cognita':
-            # Cognita 분석
+            # Cognita 분석 - employee_id로 관계 분석
             url = f"{os.getenv('COGNITA_URL', 'http://localhost:5002')}/api/analyze/employee/{employee_id}"
             response = requests.get(url)
             return response.json() if response.ok else {'error': f'Cognita API error: {response.status_code}'}
             
         elif agent_name == 'chronos':
-            # Chronos 분석
+            # Chronos 분석 - employee_id로 시계열 분석
             url = f"{os.getenv('CHRONOS_URL', 'http://localhost:5003')}/api/predict"
-            response = requests.post(url, json={'employee_id': employee_id, **request_data})
+            response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': 'batch'})
             return response.json() if response.ok else {'error': f'Chronos API error: {response.status_code}'}
             
         elif agent_name == 'sentio':
-            # Sentio 분석
-            url = f"{os.getenv('SENTIO_URL', 'http://localhost:5004')}/analyze/risk"
-            response = requests.post(url, json={'employee_id': employee_id, **request_data})
+            # Sentio 분석 - employee_id로 감정 분석
+            url = f"{os.getenv('SENTIO_URL', 'http://localhost:5004')}/analyze_sentiment"
+            response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': 'batch'})
             return response.json() if response.ok else {'error': f'Sentio API error: {response.status_code}'}
             
         elif agent_name == 'agora':
-            # Agora 분석
-            url = f"{os.getenv('AGORA_URL', 'http://localhost:5005')}/analyze/job_market"
-            response = requests.post(url, json={'employee_id': employee_id, **request_data})
+            # Agora 분석 - employee_id로 시장 분석
+            url = f"{os.getenv('AGORA_URL', 'http://localhost:5005')}/api/agora/comprehensive-analysis"
+            response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': 'batch'})
             return response.json() if response.ok else {'error': f'Agora API error: {response.status_code}'}
             
         else:
@@ -548,6 +548,7 @@ def batch_analyze():
         
         logger.info(f"Starting batch analysis for {len(employee_ids)} employees")
         
+        
         # 배치 진행률 추적을 위한 세션 생성
         import uuid
         batch_id = str(uuid.uuid4())
@@ -589,7 +590,7 @@ def batch_analyze():
                     logger.info(f"{agent_name}: Processing employee {emp_idx+1}/{len(employee_ids)}: {employee_id}")
                     
                     try:
-                        # 개별 에이전트 분석 (동기 함수로 호출)
+                        # 개별 에이전트 분석 (employee_id만 전달)
                         result = analyze_single_agent_sync(agent_name, employee_id, data)
                         agent_results[agent_name].append({
                             'employee_id': employee_id,
@@ -644,21 +645,18 @@ def batch_analyze():
             
             logger.info(f"Batch analysis completed: {successful_count}/{len(employee_ids)} successful")
             
-            return jsonify({
-                'success': True,
-                'batch_id': batch_id,  # 진행률 추적을 위한 batch_id 반환
-                'batch_results': batch_results,
-                'summary': {
-                    'total_employees': len(employee_ids),
-                    'successful_analyses': successful_count,
-                    'failed_analyses': len(employee_ids) - successful_count,
-                    'success_rate': successful_count / len(employee_ids)
-                }
-            })
+        return jsonify({
+            'success': True,
+            'batch_id': batch_id,  # 진행률 추적을 위한 batch_id 반환
+            'batch_results': batch_results,
+            'summary': {
+                'total_employees': len(employee_ids),
+                'successful_analyses': successful_count,
+                'failed_analyses': len(employee_ids) - successful_count,
+                'success_rate': successful_count / len(employee_ids)
+            }
+        })
             
-        finally:
-            loop.close()
-        
     except Exception as e:
         logger.error(f"Batch analysis error: {e}")
         logger.error(traceback.format_exc())
