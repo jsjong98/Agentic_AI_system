@@ -1593,7 +1593,27 @@ const BatchAnalysis = ({
         // 에러가 발생해도 메인 분석 프로세스는 계속 진행
       }
       
-      // 7. 분석 완료
+      // 7. 계층적 구조로 결과 저장
+      console.log('💾 배치 분석 결과를 계층적 구조로 저장 중...');
+      try {
+        const hierarchicalSaveResult = await saveHierarchicalBatchResults(
+          analysisResults, 
+          employeeData, 
+          {
+            totalEmployees: employee_ids.length,
+            successfulAnalyses: finalResults.summary?.successful_analyses || 0,
+            failedAnalyses: finalResults.summary?.failed_analyses || 0,
+            agentBreakdown: finalResults.summary?.agent_breakdown || {}
+          }
+        );
+        console.log('✅ 계층적 구조 저장 완료:', hierarchicalSaveResult);
+        message.success('계층적 구조로 결과 저장 완료! (Department > JobRole > JobLevel > 직원별)');
+      } catch (error) {
+        console.error('❌ 계층적 구조 저장 실패:', error);
+        message.warning('계층적 구조 저장에 실패했지만 분석은 완료되었습니다.');
+      }
+
+      // 8. 분석 완료
       updateProgress('complete');
 
       const completedCount = finalResults.summary?.successful_analyses || 0;
@@ -1622,6 +1642,79 @@ const BatchAnalysis = ({
       }
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  // 계층적 구조로 배치 결과 저장 함수
+  const saveHierarchicalBatchResults = async (analysisResults, employeeData, analysisSummary) => {
+    try {
+      console.log('💾 계층적 구조 저장 시작...');
+      
+      // 직원별 결과를 Department > JobRole > JobLevel 구조로 정리
+      const hierarchicalResults = {};
+      
+      // 각 직원의 분석 결과를 계층적으로 구성
+      for (let i = 0; i < employeeData.length; i++) {
+        const employee = employeeData[i];
+        const employeeId = employee.EmployeeNumber;
+        
+        // 직원 기본 정보
+        const department = employee.Department || 'Unknown';
+        const jobRole = employee.JobRole || 'Unknown';
+        const jobLevel = employee.JobLevel || 'Unknown';
+        
+        // 각 에이전트별 결과 수집
+        const employeeResults = {
+          employee_id: employeeId,
+          employee_data: employee,
+          agent_results: {}
+        };
+        
+        // 각 에이전트 결과 추가
+        for (const [agentName, predictions] of Object.entries(analysisResults)) {
+          const employeePrediction = predictions.find(p => p.employee_id == employeeId);
+          if (employeePrediction) {
+            employeeResults.agent_results[agentName] = employeePrediction;
+          }
+        }
+        
+        // 계층적 구조 생성
+        if (!hierarchicalResults[department]) {
+          hierarchicalResults[department] = {};
+        }
+        if (!hierarchicalResults[department][jobRole]) {
+          hierarchicalResults[department][jobRole] = {};
+        }
+        if (!hierarchicalResults[department][jobRole][jobLevel]) {
+          hierarchicalResults[department][jobRole][jobLevel] = {};
+        }
+        
+        hierarchicalResults[department][jobRole][jobLevel][employeeId] = employeeResults;
+      }
+      
+      // Supervisor API를 통해 계층적 저장 요청
+      const saveResponse = await fetch('http://localhost:5006/api/batch-analysis/save-hierarchical-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hierarchical_results: hierarchicalResults,
+          analysis_summary: analysisSummary,
+          analysis_timestamp: new Date().toISOString()
+        })
+      });
+      
+      if (saveResponse.ok) {
+        const result = await saveResponse.json();
+        console.log('✅ 계층적 구조 저장 성공:', result);
+        return result;
+      } else {
+        const error = await saveResponse.json();
+        console.error('❌ 계층적 구조 저장 실패:', error);
+        throw new Error(error.error || '계층적 구조 저장 실패');
+      }
+    } catch (error) {
+      console.error('❌ 계층적 구조 저장 중 오류:', error);
+      throw error;
     }
   };
 

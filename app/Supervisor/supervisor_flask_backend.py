@@ -2984,6 +2984,104 @@ def save_batch_analysis_results():
         }), 500
 
 
+@app.route('/api/batch-analysis/save-hierarchical-results', methods=['POST'])
+def save_hierarchical_batch_results():
+    """배치 분석 결과를 계층적 구조로 저장 API (Department > JobRole > JobLevel > 직원별)"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': '요청 데이터가 필요합니다.'
+            }), 400
+        
+        hierarchical_results = data.get('hierarchical_results', {})
+        analysis_summary = data.get('analysis_summary', {})
+        analysis_timestamp = data.get('analysis_timestamp', datetime.now().isoformat())
+        
+        if not hierarchical_results:
+            return jsonify({
+                'success': False,
+                'error': '계층적 결과 데이터가 없습니다.'
+            }), 400
+        
+        logger.info(f"계층적 배치 분석 결과 저장 시작: {len(hierarchical_results)}개 부서")
+        
+        saved_paths = []
+        total_employees_saved = 0
+        
+        # 각 부서별로 처리
+        for department, job_roles in hierarchical_results.items():
+            logger.info(f"부서 '{department}' 처리 중...")
+            
+            for job_role, job_levels in job_roles.items():
+                for job_level, employees in job_levels.items():
+                    for employee_id, employee_result in employees.items():
+                        try:
+                            # hierarchical_result_manager를 통해 저장
+                            employee_data = employee_result.get('employee_data', {})
+                            agent_results = employee_result.get('agent_results', {})
+                            
+                            # 에러가 있는 에이전트 결과 필터링
+                            clean_agent_results = {}
+                            for agent_name, agent_result in agent_results.items():
+                                if isinstance(agent_result, dict) and 'error' not in agent_result:
+                                    clean_agent_results[agent_name] = agent_result
+                            
+                            if clean_agent_results:
+                                # 직원 데이터에서 계층 정보 추출
+                                department = employee_data.get('Department', 'Unknown')
+                                job_role = employee_data.get('JobRole', 'Unknown')
+                                job_level = employee_data.get('JobLevel', 'Unknown')
+                                
+                                # 계층적 구조로 저장 (Department/JobRole/JobLevel/employee_ID)
+                                saved_path = hierarchical_result_manager.save_employee_result(
+                                    employee_id=employee_id,
+                                    employee_data=employee_data,
+                                    worker_results=clean_agent_results
+                                )
+                                saved_paths.append(saved_path)
+                                total_employees_saved += 1
+                                
+                                logger.debug(f"직원 {employee_id} 저장 완료: {saved_path}")
+                            
+                        except Exception as e:
+                            logger.error(f"직원 {employee_id} 저장 실패: {e}")
+                            continue
+        
+        # 전체 통계 업데이트
+        try:
+            # 부서별 통계 업데이트
+            for department in hierarchical_results.keys():
+                hierarchical_result_manager.update_department_statistics(department)
+        except Exception as e:
+            logger.warning(f"부서별 통계 업데이트 실패: {e}")
+        
+        logger.info(f"계층적 배치 분석 결과 저장 완료: {total_employees_saved}명")
+        
+        return jsonify({
+            'success': True,
+            'message': f'계층적 구조로 배치 분석 결과가 저장되었습니다.',
+            'statistics': {
+                'total_departments': len(hierarchical_results),
+                'total_employees_saved': total_employees_saved,
+                'saved_paths_count': len(saved_paths),
+                'structure': 'Department > JobRole > JobLevel > Employee'
+            },
+            'analysis_timestamp': analysis_timestamp
+        })
+        
+    except Exception as e:
+        logger.error(f"계층적 배치 분석 결과 저장 중 오류 발생: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'계층적 배치 분석 결과 저장 중 오류 발생: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 def call_worker_api(worker_name, endpoint, data):
     """워커 API 호출 헬퍼 함수"""
     import requests
