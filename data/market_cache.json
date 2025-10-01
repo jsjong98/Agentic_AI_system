@@ -1,0 +1,22 @@
+{
+  "Data Scientist_서울_20251001": {
+    "data": {
+      "job_postings": 235,
+      "avg_salary": 6320042,
+      "salary_range": {
+        "min": 4000000,
+        "max": 9500000
+      },
+      "market_trend": "HOT",
+      "competition_level": "VERY_HIGH",
+      "key_skills": [
+        "Python",
+        "Machine Learning",
+        "SQL",
+        "Statistics"
+      ],
+      "data_source": "Simulation"
+    },
+    "timestamp": "2025-10-01T14:29:30.292368"
+  }
+}

@@ -207,7 +207,11 @@ class GRU_CNN_HybridModel(nn.Module):
             self.train(original_training)
             
         except Exception as e:
-            print(f"⚠️ Feature importance 계산 실패: {e}")
+            # 로그 스팸 방지 - 한 번만 출력
+            if not hasattr(self, '_feature_importance_error_logged'):
+                print(f"⚠️ Feature importance 계산 실패: {e}")
+                print("⚠️ 기본값(균등 분포)을 사용합니다. 추가 오류는 출력하지 않습니다.")
+                self._feature_importance_error_logged = True
             # 기본값으로 균등 분포 사용
             feature_importance = np.ones(self.input_size) / self.input_size
         

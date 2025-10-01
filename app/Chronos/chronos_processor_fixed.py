@@ -643,7 +643,10 @@ class ChronosVisualizer:
                 }
                 
             except Exception as e:
-                print(f"⚠️ 직원 {emp_id} Gradient 계산 실패: {e}")
+                # 로그 스팸 방지 - 첫 번째 오류만 출력
+                if emp_id == list(unique_employees)[0]:
+                    print(f"⚠️ Gradient 계산 실패 (대표 오류): {e}")
+                    print("⚠️ 모든 직원에 대해 동일한 오류가 발생할 수 있습니다. 로그 스팸 방지를 위해 추가 오류는 출력하지 않습니다.")
                 continue
         
         print(f"✅ {len(employee_gradient_results)}명의 직원별 Gradient Importance 계산 완료")

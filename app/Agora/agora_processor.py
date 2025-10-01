@@ -818,11 +818,30 @@ class AgoraMarketProcessor:
             # Agora 종합 점수 계산
             agora_score = self.calculate_agora_score(market_pressure_index, compensation_gap)
             
+            # 위험 수준 계산 (agora_score 기반)
+            if agora_score >= 0.7:
+                risk_level = "HIGH"
+            elif agora_score >= 0.4:
+                risk_level = "MEDIUM"
+            else:
+                risk_level = "LOW"
+            
+            # 시장 경쟁력 평가
+            if market_pressure_index > 0.7 and compensation_gap > 0.3:
+                market_competitiveness = "HIGH"
+            elif market_pressure_index > 0.4 or compensation_gap > 0.2:
+                market_competitiveness = "MEDIUM"
+            else:
+                market_competitiveness = "LOW"
+            
             # 종합 결과 구성
             result = {
                 'agora_score': agora_score,
+                'risk_level': risk_level,  # 추가
+                'market_competitiveness': market_competitiveness,  # 추가
                 'market_pressure_index': market_pressure_index,
                 'compensation_gap': compensation_gap,
+                'job_postings_count': market_data.get('job_postings', 0),  # 추가
                 'raw_market_data': market_data,
                 'data_source': market_data.get('data_source', 'Unknown'),
                 'analysis_timestamp': datetime.now().isoformat(),

@@ -21,6 +21,77 @@ warnings.filterwarnings('ignore')
 from typing import Dict, List, Any
 from dotenv import load_dotenv
 
+def safe_json_serialize(obj):
+    """
+    NaN, Infinity 값을 안전하게 처리하는 JSON 직렬화 함수
+    """
+    if isinstance(obj, dict):
+        return {k: safe_json_serialize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [safe_json_serialize(item) for item in obj]
+    elif isinstance(obj, (np.ndarray,)):
+        return safe_json_serialize(obj.tolist())
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return obj
+    else:
+        return obj
+
+def load_optimization_results():
+    """베이지안 최적화 결과를 파일에서 로드"""
+    global current_data, current_results
+    
+    try:
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        optimization_result_file = os.path.join(project_root, 'app/results/models', 'bayesian_optimization_result.json')
+        
+        if not os.path.exists(optimization_result_file):
+            print("WARNING: 베이지안 최적화 결과 파일이 없습니다.")
+            return False
+        
+        # JSON 파일에서 최적화 결과 로드
+        with open(optimization_result_file, 'r', encoding='utf-8') as f:
+            optimization_data = json.load(f)
+        
+        # CSV 파일에서 데이터 로드
+        csv_file = optimization_data.get('current_data_csv')
+        if csv_file:
+            # 상대 경로인 경우 절대 경로로 변환
+            if not os.path.isabs(csv_file):
+                csv_file = os.path.join(project_root, csv_file)
+            
+            if os.path.exists(csv_file):
+                current_data = pd.read_csv(csv_file)
+                print(f"SUCCESS: 베이지안 최적화 데이터 로드 완료: {len(current_data)}행")
+            else:
+                print(f"WARNING: 베이지안 최적화 CSV 파일을 찾을 수 없습니다: {csv_file}")
+                return False
+        else:
+            print("WARNING: CSV 파일 경로가 없습니다.")
+            return False
+        
+        # current_results 복원
+        if current_results is None:
+            current_results = {}
+        
+        current_results['performance_summary'] = optimization_data.get('performance_summary', {})
+        current_results['optimization_data'] = optimization_data
+        
+        print(f"SUCCESS: 베이지안 최적화 결과 복원 완료 (저장 시간: {optimization_data.get('timestamp', 'Unknown')})")
+        return True
+        
+    except Exception as e:
+        print(f"ERROR: 베이지안 최적화 결과 로드 실패: {str(e)}")
+        return False
+
 from threshold_calculator import ThresholdCalculator, load_and_process_data
 from weight_optimizer import WeightOptimizer
 from report_generator import ReportGenerator
@@ -723,6 +794,115 @@ def generate_batch_reports():
         }), 500
 
 
+@app.route('/generate_batch_analysis_report', methods=['POST'])
+def generate_batch_analysis_report():
+    """배치 분석 결과를 바탕으로 통합 보고서 생성"""
+    try:
+        data = request.get_json()
+        analysis_results = data.get('analysis_results', [])
+        report_options = data.get('report_options', {})
+        
+        if not analysis_results:
+            return jsonify({
+                'success': False,
+                'error': '분석 결과 데이터가 필요합니다.'
+            }), 400
+        
+        print(f"📊 배치 분석 보고서 생성 시작: {len(analysis_results)}명의 직원")
+        
+        # 분석 결과를 employees 형식으로 변환
+        employees_data = []
+        for result in analysis_results:
+            if isinstance(result, dict):
+                employee_id = result.get('employee_id') or result.get('employeeNumber') or result.get('id')
+                if employee_id:
+                    # 에이전트 점수 추출
+                    agent_scores = {}
+                    
+                    # 각 에이전트별 점수 추출
+                    if 'structura_score' in result:
+                        agent_scores['structura'] = result['structura_score']
+                    if 'chronos_score' in result:
+                        agent_scores['chronos'] = result['chronos_score']
+                    if 'sentio_score' in result:
+                        agent_scores['sentio'] = result['sentio_score']
+                    if 'agora_score' in result:
+                        agent_scores['agora'] = result['agora_score']
+                    if 'cognita_score' in result:
+                        agent_scores['cognita'] = result['cognita_score']
+                    
+                    # 통합 점수가 있다면 추가
+                    if 'integration_score' in result:
+                        agent_scores['integration'] = result['integration_score']
+                    if 'risk_score' in result:
+                        agent_scores['risk'] = result['risk_score']
+                    
+                    employees_data.append({
+                        'employee_id': str(employee_id),
+                        'agent_scores': agent_scores,
+                        'additional_data': result  # 추가 정보 보존
+                    })
+        
+        if not employees_data:
+            return jsonify({
+                'success': False,
+                'error': '유효한 직원 데이터를 찾을 수 없습니다.'
+            }), 400
+        
+        print(f"📋 변환된 직원 데이터: {len(employees_data)}명")
+        
+        # 각 직원의 점수 설정
+        employee_ids = []
+        for emp_data in employees_data:
+            employee_id = emp_data.get('employee_id')
+            agent_scores = emp_data.get('agent_scores', {})
+            
+            if employee_id and agent_scores:
+                report_generator.set_agent_scores(employee_id, agent_scores)
+                employee_ids.append(employee_id)
+        
+        if not employee_ids:
+            return jsonify({
+                'success': False,
+                'error': '유효한 직원 점수 데이터가 없습니다.'
+            }), 400
+        
+        # 일괄 레포트 생성
+        batch_results = report_generator.generate_batch_reports(
+            employee_ids, 
+            os.path.join(OUTPUT_DIR, 'reports')
+        )
+        
+        # 통합 요약 보고서 생성
+        summary_report = {
+            'total_employees': len(employee_ids),
+            'report_generation_time': datetime.now().isoformat(),
+            'report_options': report_options,
+            'batch_results': batch_results,
+            'summary_statistics': {
+                'successful_reports': sum(1 for r in batch_results.values() if r.get('success', False)),
+                'failed_reports': sum(1 for r in batch_results.values() if not r.get('success', False))
+            }
+        }
+        
+        print(f"✅ 배치 분석 보고서 생성 완료: {summary_report['summary_statistics']['successful_reports']}개 성공")
+        
+        return jsonify({
+            'success': True,
+            'message': '배치 분석 보고서 생성이 완료되었습니다.',
+            'summary_report': summary_report,
+            'individual_reports': batch_results
+        })
+        
+    except Exception as e:
+        print(f"❌ 배치 분석 보고서 생성 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'배치 분석 보고서 생성 중 오류 발생: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/load_employee_data', methods=['POST'])
 def load_employee_data():
     """직원 기본 데이터 로드 (레포트 생성용)"""
@@ -937,20 +1117,53 @@ def bayesian_optimization():
         employee_ids = []
         
         for agent_name, result in agent_results.items():
-            # 예측 결과 추출 (PostAnalysis.js 구조에 맞게 수정)
+            # 예측 결과 추출 (실제 에이전트 응답 구조에 맞게 수정)
             predictions = None
             
-            # PostAnalysis.js에서 생성하는 구조: result.raw_result.data.predictions
-            if result.get('raw_result', {}).get('data', {}).get('predictions'):
-                predictions = result['raw_result']['data']['predictions']
-                print(f"   - {agent_name}: raw_result.data.predictions에서 발견")
-            elif result.get('predictions'):
-                predictions = result['predictions']
-                print(f"   - {agent_name}: predictions에서 발견")
-            elif result.get('data', {}).get('predictions'):
-                predictions = result['data']['predictions']
-                print(f"   - {agent_name}: data.predictions에서 발견")
-            else:
+            # 각 에이전트별 실제 응답 구조에 맞게 처리
+            if agent_name == 'structura':
+                # Structura: result.predictions 또는 result.data.predictions
+                if result.get('predictions'):
+                    predictions = result['predictions']
+                    print(f"   - {agent_name}: predictions에서 발견")
+                elif result.get('data', {}).get('predictions'):
+                    predictions = result['data']['predictions']
+                    print(f"   - {agent_name}: data.predictions에서 발견")
+                    
+            elif agent_name == 'chronos':
+                # Chronos: result.predictions 또는 result.data.predictions
+                if result.get('predictions'):
+                    predictions = result['predictions']
+                    print(f"   - {agent_name}: predictions에서 발견")
+                elif result.get('data', {}).get('predictions'):
+                    predictions = result['data']['predictions']
+                    print(f"   - {agent_name}: data.predictions에서 발견")
+                    
+            elif agent_name in ['sentio', 'agora']:
+                # Sentio/Agora: result.analysis_results
+                if result.get('analysis_results'):
+                    predictions = result['analysis_results']
+                    print(f"   - {agent_name}: analysis_results에서 발견")
+                elif result.get('predictions'):
+                    predictions = result['predictions']
+                    print(f"   - {agent_name}: predictions에서 발견")
+                    
+            elif agent_name == 'cognita':
+                # Cognita: 개별 호출이므로 다른 구조
+                if result.get('predictions'):
+                    predictions = result['predictions']
+                    print(f"   - {agent_name}: predictions에서 발견")
+                    
+            # PostAnalysis.js 구조도 지원 (하위 호환성)
+            if not predictions:
+                if result.get('raw_result', {}).get('data', {}).get('predictions'):
+                    predictions = result['raw_result']['data']['predictions']
+                    print(f"   - {agent_name}: raw_result.data.predictions에서 발견")
+                elif result.get('raw_result', {}).get('data', {}).get('analysis_results'):
+                    predictions = result['raw_result']['data']['analysis_results']
+                    print(f"   - {agent_name}: raw_result.data.analysis_results에서 발견")
+            
+            if not predictions:
                 print(f"   - {agent_name}: 예측 데이터 구조 확인")
                 print(f"     result 키: {list(result.keys()) if isinstance(result, dict) else 'not dict'}")
                 if result.get('raw_result'):
@@ -974,8 +1187,29 @@ def bayesian_optimization():
                             'error': '실제 이탈 라벨(actual_attrition)이 없습니다. 실제 데이터를 사용해주세요.'
                         }), 400
                 
-                # 에이전트별 위험도 점수 (0~1)
-                agent_predictions[agent_name] = [pred['risk_score'] for pred in predictions]
+                # 에이전트별 위험도 점수 (0~1) - 안전한 값 추출
+                risk_scores = []
+                for pred in predictions:
+                    # 다양한 필드명에서 위험도 점수 추출
+                    risk_score = None
+                    if isinstance(pred, dict):
+                        # 가능한 위험도 점수 필드들 확인
+                        risk_score = (pred.get('risk_score') or 
+                                    pred.get('attrition_probability') or 
+                                    pred.get('psychological_risk_score') or
+                                    pred.get('market_pressure_index') or
+                                    pred.get('overall_risk_score'))
+                    
+                    # None이거나 NaN인 경우 기본값 사용
+                    if risk_score is None or (isinstance(risk_score, float) and np.isnan(risk_score)):
+                        risk_score = 0.5  # 중간값으로 기본 설정
+                    
+                    # 0~1 범위로 정규화
+                    risk_score = max(0.0, min(1.0, float(risk_score)))
+                    risk_scores.append(risk_score)
+                
+                agent_predictions[agent_name] = risk_scores
+                print(f"   - {agent_name}: 위험도 점수 범위 {min(risk_scores):.3f} ~ {max(risk_scores):.3f}")
             else:
                 print(f"   ⚠️ {agent_name}: 예측 결과 없음")
         
@@ -1055,6 +1289,13 @@ def bayesian_optimization():
             for i, agent_name in enumerate(agent_names):
                 if i < len(weights):  # 가중치가 있는 에이전트만
                     agent_pred = np.array(agent_predictions[agent_name])
+                    
+                    # NaN이나 None 값 처리
+                    agent_pred = np.nan_to_num(agent_pred, nan=0.5, posinf=1.0, neginf=0.0)
+                    
+                    # 0~1 범위로 클리핑
+                    agent_pred = np.clip(agent_pred, 0.0, 1.0)
+                    
                     ensemble_scores += agent_pred * weights[i]
             
             # 최적 임계값 찾기 (ROC 곡선 기반)
@@ -1277,6 +1518,31 @@ def bayesian_optimization():
             # current_data를 최종 결과로 업데이트
             current_data = final_df
             
+            # 베이지안 최적화 결과를 영구 저장 (메모리 초기화 대비)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            optimization_result_file = os.path.join(project_root, 'app/results/models', 'bayesian_optimization_result.json')
+            os.makedirs(os.path.dirname(optimization_result_file), exist_ok=True)
+            
+            optimization_data = {
+                'current_data_csv': output_file,  # CSV 파일 경로
+                'optimal_thresholds': optimal_thresholds,
+                'optimal_weights': optimal_weights,
+                'best_performance': best_performance,
+                'performance_summary': performance_summary,
+                'risk_distribution': risk_distribution,
+                'total_employees': total_employees,
+                'timestamp': datetime.now().isoformat(),
+                'optimization_completed': True
+            }
+            
+            with open(optimization_result_file, 'w', encoding='utf-8') as f:
+                json.dump(optimization_data, f, ensure_ascii=False, indent=2, default=str)
+            
+            print(f"✅ 베이지안 최적화 결과 영구 저장: {optimization_result_file}")
+            
+            # current_results도 업데이트
+            current_results['optimization_data'] = optimization_data
+            
         except Exception as e:
             print(f"⚠️ 결과 저장 중 오류 (계속 진행): {str(e)}")
         
@@ -1320,7 +1586,8 @@ def bayesian_optimization():
         # current_results에 저장
         current_results['performance_summary'] = performance_summary
         
-        return jsonify({
+        # 안전한 JSON 직렬화를 위해 safe_json_serialize 사용
+        response_data = {
             'success': True,
             'message': '베이지안 최적화가 완료되었습니다.',
             'optimal_thresholds': optimal_thresholds,
@@ -1339,7 +1606,11 @@ def bayesian_optimization():
             'n_trials': len(optimization_history),
             'risk_distribution': risk_distribution,
             'total_employees': total_employees
-        })
+        }
+        
+        # NaN, Infinity 값 안전 처리
+        safe_response = safe_json_serialize(response_data)
+        return jsonify(safe_response)
         
     except Exception as e:
         return jsonify({
@@ -1364,11 +1635,15 @@ def update_risk_thresholds():
         print(f"🎯 위험도 임계값 업데이트: 안전군 < {low_risk_threshold}, 주의군 {low_risk_threshold}-{high_risk_threshold}, 고위험군 >= {high_risk_threshold}")
         print(f"🎯 퇴사 예측 모드: {attrition_prediction_mode}")
         
+        # current_data가 없으면 베이지안 최적화 결과를 파일에서 로드 시도
         if current_data is None or current_data.empty:
-            return jsonify({
-                'success': False,
-                'error': '분석 데이터가 없습니다. 먼저 Bayesian Optimization을 실행해주세요.'
-            }), 400
+            print("INFO: current_data가 없어서 베이지안 최적화 결과를 파일에서 로드 시도...")
+            if not load_optimization_results():
+                return jsonify({
+                    'success': False,
+                    'error': '분석 데이터가 없습니다. 먼저 Bayesian Optimization을 실행해주세요.'
+                }), 400
+            print("SUCCESS: 베이지안 최적화 결과 로드 완료, 위험도 임계값 업데이트 계속 진행")
         
         # 새로운 임계값으로 위험도 재분류
         total_employees = len(current_data)
@@ -1492,6 +1767,11 @@ def save_final_settings():
     global current_results
     
     try:
+        # current_results가 없으면 베이지안 최적화 결과를 파일에서 로드 시도
+        if current_results is None:
+            print("INFO: current_results가 없어서 베이지안 최적화 결과를 파일에서 로드 시도...")
+            load_optimization_results()
+        
         data = request.get_json()
         
         # 사용자가 최종 결정한 설정 + 최적화된 가중치

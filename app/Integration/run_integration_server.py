@@ -22,7 +22,7 @@ def check_requirements():
         'scikit-optimize'  # Bayesian Optimization용
     ]
     
-    print("📦 필요한 패키지 확인 중...")
+    print("필요한 패키지 확인 중...")
     
     missing_required = []
     missing_optional = []
@@ -35,7 +35,7 @@ def check_requirements():
             print(f"✅ {package}")
         except ImportError:
             missing_required.append(package)
-            print(f"❌ {package} (필수)")
+            print(f"누락: {package} (필수)")
     
     for package in optional_packages:
         try:
@@ -46,7 +46,7 @@ def check_requirements():
             print(f"⚠️ {package} (선택사항 - Bayesian Optimization 사용 불가)")
     
     if missing_required:
-        print(f"\n❌ 필수 패키지가 누락되었습니다: {', '.join(missing_required)}")
+        print(f"\n필수 패키지가 누락되었습니다: {', '.join(missing_required)}")
         print("다음 명령어로 설치하세요:")
         print(f"pip install {' '.join(missing_required)}")
         return False
@@ -80,7 +80,7 @@ def check_data_files():
     print(f"데이터 디렉토리: {data_dir}")
     
     if not data_dir.exists():
-        print(f"❌ 데이터 디렉토리가 존재하지 않습니다: {data_dir}")
+        print(f"데이터 디렉토리가 존재하지 않습니다: {data_dir}")
         return False
     
     missing_required = []
@@ -91,7 +91,7 @@ def check_data_files():
             print(f"✅ {file_name}")
         else:
             missing_required.append(file_name)
-            print(f"❌ {file_name} (필수)")
+            print(f"누락: {file_name} (필수)")
     
     for file_name in optional_files:
         file_path = data_dir / file_name
@@ -101,7 +101,7 @@ def check_data_files():
             print(f"⚠️ {file_name} (선택사항)")
     
     if missing_required:
-        print(f"\n❌ 필수 데이터 파일이 누락되었습니다: {', '.join(missing_required)}")
+        print(f"\n필수 데이터 파일이 누락되었습니다: {', '.join(missing_required)}")
         print(f"다음 위치에 파일을 배치하세요: {data_dir}")
         return False
     
@@ -156,7 +156,7 @@ def run_server():
         print("   GET  /get_employee_list - 직원 목록 조회")
         print("   POST /generate_report - 개별 직원 레포트 생성")
         print("   POST /generate_batch_reports - 일괄 레포트 생성")
-        print("\n💡 테스트 방법:")
+        print("\n테스트 방법:")
         print("   python test_integration_api.py")
         print("\n⏹️ 서버 중지: Ctrl+C")
         print("=" * 60)
@@ -164,32 +164,32 @@ def run_server():
         app.run(host='0.0.0.0', port=5007, debug=True)
         
     except ImportError as e:
-        print(f"❌ 모듈 import 오류: {e}")
+        print(f"모듈 import 오류: {e}")
         print("필요한 패키지가 설치되었는지 확인하세요.")
         return False
     except Exception as e:
-        print(f"❌ 서버 실행 오류: {e}")
+        print(f"서버 실행 오류: {e}")
         return False
 
 
 def main():
     """메인 함수"""
-    print("🔧 Integration 서버 설정 및 실행")
+    print("Integration 서버 설정 및 실행")
     print("=" * 50)
     
     # 1. 패키지 확인
     if not check_requirements():
-        print("\n❌ 필수 패키지가 누락되어 서버를 시작할 수 없습니다.")
+        print("\n필수 패키지가 누락되어 서버를 시작할 수 없습니다.")
         
         # requirements.txt 생성
         req_file = create_requirements_file()
-        print(f"\n💡 다음 명령어로 필요한 패키지를 설치하세요:")
+        print(f"\n다음 명령어로 필요한 패키지를 설치하세요:")
         print(f"pip install -r {req_file}")
         return
     
     # 2. 데이터 파일 확인
     if not check_data_files():
-        print("\n❌ 필수 데이터 파일이 누락되어 서버를 시작할 수 없습니다.")
+        print("\n필수 데이터 파일이 누락되어 서버를 시작할 수 없습니다.")
         print("데이터 파일을 준비한 후 다시 실행하세요.")
         return
     

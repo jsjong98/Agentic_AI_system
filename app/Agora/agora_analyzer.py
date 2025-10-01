@@ -50,9 +50,25 @@ class AgoraMarketAnalyzer:
             employee_id = employee_data.get('EmployeeNumber', 'unknown')
             job_role = employee_data.get('JobRole', '')
             department = employee_data.get('Department', '')
-            monthly_income = employee_data.get('MonthlyIncome', 0)
-            years_at_company = employee_data.get('YearsAtCompany', 0)
-            job_satisfaction = employee_data.get('JobSatisfaction', 3)
+            
+            # 숫자 필드들의 안전한 타입 변환
+            try:
+                monthly_income = float(employee_data.get('MonthlyIncome', 0))
+            except (ValueError, TypeError):
+                logger.warning(f"MonthlyIncome 변환 실패: {employee_data.get('MonthlyIncome')}, 기본값 0 사용")
+                monthly_income = 0
+            
+            try:
+                years_at_company = int(employee_data.get('YearsAtCompany', 0))
+            except (ValueError, TypeError):
+                logger.warning(f"YearsAtCompany 변환 실패: {employee_data.get('YearsAtCompany')}, 기본값 0 사용")
+                years_at_company = 0
+            
+            try:
+                job_satisfaction = int(employee_data.get('JobSatisfaction', 3))
+            except (ValueError, TypeError):
+                logger.warning(f"JobSatisfaction 변환 실패: {employee_data.get('JobSatisfaction')}, 기본값 3 사용")
+                job_satisfaction = 3
             
             logger.debug(f"직원 {employee_id} 시장 분석 시작")
             
@@ -106,7 +122,7 @@ class AgoraMarketAnalyzer:
                     analysis_result
                 )
             
-            logger.debug(f"직원 {employee_id} 시장 분석 완료: 위험도 {risk_level}")
+            logger.debug(f"직원 {employee_id} 시장 분석 완료: 위험도 {risk_result['risk_level']}")
             return analysis_result
             
         except Exception as e:
@@ -269,7 +285,24 @@ class AgoraMarketAnalyzer:
                         logger.info(f"배치 분석 진행: {i + 1}/{len(employees_data)} 완료")
                     
                 except Exception as e:
-                    logger.error(f"직원 {employee_data.get('EmployeeNumber', 'unknown')} 분석 실패: {e}")
+                    employee_id = employee_data.get('EmployeeNumber', 'unknown')
+                    logger.error(f"직원 {employee_id} 분석 실패: {e}")
+                    
+                    # 실패한 직원에 대한 기본 결과 생성
+                    failed_result = {
+                        'employee_id': str(employee_id),
+                        'job_role': employee_data.get('JobRole', 'Unknown'),
+                        'department': employee_data.get('Department', 'Unknown'),
+                        'market_pressure_index': 0.0,
+                        'compensation_gap': 0.0,
+                        'job_postings_count': 0,
+                        'market_competitiveness': 'UNKNOWN',
+                        'agora_score': 0.0,
+                        'risk_level': 'UNKNOWN',
+                        'error': str(e),
+                        'analysis_timestamp': datetime.now().isoformat()
+                    }
+                    results.append(failed_result)
                     continue
             
             logger.info(f"배치 시장 분석 완료: {len(results)}/{len(employees_data)} 성공")
