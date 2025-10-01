@@ -53,37 +53,44 @@ class HierarchicalResultManager:
         return sanitized if sanitized else "Unknown"
     
     def _get_hierarchical_path(self, department: str, job_role: str, position: str, employee_id: str) -> Path:
-        """간소화된 경로 생성: 부서/직원"""
+        """완전한 계층적 경로 생성: Department/JobRole/JobLevel/employee_ID"""
         
         dept_clean = self._sanitize_folder_name(department)
+        job_role_clean = self._sanitize_folder_name(job_role)
+        position_clean = self._sanitize_folder_name(position)
         
-        # 간소화된 구조: results/부서명/employee_ID
+        # 완전한 계층적 구조: results/Department/JobRole/JobLevel/employee_ID
         hierarchical_path = (
             self.base_output_dir / 
             dept_clean / 
+            job_role_clean /
+            position_clean /
             f"employee_{employee_id}"
         )
         
         return hierarchical_path
     
     def _update_department_index(self, department: str, employee_id: str, job_role: str, position: str):
-        """부서별 직원 인덱스 파일 업데이트"""
+        """계층적 구조의 인덱스 파일들 업데이트"""
         try:
             dept_clean = self._sanitize_folder_name(department)
-            index_file = self.base_output_dir / dept_clean / "department_index.json"
+            job_role_clean = self._sanitize_folder_name(job_role)
+            position_clean = self._sanitize_folder_name(position)
             
-            # 기존 인덱스 로드
-            if index_file.exists():
-                with open(index_file, 'r', encoding='utf-8') as f:
-                    index_data = json.load(f)
+            # 1. 부서 레벨 인덱스 업데이트
+            dept_index_file = self.base_output_dir / dept_clean / "department_index.json"
+            dept_dir = self.base_output_dir / dept_clean
+            dept_dir.mkdir(parents=True, exist_ok=True)
+            
+            if dept_index_file.exists():
+                with open(dept_index_file, 'r', encoding='utf-8') as f:
+                    dept_index = json.load(f)
             else:
-                index_data = {
+                dept_index = {
                     "department": department,
                     "created_at": datetime.now().isoformat(),
-                    "structure_version": "simplified_v1.0",
-                    "employees": {},
+                    "structure_version": "hierarchical_v2.0",
                     "job_roles": {},
-                    "positions": {},
                     "statistics": {
                         "total_employees": 0,
                         "job_role_count": {},
@@ -91,39 +98,110 @@ class HierarchicalResultManager:
                     }
                 }
             
+            # 2. 직무 레벨 인덱스 업데이트
+            job_role_dir = dept_dir / job_role_clean
+            job_role_dir.mkdir(parents=True, exist_ok=True)
+            job_role_index_file = job_role_dir / "job_role_index.json"
+            
+            if job_role_index_file.exists():
+                with open(job_role_index_file, 'r', encoding='utf-8') as f:
+                    job_role_index = json.load(f)
+            else:
+                job_role_index = {
+                    "department": department,
+                    "job_role": job_role,
+                    "created_at": datetime.now().isoformat(),
+                    "job_levels": {},
+                    "statistics": {
+                        "total_employees": 0,
+                        "job_level_count": {}
+                    }
+                }
+            
+            # 3. 직급 레벨 인덱스 업데이트
+            position_dir = job_role_dir / position_clean
+            position_dir.mkdir(parents=True, exist_ok=True)
+            position_index_file = position_dir / "job_level_index.json"
+            
+            if position_index_file.exists():
+                with open(position_index_file, 'r', encoding='utf-8') as f:
+                    position_index = json.load(f)
+            else:
+                position_index = {
+                    "department": department,
+                    "job_role": job_role,
+                    "job_level": position,
+                    "created_at": datetime.now().isoformat(),
+                    "employees": {},
+                    "statistics": {
+                        "total_employees": 0
+                    }
+                }
+            
             # 직원 정보 업데이트
-            index_data["employees"][employee_id] = {
+            employee_info = {
                 "job_role": job_role,
-                "position": position,
+                "job_level": position,
                 "last_updated": datetime.now().isoformat(),
-                "folder_path": f"employee_{employee_id}"
+                "folder_path": f"{job_role_clean}/{position_clean}/employee_{employee_id}"
             }
             
-            # Job Role 인덱스 업데이트
-            if job_role not in index_data["job_roles"]:
-                index_data["job_roles"][job_role] = []
-            if employee_id not in index_data["job_roles"][job_role]:
-                index_data["job_roles"][job_role].append(employee_id)
+            # 각 레벨별 인덱스에 직원 정보 추가
+            position_index["employees"][employee_id] = employee_info
             
-            # Position 인덱스 업데이트
-            if position not in index_data["positions"]:
-                index_data["positions"][position] = []
-            if employee_id not in index_data["positions"][position]:
-                index_data["positions"][position].append(employee_id)
+            # 직급 레벨 통계 업데이트
+            position_index["statistics"]["total_employees"] = len(position_index["employees"])
+            position_index["last_updated"] = datetime.now().isoformat()
             
-            # 통계 업데이트
-            index_data["statistics"]["total_employees"] = len(index_data["employees"])
-            index_data["statistics"]["job_role_count"] = {
-                role: len(employees) for role, employees in index_data["job_roles"].items()
+            # 직무 레벨 인덱스 업데이트
+            if position not in job_role_index["job_levels"]:
+                job_role_index["job_levels"][position] = []
+            if employee_id not in job_role_index["job_levels"][position]:
+                job_role_index["job_levels"][position].append(employee_id)
+            
+            job_role_index["statistics"]["total_employees"] = sum(
+                len(employees) for employees in job_role_index["job_levels"].values()
+            )
+            job_role_index["statistics"]["job_level_count"] = {
+                level: len(employees) for level, employees in job_role_index["job_levels"].items()
             }
-            index_data["statistics"]["position_count"] = {
-                pos: len(employees) for pos, employees in index_data["positions"].items()
-            }
-            index_data["last_updated"] = datetime.now().isoformat()
+            job_role_index["last_updated"] = datetime.now().isoformat()
             
-            # 인덱스 파일 저장
-            with open(index_file, 'w', encoding='utf-8') as f:
-                json.dump(index_data, f, ensure_ascii=False, indent=2)
+            # 부서 레벨 인덱스 업데이트
+            if job_role not in dept_index["job_roles"]:
+                dept_index["job_roles"][job_role] = {}
+            if position not in dept_index["job_roles"][job_role]:
+                dept_index["job_roles"][job_role][position] = []
+            if employee_id not in dept_index["job_roles"][job_role][position]:
+                dept_index["job_roles"][job_role][position].append(employee_id)
+            
+            # 부서 레벨 통계 업데이트
+            total_employees = 0
+            job_role_count = {}
+            position_count = {}
+            
+            for role, positions in dept_index["job_roles"].items():
+                role_total = 0
+                for pos, employees in positions.items():
+                    role_total += len(employees)
+                    position_count[pos] = position_count.get(pos, 0) + len(employees)
+                job_role_count[role] = role_total
+                total_employees += role_total
+            
+            dept_index["statistics"]["total_employees"] = total_employees
+            dept_index["statistics"]["job_role_count"] = job_role_count
+            dept_index["statistics"]["position_count"] = position_count
+            dept_index["last_updated"] = datetime.now().isoformat()
+            
+            # 각 레벨별 인덱스 파일 저장
+            with open(position_index_file, 'w', encoding='utf-8') as f:
+                json.dump(position_index, f, ensure_ascii=False, indent=2)
+            
+            with open(job_role_index_file, 'w', encoding='utf-8') as f:
+                json.dump(job_role_index, f, ensure_ascii=False, indent=2)
+            
+            with open(dept_index_file, 'w', encoding='utf-8') as f:
+                json.dump(dept_index, f, ensure_ascii=False, indent=2)
             
             logger.info(f"부서 인덱스 업데이트 완료: {department} - {employee_id}")
             
