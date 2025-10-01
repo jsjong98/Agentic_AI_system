@@ -260,8 +260,11 @@ class SentioTextProcessor:
     def analyze_text(self, text: str, employee_id: str = "unknown", text_type: str = "general") -> Dict[str, Any]:
         """종합 텍스트 분석 (개선된 JD-R 모델 기반)"""
         try:
+            logger.info(f"텍스트 분석 시작: employee_id={employee_id}, text_length={len(text) if text else 0}")
+            
             # JD-R 기반 분석 사용 (analyzer가 있는 경우)
             if hasattr(self, 'analyzer') and self.analyzer:
+                logger.info("JD-R 분석기를 사용하여 분석 수행")
                 jdr_result = self.analyzer.analyze_employee_text(
                     employee_id=employee_id,
                     self_review=text,
@@ -269,9 +272,11 @@ class SentioTextProcessor:
                     weekly_survey=""
                 )
                 
+                logger.info(f"JD-R 분석 결과 타입: {type(jdr_result)}")
+                
                 # jdr_result가 딕셔너리인지 확인
                 if isinstance(jdr_result, dict):
-                    return {
+                    result = {
                         "keywords": jdr_result.get('detected_keywords', []),
                         "sentiment_score": jdr_result.get('sentiment_score', 0.5),
                         "attrition_risk_score": jdr_result.get('psychological_risk_score', 0.5),
@@ -282,34 +287,38 @@ class SentioTextProcessor:
                         "risk_level": jdr_result.get('risk_level', 'MEDIUM'),
                         "attrition_prediction": jdr_result.get('attrition_prediction', 0)
                     }
+                    logger.info(f"JD-R 분석 결과 반환: keywords={len(result['keywords'])}, risk_level={result['risk_level']}")
+                    return result
                 else:
                     # jdr_result가 딕셔너리가 아닌 경우 로그 출력하고 fallback 사용
                     logger.warning(f"JD-R 분석 결과가 예상과 다른 타입입니다: {type(jdr_result)}, 값: {jdr_result}")
                     # fallback으로 넘어감
             
             # 기존 방식 (fallback)
-            else:
-                # 키워드 추출
-                keywords = self.extract_keywords(text)
-                
-                # 감정 점수 계산
-                sentiment_score = self.calculate_sentiment_score(text, keywords)
-                
-                # 퇴직 위험 점수 계산
-                attrition_risk_score, risk_factors = self.calculate_attrition_risk_score(text, keywords)
-                
-                # 위험 레벨 계산
-                risk_level = self._calculate_risk_level(attrition_risk_score)
-                
-                return {
-                    "keywords": keywords,
-                    "sentiment_score": sentiment_score,
-                    "attrition_risk_score": attrition_risk_score,
-                    "risk_factors": risk_factors,
-                    "risk_level": risk_level,
-                    "keyword_count": len(keywords),
-                    "text_length": len(text)
-                }
+            logger.info("기존 키워드 기반 분석 사용")
+            # 키워드 추출
+            keywords = self.extract_keywords(text)
+            
+            # 감정 점수 계산
+            sentiment_score = self.calculate_sentiment_score(text, keywords)
+            
+            # 퇴직 위험 점수 계산
+            attrition_risk_score, risk_factors = self.calculate_attrition_risk_score(text, keywords)
+            
+            # 위험 레벨 계산
+            risk_level = self._calculate_risk_level(attrition_risk_score)
+            
+            result = {
+                "keywords": keywords,
+                "sentiment_score": sentiment_score,
+                "attrition_risk_score": attrition_risk_score,
+                "risk_factors": risk_factors,
+                "risk_level": risk_level,
+                "keyword_count": len(keywords),
+                "text_length": len(text)
+            }
+            logger.info(f"기존 방식 분석 결과 반환: keywords={len(result['keywords'])}, risk_level={result['risk_level']}")
+            return result
             
         except Exception as e:
             logger.error(f"텍스트 분석 오류: {str(e)}")

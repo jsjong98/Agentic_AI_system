@@ -974,6 +974,11 @@ const BatchAnalysis = ({
       return;
     }
 
+    if (!employeeData || employeeData.length === 0) {
+      message.error('직원 데이터가 로드되지 않았습니다. Structura 파일을 다시 업로드해주세요.');
+      return;
+    }
+
     // 2. 가중치 합계 검증
     const weightSum = integrationConfig.structura_weight + 
                      integrationConfig.cognita_weight + 
@@ -986,9 +991,7 @@ const BatchAnalysis = ({
       return;
     }
 
-    // 진행률 폴링을 위한 변수들을 함수 스코프에서 선언
-    let progressInterval = null;
-    let cleanup = null;
+    // 클라이언트 사이드 진행률 관리 (PostAnalysis 방식)
 
     try {
       setIsAnalyzing(true);
@@ -1017,56 +1020,32 @@ const BatchAnalysis = ({
       console.log('⚙️ 통합 설정:', integrationConfig);
       console.log('🔗 Neo4j 연결 상태:', neo4jConnected);
 
-      // 4. 실제 진행률 폴링 시작
-      progressInterval = setInterval(async () => {
-        try {
-          console.log('📊 진행률 조회 시도...');
-          const progressResponse = await fetch('http://localhost:5006/batch_status');  // 배치 상태 확인
-          console.log('📊 진행률 응답 상태:', progressResponse.status);
-          
-          if (progressResponse.ok) {
-            const progressData = await progressResponse.json();
-            console.log('📊 진행률 데이터:', progressData);
-            
-            if (progressData.success) {
-              // 진행률을 0-100 범위로 정규화하고 소수점 둘째자리까지 표시
-              const normalizeProgress = (value) => {
-                if (typeof value === 'string' && value.includes('/')) {
-                  const [current, total] = value.split('/').map(Number);
-                  return total > 0 ? Math.min(100, (current / total) * 100) : 0;
-                }
-                return Math.min(100, Number(value) || 0);
-              };
-
-              setAnalysisProgress({
-                structura: parseFloat(normalizeProgress(progressData.agent_progress?.structura).toFixed(2)),
-                cognita: parseFloat(normalizeProgress(progressData.agent_progress?.cognita).toFixed(2)),
-                chronos: parseFloat(normalizeProgress(progressData.agent_progress?.chronos).toFixed(2)),
-                sentio: parseFloat(normalizeProgress(progressData.agent_progress?.sentio).toFixed(2)),
-                agora: parseFloat(normalizeProgress(progressData.agent_progress?.agora).toFixed(2)),
-                overall: parseFloat(normalizeProgress(progressData.overall_progress).toFixed(2))
-              });
-              
-              // 분석 완료 시 폴링 중단
-              if (progressData.status === 'completed') {
-                clearInterval(progressInterval);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('진행률 조회 실패:', error);
-        }
-      }, 1000); // 1초마다 폴링
-      
-      // 컴포넌트 언마운트 시 폴링 정리
-      cleanup = () => {
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
+      // 4. 클라이언트 사이드 진행률 관리 (PostAnalysis 방식)
+      const updateProgress = (step, agentProgress = {}) => {
+        const stepProgress = {
+          'start': 5,
+          'api_call': 15,
+          'processing': 50,
+          'integration': 85,
+          'complete': 100
+        };
+        
+        const overall = stepProgress[step] || 0;
+        
+        setAnalysisProgress({
+          structura: agentProgress.structura || 0,
+          cognita: agentProgress.cognita || 0,
+          chronos: agentProgress.chronos || 0,
+          sentio: agentProgress.sentio || 0,
+          agora: agentProgress.agora || 0,
+          overall: overall
+        });
+        
+        console.log(`📊 진행률 업데이트: ${step} - 전체 ${overall}%`);
       };
       
-      // 분석 완료 후 정리
-      window.addEventListener('beforeunload', cleanup);
+      // 분석 시작
+      updateProgress('start');
 
       // 5. 저장된 모델 정보 포함하여 배치 분석 API 호출
       let savedModelInfo = null;
@@ -1082,97 +1061,479 @@ const BatchAnalysis = ({
         }
       }
 
-      const response = await fetch('http://localhost:5006/batch_analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // 직원 데이터에서 employee_id 추출 (다양한 필드명 지원)
+      console.log('🔍 직원 데이터 샘플:', employeeData.slice(0, 2)); // 디버깅용 로그
+      
+      const employee_ids = employeeData.map(emp => {
+        // 다양한 가능한 ID 필드명들을 시도
+        return emp.EmployeeNumber || emp.employee_id || emp.id || emp.Employee_ID || emp.employeeNumber;
+      }).filter(id => id !== undefined && id !== null && id !== '');
+      
+      if (employee_ids.length === 0) {
+        console.error('❌ 직원 데이터 구조:', employeeData.slice(0, 3));
+        throw new Error('유효한 직원 ID를 찾을 수 없습니다. 데이터 구조를 확인해주세요. 가능한 필드: EmployeeNumber, employee_id, id');
+      }
+
+      console.log(`📋 배치 분석 대상: ${employee_ids.length}명의 직원 (IDs: ${employee_ids.join(', ')})`);
+
+      // 요청 데이터 구성
+      const requestData = {
+        employee_ids: employee_ids, // 백엔드가 기대하는 형식으로 변경
+        employees: employeeData, // 추가 데이터로 전체 직원 정보도 포함
+        analysis_type: 'batch', // 배치 분석 타입 전달
+        ...agentConfig,
+        integration_config: integrationConfig,
+        neo4j_config: neo4jConnected ? neo4jConfig : null,
+        agent_files: {
+          structura: agentFiles.structura?.name,
+          chronos: agentFiles.chronos?.name,
+          sentio: agentFiles.sentio?.name,
+          agora: agentFiles.agora?.name
         },
-        body: JSON.stringify({
-          employees: employeeData,
-          analysis_type: 'batch', // 배치 분석 타입 전달
-          ...agentConfig,
-          integration_config: integrationConfig,
-          neo4j_config: neo4jConnected ? neo4jConfig : null,
-          agent_files: {
-            structura: agentFiles.structura?.name,
-            chronos: agentFiles.chronos?.name,
-            sentio: agentFiles.sentio?.name,
-            agora: agentFiles.agora?.name
-          },
-          // 저장된 모델 정보 전달
-          trained_models: savedModelInfo?.saved_models || null,
-          use_trained_models: integrationConfig.use_trained_models
-        })
+        // 저장된 모델 정보 전달
+        trained_models: savedModelInfo?.saved_models || null,
+        use_trained_models: integrationConfig.use_trained_models
+      };
+
+      console.log('📤 서버로 전송할 데이터:', {
+        employee_ids: requestData.employee_ids,
+        employee_count: requestData.employees?.length,
+        analysis_type: requestData.analysis_type,
+        agent_files: requestData.agent_files
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const batchResult = await response.json();
+      // 5. PostAnalysis 방식으로 각 에이전트 직접 호출
+      console.log('🚀 PostAnalysis 방식으로 각 에이전트 순차 실행 시작');
+      updateProgress('api_call');
       
-      console.log('📥 배치 분석 응답 받음:', batchResult);
+      const analysisResults = {};
+      const expectedAgents = ['structura', 'cognita', 'chronos', 'sentio', 'agora'];
       
-      if (batchResult.error) {
-        console.error('❌ 배치 분석 오류:', batchResult.error);
-        throw new Error(batchResult.error);
-      }
-
-      // 결과 분석 로깅
-      if (batchResult.results) {
-        const successCount = batchResult.results.filter(r => r.analysis_result && r.analysis_result.status === 'success').length;
-        const failureCount = batchResult.results.filter(r => r.analysis_result && r.analysis_result.status === 'failed').length;
-        console.log(`📈 분석 결과: 성공 ${successCount}명, 실패 ${failureCount}명`);
-        
-        // 실패한 케이스들 상세 로깅
-        const failures = batchResult.results.filter(r => r.analysis_result && r.analysis_result.status === 'failed');
-        if (failures.length > 0) {
-          console.log('❌ 실패한 분석들:');
-          failures.forEach((failure, index) => {
-            console.log(`  ${index + 1}. 직원 ${failure.employee_number}:`, failure.analysis_result);
-          });
-        }
-      }
-
-      // 폴링 정리
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
-      window.removeEventListener('beforeunload', cleanup);
-
-      // 5. Integration 보고서 생성
-      const reportResponse = await fetch('http://localhost:5006/api/workers/integration/generate_report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          analysis_results: batchResult.results,
-          report_options: {
-            include_recommendations: true,
-            include_risk_analysis: true,
-            integration_config: integrationConfig
-          }
-        })
-      });
-
-      if (!reportResponse.ok) {
-        throw new Error(`Integration 보고서 생성 실패: ${reportResponse.status}`);
-      }
-
-      const reportResult = await reportResponse.json();
-      
-      if (reportResult.error) {
-        throw new Error(reportResult.error);
-      }
-
-      // 6. 최종 결과 설정
-      const finalResults = {
-        ...batchResult,
-        integration_report: reportResult.report,
-        report_metadata: reportResult.metadata
+      // 진행률 업데이트 함수 (PostAnalysis 방식)
+      const updateAgentProgress = (agentName, progress) => {
+        setAnalysisProgress(prev => {
+          const newProgress = { ...prev };
+          newProgress[agentName] = progress;
+          
+          // 전체 진행률 계산 (활성화된 에이전트 기준)
+          const activeAgents = expectedAgents.filter(agent => agentConfig[`use_${agent}`]);
+          const totalProgress = activeAgents.reduce((sum, agent) => sum + (newProgress[agent] || 0), 0);
+          newProgress.overall = activeAgents.length > 0 ? Math.round(totalProgress / activeAgents.length) : 0;
+          
+          return newProgress;
+        });
       };
       
+      // 각 에이전트별 순차 실행
+      for (const agentName of expectedAgents) {
+        if (!agentConfig[`use_${agentName}`]) {
+          console.log(`⚠️ ${agentName}: 비활성화됨, 건너뜀`);
+          continue;
+        }
+        
+        console.log(`🔄 ${agentName}: 배치 분석 시작...`);
+        updateAgentProgress(agentName, 10);
+        
+        try {
+          let predictions = [];
+          
+          if (agentName === 'structura') {
+            // Structura 배치 분석: Post 데이터로 학습 → Batch 데이터로 예측
+            console.log(`📊 Structura: 배치 분석 시작 (Post 학습 → Batch 예측)`);
+            updateAgentProgress('structura', 30);
+            
+            const response = await fetch('http://localhost:5001/api/batch-analysis', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                analysis_type: 'batch'
+                // employees 데이터 제거 - CSV 파일에서 직접 읽음
+              })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              predictions = result.predictions || [];
+              console.log(`✅ Structura: ${predictions.length}명 배치 분석 완료`);
+              updateAgentProgress('structura', 100);
+            } else {
+              throw new Error(`Structura 배치 분석 실패: ${response.status}`);
+            }
+            
+          } else if (agentName === 'chronos' && agentFiles.chronos) {
+            // Chronos 배치 분석: Post 데이터로 학습 → Batch 데이터로 예측
+            console.log(`📈 Chronos: 배치 분석 시작 (Post 학습 → Batch 예측)`);
+            updateAgentProgress('chronos', 30);
+            
+            const response = await fetch('http://localhost:5003/api/batch-analysis', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                analysis_type: 'batch'
+                // employee_ids 제거 - CSV 파일에서 직접 읽음
+              })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              predictions = result.predictions || [];
+              console.log(`✅ Chronos: ${predictions.length}명 배치 분석 완료`);
+              updateAgentProgress('chronos', 100);
+            } else {
+              throw new Error(`Chronos 배치 분석 실패: ${response.status}`);
+            }
+            
+          } else if (agentName === 'sentio' && agentFiles.sentio) {
+            // Sentio API 호출 - PostAnalysis와 동일한 방식으로 실제 텍스트 데이터 전송
+            console.log(`💭 Sentio: ${employee_ids.length}명 감정 분석 시작...`);
+            updateAgentProgress('sentio', 10);
+            
+            // Sentio는 반드시 업로드된 실제 텍스트 데이터만 사용
+            if (!agentFiles.sentio || !agentFiles.sentio.data) {
+              console.error('❌ Sentio: 텍스트 데이터 파일이 업로드되지 않았습니다.');
+              throw new Error('Sentio 분석을 위해서는 텍스트 데이터 파일(SELF_REVIEW_text, PEER_FEEDBACK_text, WEEKLY_SURVEY_text 포함)이 필요합니다.');
+            }
+            
+            // 업로드된 Sentio 데이터에서 실제 텍스트 추출
+            const sentioEmployees = agentFiles.sentio.data
+              .filter(emp => employee_ids.includes(emp.EmployeeNumber)) // 배치 분석 대상만 필터링
+              .map(emp => ({
+                employee_id: emp.EmployeeNumber,
+                text_data: {
+                  self_review: emp.SELF_REVIEW_text || '',
+                  peer_feedback: emp.PEER_FEEDBACK_text || '',
+                  weekly_survey: emp.WEEKLY_SURVEY_text || ''
+                }
+              }));
+            
+            console.log(`📝 Sentio: 업로드된 데이터에서 ${sentioEmployees.length}명의 실제 텍스트 데이터 추출`);
+            updateAgentProgress('sentio', 20);
+            
+            // 텍스트 데이터 품질 검증
+            const validTextCount = sentioEmployees.filter(emp => {
+              const textData = emp.text_data;
+              return textData.self_review || textData.peer_feedback || textData.weekly_survey;
+            }).length;
+            
+            if (validTextCount === 0) {
+              console.error('❌ Sentio: 업로드된 파일에 유효한 텍스트 데이터가 없습니다.');
+              throw new Error('업로드된 Sentio 파일에 SELF_REVIEW_text, PEER_FEEDBACK_text, WEEKLY_SURVEY_text 중 하나 이상의 데이터가 필요합니다.');
+            }
+            
+            console.log(`✅ Sentio: ${validTextCount}명의 유효한 텍스트 데이터 확인됨`);
+            updateAgentProgress('sentio', 30);
+            
+            const response = await fetch('http://localhost:5004/analyze_sentiment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                analysis_type: 'batch', // 배치 분석 타입 전달
+                employees: sentioEmployees  // 실제 텍스트 데이터 포함
+              })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              predictions = result.analysis_results?.map(pred => ({
+                employee_id: pred.employee_id,
+                risk_score: pred.psychological_risk_score,
+                predicted_attrition: pred.psychological_risk_score > 0.5 ? 1 : 0,
+                confidence: 0.8,
+                sentiment_scores: pred.sentiment_scores || {}
+              })) || [];
+              
+              if (predictions.length > 0) {
+                console.log(`✅ Sentio: ${predictions.length}명 실제 텍스트 분석 완료!`);
+                console.log(`📝 ${validTextCount}명의 유효한 텍스트 데이터로 정밀 감정 분석 수행됨`);
+              } else {
+                console.warn('⚠️ Sentio: 분석 결과가 0명입니다.');
+              }
+              updateAgentProgress('sentio', 100);
+            } else {
+              const errorText = await response.text();
+              console.error('❌ Sentio API 호출 실패:', response.status, errorText);
+              throw new Error(`Sentio API 호출 실패: ${response.status}`);
+            }
+            
+          } else if (agentName === 'cognita' && neo4jConnected) {
+            // Cognita는 개별 직원별로 호출 (PostAnalysis와 동일한 방식)
+            console.log(`🕸️ Cognita: ${employee_ids.length}명 관계 분석 시작...`);
+            updateAgentProgress('cognita', 30);
+            
+            predictions = [];
+            for (let i = 0; i < employee_ids.length; i++) {
+              try {
+                const response = await fetch(`http://localhost:5002/api/analyze/employee/${employee_ids[i]}`);
+                if (response.ok) {
+                  const result = await response.json();
+                  predictions.push({
+                    employee_id: employee_ids[i],
+                    risk_score: result.risk_analysis?.overall_risk_score || 0.5,
+                    predicted_attrition: result.risk_analysis?.overall_risk_score > 0.5 ? 1 : 0
+                  });
+                }
+                
+                // 실시간 진행률 업데이트 (10명마다)
+                if ((i + 1) % 10 === 0 || i === employee_ids.length - 1) {
+                  const progress = 30 + Math.floor(((i + 1) / employee_ids.length) * 70);
+                  updateAgentProgress('cognita', progress);
+                  console.log(`🕸️ Cognita: ${i + 1}/${employee_ids.length}명 분석 완료 (${Math.floor((i + 1) / employee_ids.length * 100)}%)`);
+                }
+              } catch (error) {
+                console.warn(`⚠️ Cognita 분석 실패 (직원 ${employee_ids[i]}):`, error);
+              }
+            }
+            
+            console.log(`✅ Cognita: 전체 분석 완료 - ${predictions.length}/${employee_ids.length}명 성공`);
+            
+          } else if (agentName === 'agora') {
+            // Agora 개별 분석 API 호출 (PostAnalysis와 동일한 방식)
+            predictions = [];
+            console.log(`📊 Agora: ${employee_ids.length}명 개별 시장 분석 시작...`);
+            updateAgentProgress('agora', 10);
+            
+            for (let i = 0; i < employee_ids.length; i++) {
+              try {
+                const employeeId = employee_ids[i];
+                const employeeInfo = employeeData.find(emp => emp.EmployeeNumber == employeeId) || {};
+                
+                const response = await fetch('http://localhost:5005/api/agora/comprehensive-analysis', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    analysis_type: 'batch', // 배치 분석 타입 전달
+                    EmployeeNumber: employeeId,
+                    JobRole: employeeInfo.JobRole || 'Unknown',
+                    MonthlyIncome: parseFloat(employeeInfo.MonthlyIncome) || 5000, // 숫자로 변환
+                    Department: employeeInfo.Department || 'Unknown',
+                    YearsAtCompany: parseInt(employeeInfo.YearsAtCompany) || 1, // 숫자로 변환
+                    JobSatisfaction: parseInt(employeeInfo.JobSatisfaction) || 3 // 숫자로 변환
+                  })
+                });
+                
+                if (response.ok) {
+                  const result = await response.json();
+                  predictions.push({
+                    employee_id: employeeId,
+                    agora_score: result.agora_score || 0,
+                    risk_level: result.risk_level || 'UNKNOWN',
+                    market_pressure_index: result.market_pressure_index || 0,
+                    compensation_gap: result.compensation_gap || 0,
+                    job_postings_count: result.job_postings_count || 0,
+                    market_competitiveness: result.market_competitiveness || 'UNKNOWN'
+                  });
+                } else {
+                  console.error(`❌ Agora 직원 ${employeeId} 분석 실패: ${response.status}`);
+                  // 실패한 직원에 대한 기본값 추가
+                  predictions.push({
+                    employee_id: employeeId,
+                    agora_score: 0,
+                    risk_level: 'ERROR',
+                    market_pressure_index: 0,
+                    compensation_gap: 0,
+                    job_postings_count: 0,
+                    market_competitiveness: 'ERROR'
+                  });
+                }
+                
+                // 진행률 업데이트
+                const progress = Math.min(100, 10 + (i + 1) / employee_ids.length * 90);
+                updateAgentProgress('agora', Math.round(progress));
+                
+                // 진행 상황 로그 (10명마다)
+                if ((i + 1) % 10 === 0 || i === employee_ids.length - 1) {
+                  console.log(`📊 Agora: ${i + 1}/${employee_ids.length}명 분석 완료`);
+                }
+                
+              } catch (error) {
+                console.error(`❌ Agora 직원 ${employee_ids[i]} 분석 중 오류:`, error);
+                // 오류 발생 시에도 기본값 추가
+                predictions.push({
+                  employee_id: employee_ids[i],
+                  agora_score: 0,
+                  risk_level: 'ERROR',
+                  market_pressure_index: 0,
+                  compensation_gap: 0,
+                  job_postings_count: 0,
+                  market_competitiveness: 'ERROR'
+                });
+              }
+            }
+            
+            console.log(`✅ Agora: ${predictions.length}/${employee_ids.length}명 분석 완료`);
+            updateAgentProgress('agora', 100);
+          }
+          
+          // 결과 저장
+          analysisResults[agentName] = predictions;
+          
+        } catch (error) {
+          console.error(`❌ ${agentName} 분석 실패:`, error);
+          throw error; // 에러를 상위로 전파하여 전체 분석 중단
+        }
+      }
+      
+      console.log('📊 모든 에이전트 분석 완료:', analysisResults);
+      updateProgress('processing');
+
+      // 6. 결과 통합 및 포맷팅 (PostAnalysis 방식)
+      updateProgress('integration');
+      
+      const batchResults = [];
+      const totalEmployees = employeeData.length;
+      let successfulAnalyses = 0;
+      
+      // 각 직원별로 결과 통합
+      for (const employee of employeeData) {
+        const empId = employee.EmployeeNumber || employee.employee_id || employee.id;
+        
+        const employeeResult = {
+          employee_id: empId,
+          employee_number: empId,
+          success: true,
+          analysis_result: {
+            status: 'success',
+            employee_data: employee,
+            structura_result: null,
+            cognita_result: null,
+            chronos_result: null,
+            sentio_result: null,
+            agora_result: null,
+            combined_analysis: {
+              integrated_assessment: {
+                overall_risk_score: 0,
+                overall_risk_level: 'LOW'
+              }
+            }
+          }
+        };
+        
+        // 각 에이전트 결과 통합
+        let totalRiskScore = 0;
+        let activeAgentCount = 0;
+        
+        // Structura 결과
+        if (analysisResults.structura) {
+          const structuraPred = analysisResults.structura.find(p => 
+            String(p.employee_number || p.employee_id) === String(empId)
+          );
+          if (structuraPred) {
+            employeeResult.analysis_result.structura_result = {
+              prediction: {
+                attrition_probability: structuraPred.risk_score || structuraPred.attrition_probability,
+                confidence_score: structuraPred.confidence || 0.8,
+                risk_category: structuraPred.risk_score > 0.7 ? 'HIGH' : structuraPred.risk_score > 0.3 ? 'MEDIUM' : 'LOW'
+              }
+            };
+            totalRiskScore += (structuraPred.risk_score || 0) * integrationConfig.structura_weight;
+            activeAgentCount++;
+          }
+        }
+        
+        // Cognita 결과
+        if (analysisResults.cognita) {
+          const cognitaPred = analysisResults.cognita.find(p => 
+            String(p.employee_id) === String(empId)
+          );
+          if (cognitaPred) {
+            employeeResult.analysis_result.cognita_result = {
+              risk_analysis: {
+                overall_risk_score: cognitaPred.risk_score,
+                risk_category: cognitaPred.risk_score > 0.7 ? 'HIGH' : cognitaPred.risk_score > 0.3 ? 'MEDIUM' : 'LOW'
+              }
+            };
+            totalRiskScore += (cognitaPred.risk_score || 0) * integrationConfig.cognita_weight;
+            activeAgentCount++;
+          }
+        }
+        
+        // Chronos 결과
+        if (analysisResults.chronos) {
+          const chronosPred = analysisResults.chronos.find(p => 
+            String(p.employee_id) === String(empId)
+          );
+          if (chronosPred) {
+            employeeResult.analysis_result.chronos_result = {
+              prediction: {
+                risk_score: chronosPred.risk_score || chronosPred.attrition_probability,
+                attrition_probability: chronosPred.risk_score || chronosPred.attrition_probability
+              },
+              confidence: chronosPred.confidence || 0.8
+            };
+            totalRiskScore += (chronosPred.risk_score || 0) * integrationConfig.chronos_weight;
+            activeAgentCount++;
+          }
+        }
+        
+        // Sentio 결과
+        if (analysisResults.sentio) {
+          const sentioPred = analysisResults.sentio.find(p => 
+            String(p.employee_id) === String(empId)
+          );
+          if (sentioPred) {
+            employeeResult.analysis_result.sentio_result = {
+              sentiment_analysis: {
+                risk_score: sentioPred.psychological_risk_score || sentioPred.risk_score,
+                sentiment_score: sentioPred.sentiment_score || 0
+              },
+              risk_level: sentioPred.risk_level || 'MEDIUM'
+            };
+            totalRiskScore += (sentioPred.psychological_risk_score || sentioPred.risk_score || 0) * integrationConfig.sentio_weight;
+            activeAgentCount++;
+          }
+        }
+        
+        // Agora 결과
+        if (analysisResults.agora) {
+          const agoraPred = analysisResults.agora.find(p => 
+            String(p.employee_id) === String(empId)
+          );
+          if (agoraPred) {
+            employeeResult.analysis_result.agora_result = {
+              market_analysis: {
+                market_pressure_index: agoraPred.market_pressure_index || agoraPred.risk_score,
+                risk_score: agoraPred.risk_score || 0.5
+              },
+              risk_level: agoraPred.risk_level || 'MEDIUM'
+            };
+            totalRiskScore += (agoraPred.risk_score || 0) * integrationConfig.agora_weight;
+            activeAgentCount++;
+          }
+        }
+        
+        // 통합 위험도 계산
+        if (activeAgentCount > 0) {
+          const normalizedRiskScore = totalRiskScore; // 가중치 합이 1이므로 정규화 불필요
+          employeeResult.analysis_result.combined_analysis.integrated_assessment.overall_risk_score = normalizedRiskScore;
+          employeeResult.analysis_result.combined_analysis.integrated_assessment.overall_risk_level = 
+            normalizedRiskScore > 0.7 ? 'HIGH' : normalizedRiskScore > 0.3 ? 'MEDIUM' : 'LOW';
+          successfulAnalyses++;
+        }
+        
+        batchResults.push(employeeResult);
+      }
+      
+      // 최종 결과 구성
+      const finalResults = {
+        success: true,
+        results: batchResults,
+        total_employees: totalEmployees,
+        completed_employees: successfulAnalyses,
+        summary: {
+          total_employees: totalEmployees,
+          successful_analyses: successfulAnalyses,
+          failed_analyses: totalEmployees - successfulAnalyses,
+          success_rate: successfulAnalyses / totalEmployees
+        },
+        analysis_metadata: {
+          analysis_type: 'batch',
+          agents_used: Object.keys(agentConfig).filter(key => agentConfig[key] && key.startsWith('use_')),
+          integration_config: integrationConfig,
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+      console.log(`📊 배치 분석 완료: ${successfulAnalyses}/${totalEmployees}명 성공`);
       setAnalysisResults(finalResults);
       
       // 전역 상태 업데이트 (다른 페이지에서 사용할 수 있도록)
@@ -1232,13 +1593,25 @@ const BatchAnalysis = ({
         // 에러가 발생해도 메인 분석 프로세스는 계속 진행
       }
       
-      setAnalysisProgress(prev => ({ ...prev, overall: 100 }));
+      // 7. 분석 완료
+      updateProgress('complete');
 
-      message.success(`통합 배치 분석 완료! ${batchResult.completed_employees}명의 직원 분석 및 Integration 보고서 생성이 완료되었습니다.`);
+      const completedCount = finalResults.summary?.successful_analyses || 0;
+      message.success(`PostAnalysis 방식 배치 분석 완료! ${completedCount}명의 직원 분석이 완료되었습니다.`);
 
     } catch (error) {
       console.error('❌ 통합 배치 분석 실패:', error);
       console.error('❌ 오류 스택:', error.stack);
+      
+      // 에러 발생 시 진행률 초기화
+      setAnalysisProgress({
+        structura: 0,
+        cognita: 0,
+        chronos: 0,
+        sentio: 0,
+        agora: 0,
+        overall: 0
+      });
       
       // 네트워크 오류인지 확인
       if (error.message.includes('fetch')) {
@@ -1249,18 +1622,6 @@ const BatchAnalysis = ({
       }
     } finally {
       setIsAnalyzing(false);
-      
-      // 폴링 정리 (에러 발생 시에도)
-      try {
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
-        if (cleanup) {
-          window.removeEventListener('beforeunload', cleanup);
-        }
-      } catch (cleanupError) {
-        console.log('폴링 정리 중 오류:', cleanupError);
-      }
     }
   };
 
@@ -1464,7 +1825,7 @@ const BatchAnalysis = ({
       // 가장 중요한 점수만 추출
       risk_score: result.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score || 
                   result.analysis_result?.structura_result?.prediction || 
-                  Math.random() * 100 // 임시 더미 데이터
+                  0 // 데이터가 없으면 0으로 설정
     }));
     
     return {
@@ -2042,12 +2403,12 @@ const BatchAnalysis = ({
       key: 'chronos_score',
       width: 120,
       render: (_, record) => {
-        const score = record.analysis_result?.chronos_result?.trend_score;
-        return score ? (score * 100).toFixed(1) + '%' : 'N/A';
+        const score = record.analysis_result?.chronos_result?.prediction?.risk_score;
+        return score !== undefined ? (score * 100).toFixed(1) + '%' : 'N/A';
       },
       sorter: (a, b) => {
-        const scoreA = a.analysis_result?.chronos_result?.trend_score || 0;
-        const scoreB = b.analysis_result?.chronos_result?.trend_score || 0;
+        const scoreA = a.analysis_result?.chronos_result?.prediction?.risk_score || 0;
+        const scoreB = b.analysis_result?.chronos_result?.prediction?.risk_score || 0;
         return scoreA - scoreB;
       },
       sortDirections: ['ascend', 'descend'],
@@ -2057,12 +2418,12 @@ const BatchAnalysis = ({
       key: 'sentio_score',
       width: 120,
       render: (_, record) => {
-        const score = record.analysis_result?.sentio_result?.sentiment_score;
+        const score = record.analysis_result?.sentio_result?.sentiment_analysis?.sentiment_score;
         return score !== undefined ? (Math.abs(score) * 100).toFixed(1) + '%' : 'N/A';
       },
       sorter: (a, b) => {
-        const scoreA = Math.abs(a.analysis_result?.sentio_result?.sentiment_score || 0);
-        const scoreB = Math.abs(b.analysis_result?.sentio_result?.sentiment_score || 0);
+        const scoreA = Math.abs(a.analysis_result?.sentio_result?.sentiment_analysis?.sentiment_score || 0);
+        const scoreB = Math.abs(b.analysis_result?.sentio_result?.sentiment_analysis?.sentiment_score || 0);
         return scoreA - scoreB;
       },
       sortDirections: ['ascend', 'descend'],

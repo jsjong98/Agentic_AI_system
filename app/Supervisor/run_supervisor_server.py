@@ -23,7 +23,7 @@ def setup_environment():
         'FLASK_DEBUG': 'False',
         'MAX_RETRY_COUNT': '3',
         'TIMEOUT_MINUTES': '30',
-        'MAX_BATCH_SIZE': '10',
+        'MAX_BATCH_SIZE': '2000',
         
         # 워커 서버 URL (기본값)
         'STRUCTURA_URL': 'http://localhost:5001',

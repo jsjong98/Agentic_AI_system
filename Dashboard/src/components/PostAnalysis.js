@@ -305,17 +305,73 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       console.log(`- 총 라인 수: ${lines.length}`);
       console.log(`- 헤더: ${headers.join(', ')}`);
       
+      // 개선된 CSV 파싱 로직 - 따옴표와 줄바꿈 처리
+      const parseCSVLine = (line) => {
+        const values = [];
+        let current = '';
+        let inQuotes = false;
+        let i = 0;
+        
+        while (i < line.length) {
+          const char = line[i];
+          
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              // 이스케이프된 따옴표
+              current += '"';
+              i += 2;
+            } else {
+              // 따옴표 시작/끝
+              inQuotes = !inQuotes;
+              i++;
+            }
+          } else if (char === ',' && !inQuotes) {
+            // 쉼표 구분자 (따옴표 밖에서만)
+            values.push(current.trim());
+            current = '';
+            i++;
+          } else {
+            current += char;
+            i++;
+          }
+        }
+        
+        values.push(current.trim());
+        return values;
+      };
+      
+      // 멀티라인 레코드를 처리하기 위한 로직
+      let currentRecord = '';
+      let inQuotes = false;
+      
       for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line) {
-          const values = line.split(',');
-          const row = {};
-          headers.forEach((header, index) => {
-            row[header] = values[index]?.trim();
-          });
-          data.push(row);
-        } else {
-          skippedLines++;
+        const line = lines[i];
+        currentRecord += (currentRecord ? '\n' : '') + line;
+        
+        // 따옴표 상태 확인
+        for (let char of line) {
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          }
+        }
+        
+        // 레코드가 완성되었는지 확인 (따옴표가 모두 닫혔고, 컬럼 수가 맞는지)
+        if (!inQuotes) {
+          const values = parseCSVLine(currentRecord);
+          
+          if (values.length === headers.length) {
+            const row = {};
+            headers.forEach((header, index) => {
+              row[header] = values[index]?.replace(/^"|"$/g, '').trim(); // 앞뒤 따옴표 제거
+            });
+            data.push(row);
+            currentRecord = '';
+          } else if (currentRecord.trim() === '') {
+            // 빈 줄
+            skippedLines++;
+            currentRecord = '';
+          }
+          // 컬럼 수가 맞지 않으면 다음 라인과 합쳐서 계속 처리
         }
       }
       
@@ -489,11 +545,47 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       message.success(
         `최종 설정이 저장되었습니다! ` +
         `배치 분석에서 이 설정을 사용하여 위험도 분류를 수행할 수 있습니다. ` +
-        `(F1-Score: ${adjustedRiskResults.performance_metrics?.f1_score?.toFixed(4) || 'N/A'})`
+        `(F1-Score: ${adjustedRiskResults.performance_metrics?.f1_score ? (adjustedRiskResults.performance_metrics.f1_score * 100).toFixed(2) + '%' : 'N/A'})`
       );
       
       // localStorage에도 저장 (배치 분석에서 참조용)
       localStorage.setItem('finalRiskSettings', JSON.stringify(result.final_settings));
+      
+      // 저장 완료 후 성공 상태 표시를 위한 추가 알림
+      setTimeout(() => {
+        Modal.success({
+          title: '🎯 배치 분석용 최종 설정 저장 완료',
+          content: (
+            <div>
+              <p><strong>저장된 설정:</strong></p>
+              <ul>
+                <li>안전군 임계값: &lt; {riskThresholds.low_risk_threshold}</li>
+                <li>고위험군 임계값: ≥ {riskThresholds.high_risk_threshold}</li>
+                <li>퇴사 예측 모드: {attritionPredictionMode === 'high_risk_only' ? '고위험군만' : '주의군 + 고위험군'}</li>
+                <li>최적화된 F1-Score: {adjustedRiskResults.performance_metrics?.f1_score ? (adjustedRiskResults.performance_metrics.f1_score * 100).toFixed(2) + '%' : 'N/A'}</li>
+              </ul>
+              <p><strong>다음 단계:</strong> 배치 분석 메뉴에서 이 최적화된 설정을 사용하여 전체 직원 분석을 수행할 수 있습니다.</p>
+            </div>
+          ),
+          width: 600,
+          onOk() {
+            // 배치 분석으로 이동할지 묻기
+            Modal.confirm({
+              title: '배치 분석으로 이동하시겠습니까?',
+              content: '저장된 최적화 설정을 사용하여 배치 분석을 바로 시작할 수 있습니다.',
+              onOk() {
+                if (onNavigate) {
+                  onNavigate('batch-analysis');
+                }
+              },
+              onCancel() {
+                // 취소 시 아무것도 하지 않음
+              }
+            });
+          }
+        });
+      }, 1000);
+      
       
     } catch (error) {
       console.error('최종 설정 저장 실패:', error);
@@ -765,64 +857,147 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               console.log(`🔄 Structura: ${masterAttritionData.length}명 배치 예측 시작...`);
               updateAgentProgress('structura', 90);
               
-              // Structura API 호출
+              // Structura API 호출 - 필요한 필드만 전송하여 데이터 크기 최적화
+              const structuraEmployees = masterAttritionData.map(emp => ({
+                EmployeeNumber: emp.EmployeeNumber,
+                // 모든 필수 피처 포함
+                Age: emp.Age,
+                JobSatisfaction: emp.JobSatisfaction,
+                WorkLifeBalance: emp.WorkLifeBalance,
+                OverTime: emp.OverTime,
+                MonthlyIncome: emp.MonthlyIncome,
+                YearsAtCompany: emp.YearsAtCompany,
+                JobRole: emp.JobRole,
+                Department: emp.Department,
+                EducationField: emp.EducationField,
+                MaritalStatus: emp.MaritalStatus,
+                Gender: emp.Gender,
+                Attrition: emp.Attrition,
+                // Structura가 필요로 하는 추가 피처들
+                TotalWorkingYears: emp.TotalWorkingYears,
+                EnvironmentSatisfaction: emp.EnvironmentSatisfaction,
+                RelationshipSatisfaction: emp.RelationshipSatisfaction,
+                Education: emp.Education,
+                StockOptionLevel: emp.StockOptionLevel,
+                JobLevel: emp.JobLevel,
+                NumCompaniesWorked: emp.NumCompaniesWorked,
+                YearsSinceLastPromotion: emp.YearsSinceLastPromotion,
+                TrainingTimesLastYear: emp.TrainingTimesLastYear,
+                YearsInCurrentRole: emp.YearsInCurrentRole,
+                JobInvolvement: emp.JobInvolvement,
+                DistanceFromHome: emp.DistanceFromHome,
+                YearsWithCurrManager: emp.YearsWithCurrManager,
+                DailyRate: emp.DailyRate,
+                BusinessTravel: emp.BusinessTravel,
+                HourlyRate: emp.HourlyRate,
+                MonthlyRate: emp.MonthlyRate,
+                PercentSalaryHike: emp.PercentSalaryHike,
+                PerformanceRating: emp.PerformanceRating,
+                StandardHours: emp.StandardHours
+              }));
+              
+              console.log(`📊 Structura: ${structuraEmployees.length}명 데이터 전송 (최적화된 필드만)`);
+              
+              // AbortController로 timeout 설정 (5분)
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+              
               const response = await fetch('http://localhost:5001/api/predict/batch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   analysis_type: 'post', // 사후 분석 타입 전달
-                  employees: masterAttritionData.map(emp => ({
-                    employee_number: emp.EmployeeNumber,
-                    ...emp
-                  }))
-                })
+                  employees: structuraEmployees
+                }),
+                signal: controller.signal
               });
+              
+              clearTimeout(timeoutId);
               
               if (response.ok) {
                 const result = await response.json();
-                predictions = result.predictions.map(pred => ({
+                predictions = result.predictions?.map(pred => ({
                   employee_id: pred.employee_number,
                   risk_score: pred.attrition_probability,
                   predicted_attrition: pred.attrition_prediction,
                   confidence: pred.confidence_score,
                   actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === pred.employee_number)?.Attrition === 'Yes' ? 1 : 0
-                }));
+                })) || [];
                 
-                // API 호출 완료 후 100%로 설정
-                console.log(`✅ Structura: ${predictions.length}명 배치 예측 완료!`);
+                if (predictions.length > 0) {
+                  console.log(`✅ Structura: ${predictions.length}명 배치 예측 완료!`);
+                } else {
+                  console.warn('⚠️ Structura: 예측 결과가 0명입니다.');
+                }
                 updateAgentProgress('structura', 100);
               } else {
-                console.error('❌ Structura API 호출 실패:', response.status);
-                updateAgentProgress('structura', 100); // 실패해도 완료로 표시
+                const errorText = await response.text();
+                console.error(`❌ Structura API 호출 실패: ${response.status} - ${errorText}`);
+                throw new Error(`Structura API 호출 실패: ${response.status}`);
               }
             } else if (agentName === 'chronos') {
-              // Chronos API 호출
+              // Chronos API 호출 - 사후 분석에서는 모델 학습 + 예측을 순차적으로 수행
               console.log(`🔄 Chronos: ${employeeIds.length}명 시계열 예측 시작...`);
               updateAgentProgress('chronos', 10);
               
-              const response = await fetch('http://localhost:5003/api/predict', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  analysis_type: 'post', // 사후 분석 타입 전달
-                  employee_ids: employeeIds
-                })
-              });
-              
-              if (response.ok) {
-                const result = await response.json();
-                predictions = result.predictions.map(pred => ({
-                  employee_id: pred.employee_id,
-                  risk_score: pred.attrition_probability,
-                  predicted_attrition: pred.predicted_class,
-                  confidence: pred.confidence || 0.8,
-                  actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
-                }));
+              try {
+                // 1단계: 모델 학습
+                console.log('🔧 Chronos: 모델 학습 시작...');
+                const trainResponse = await fetch('http://localhost:5003/api/train', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    sequence_length: 50,
+                    epochs: 50,
+                    optimize_hyperparameters: true,
+                    analysis_type: 'post'
+                  })
+                });
                 
-                console.log(`✅ Chronos: ${predictions.length}명 시계열 예측 완료!`);
-                updateAgentProgress('chronos', 100);
-              } else {
-                console.error('❌ Chronos API 호출 실패:', response.status);
+                if (!trainResponse.ok) {
+                  throw new Error(`모델 학습 실패: ${trainResponse.status}`);
+                }
+                
+                const trainResult = await trainResponse.json();
+                console.log('✅ Chronos: 모델 학습 완료');
+                updateAgentProgress('chronos', 50);
+                
+                // 2단계: 예측 수행 (employee_ids를 비워서 전체 직원 예측)
+                console.log('🔮 Chronos: 예측 수행 시작... (post 데이터의 모든 직원 대상)');
+                const predictResponse = await fetch('http://localhost:5003/api/predict', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    analysis_type: 'post'
+                    // employee_ids를 제거하여 post 데이터의 모든 직원을 예측하도록 함
+                  })
+                });
+                
+                if (predictResponse.ok) {
+                  const result = await predictResponse.json();
+                  predictions = result.predictions.map(pred => ({
+                    employee_id: pred.employee_id,
+                    risk_score: pred.attrition_probability,
+                    predicted_attrition: pred.predicted_class,
+                    confidence: pred.confidence || 0.8,
+                    actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
+                  }));
+                  
+                  if (predictions.length > 0) {
+                    console.log(`✅ Chronos: ${predictions.length}명 시계열 예측 완료!`);
+                    updateAgentProgress('chronos', 100);
+                  } else {
+                    console.warn('⚠️ Chronos: 예측 결과가 0명입니다. post 데이터에 직원이 없거나 데이터 형식에 문제가 있을 수 있습니다.');
+                    throw new Error('예측 결과가 0명입니다');
+                  }
+                } else {
+                  throw new Error(`예측 실패: ${predictResponse.status}`);
+                }
+              } catch (error) {
+                console.error('❌ Chronos API 호출 실패:', error);
+                console.log('⚠️ Chronos API 호출 실패 - 원인:', error.message);
+                console.log('📝 해결 방법: 1) Chronos 서버 상태 확인, 2) post 데이터 파일 확인, 3) 모델 학습 상태 확인');
+                console.log('🔄 기본 데이터로 대체하여 분석을 계속합니다.');
                 updateAgentProgress('chronos', 100); // 실패해도 완료로 표시
               }
             } else if (agentName === 'cognita') {
@@ -861,15 +1036,43 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               console.log(`Sentio: 전체 ${masterAttritionData.length}명 배치 분석 시작...`);
               updateAgentProgress('sentio', 10);
               
+              // Sentio는 반드시 업로드된 실제 텍스트 데이터만 사용
+              if (!agentFiles.sentio || !agentFiles.sentio.data) {
+                console.error('❌ Sentio: 텍스트 데이터 파일이 업로드되지 않았습니다.');
+                throw new Error('Sentio 분석을 위해서는 텍스트 데이터 파일(SELF_REVIEW_text, PEER_FEEDBACK_text, WEEKLY_SURVEY_text 포함)이 필요합니다.');
+              }
+              
+              // 업로드된 Sentio 데이터에서 실제 텍스트 추출
+              const sentioEmployees = agentFiles.sentio.data.map(emp => ({
+                employee_id: emp.EmployeeNumber,
+                text_data: {
+                  self_review: emp.SELF_REVIEW_text || '',
+                  peer_feedback: emp.PEER_FEEDBACK_text || '',
+                  weekly_survey: emp.WEEKLY_SURVEY_text || ''
+                }
+              }));
+              
+              console.log(`📝 Sentio: 업로드된 데이터에서 ${sentioEmployees.length}명의 실제 텍스트 데이터 추출`);
+              
+              // 텍스트 데이터 품질 검증
+              const validTextCount = sentioEmployees.filter(emp => {
+                const textData = emp.text_data;
+                return textData.self_review || textData.peer_feedback || textData.weekly_survey;
+              }).length;
+              
+              if (validTextCount === 0) {
+                console.error('❌ Sentio: 업로드된 파일에 유효한 텍스트 데이터가 없습니다.');
+                throw new Error('업로드된 Sentio 파일에 SELF_REVIEW_text, PEER_FEEDBACK_text, WEEKLY_SURVEY_text 중 하나 이상의 데이터가 필요합니다.');
+              }
+              
+              console.log(`✅ Sentio: ${validTextCount}명의 유효한 텍스트 데이터 확인됨`);
+              
               const response = await fetch('http://localhost:5004/analyze_sentiment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   analysis_type: 'post', // 사후 분석 타입 전달
-                  employees: masterAttritionData.map(emp => ({
-                    employee_id: emp.EmployeeNumber,
-                    text_data: `직원 ${emp.EmployeeNumber}의 업무 관련 텍스트 데이터`
-                  }))
+                  employees: sentioEmployees
                 })
               });
               
@@ -883,7 +1086,12 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === pred.employee_id)?.Attrition === 'Yes' ? 1 : 0
                 })) || [];
                 
-                console.log(`✅ Sentio: ${predictions.length}명 배치 분석 완료!`);
+                if (predictions.length > 0) {
+                  console.log(`✅ Sentio: ${predictions.length}명 실제 텍스트 분석 완료!`);
+                  console.log(`📝 ${validTextCount}명의 유효한 텍스트 데이터로 정밀 감정 분석 수행됨`);
+                } else {
+                  console.warn('⚠️ Sentio: 분석 결과가 0명입니다.');
+                }
                 updateAgentProgress('sentio', 100);
               } else {
                 console.error('❌ Sentio API 호출 실패:', response.status);
@@ -933,33 +1141,16 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               console.log(`Agora: 전체 분석 완료 - ${predictions.length}/${employeeIds.length}명 성공`);
             }
             
-            // API 호출 실패 시 기본 데이터 생성
+            // API 호출 실패 시 오류 처리 (더미 데이터 생성하지 않음)
             if (predictions.length === 0) {
-              console.warn(`${agentName} API 호출 실패, 기본 데이터 생성`);
-              for (let i = 0; i < employeeIds.length; i++) {
-                predictions.push({
-                  employee_id: employeeIds[i],
-                  risk_score: Math.random(),
-                  predicted_attrition: Math.random() > 0.7 ? 1 : 0,
-                  confidence: 0.7 + Math.random() * 0.3,
-                  actual_attrition: masterAttritionData[i]?.Attrition === 'Yes' ? 1 : 0
-                });
-              }
+              console.error(`❌ ${agentName}: 예측 결과가 없습니다. API 호출이 실패했거나 데이터에 문제가 있을 수 있습니다.`);
+              throw new Error(`${agentName} 분석 실패: 예측 결과를 받을 수 없습니다.`);
             }
             
           } catch (error) {
-            console.error(`${agentName} API 호출 오류:`, error);
-            // 오류 시 기본 데이터 생성
-            predictions = [];
-            for (let i = 0; i < employeeIds.length; i++) {
-              predictions.push({
-                employee_id: employeeIds[i],
-                risk_score: Math.random(),
-                predicted_attrition: Math.random() > 0.7 ? 1 : 0,
-                confidence: 0.7 + Math.random() * 0.3,
-                actual_attrition: masterAttritionData[i]?.Attrition === 'Yes' ? 1 : 0
-              });
-            }
+            console.error(`❌ ${agentName} API 호출 오류:`, error);
+            // 더미 데이터 생성하지 않고 오류를 그대로 전파
+            throw error;
           }
           
           agentResults[agentName] = {
@@ -1268,7 +1459,8 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
         weights: optimizationResult.optimal_weights,
         ensemble_performance: optimizationResult.best_performance,
         optimization_history: optimizationResult.optimization_history,
-        cross_validation_results: optimizationResult.cv_results
+        cross_validation_results: optimizationResult.cv_results,
+        performance_summary: optimizationResult.best_performance // 성능 분석 탭에서 필요한 필드 추가
       };
 
       setOptimizationResults(newOptimizationResults);
@@ -1320,6 +1512,13 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
         `최적 F1-Score: ${optimizationResult.best_performance.f1_score.toFixed(3)} ` +
         `(${optimizationResult.n_trials}회 시도)`
       );
+
+      // 베이지안 최적화 완료 후 성능 분석 탭으로 자동 이동
+      console.log('🔄 성능 분석 탭으로 이동 중...');
+      setTimeout(() => {
+        setActiveTab('performance');
+        console.log('✅ 성능 분석 탭으로 이동 완료');
+      }, 2000);
 
     } catch (error) {
       console.error('❌ Bayesian Optimization 실패:', error);
@@ -1801,7 +2000,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                                 <Text strong>테스트 성능</Text>
                                 <Statistic 
                                   title="정확도" 
-                                  value={result.performance?.accuracy || result.test_performance?.accuracy} 
+                                  value={(result.performance?.accuracy || result.test_performance?.accuracy) ? ((result.performance?.accuracy || result.test_performance?.accuracy) * 100) : 0} 
                                   precision={2}
                                   suffix="%" 
                                   valueStyle={{ fontSize: '16px' }}
@@ -1810,19 +2009,22 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Statistic 
                                   title="정밀도" 
-                                  value={result.performance?.precision || result.test_performance?.precision} 
+                                  value={(result.performance?.precision || result.test_performance?.precision) ? ((result.performance?.precision || result.test_performance?.precision) * 100) : 0} 
                                   precision={2} 
+                                  suffix="%"
                                 />
                                 <Statistic 
                                   title="재현율" 
-                                  value={result.performance?.recall || result.test_performance?.recall} 
+                                  value={(result.performance?.recall || result.test_performance?.recall) ? ((result.performance?.recall || result.test_performance?.recall) * 100) : 0} 
                                   precision={2} 
+                                  suffix="%"
                                 />
                               </div>
                               <Statistic 
                                 title="F1-Score" 
-                                value={result.performance?.f1_score || result.test_performance?.f1_score} 
+                                value={(result.performance?.f1_score || result.test_performance?.f1_score) ? ((result.performance?.f1_score || result.test_performance?.f1_score) * 100) : 0} 
                                 precision={2}
+                                suffix="%"
                                 valueStyle={{ color: '#1890ff' }}
                               />
                               {result.hyperparameters && (
@@ -2044,33 +2246,36 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                       <Col span={6}>
                         <Statistic
                           title="F1-Score"
-                          value={optimizationResults.performance_summary.performance_metrics?.f1_score}
-                          precision={4}
+                          value={optimizationResults.performance_summary.performance_metrics?.f1_score ? (optimizationResults.performance_summary.performance_metrics.f1_score * 100) : 0}
+                          precision={2}
+                          suffix="%"
                           valueStyle={{ color: '#52c41a', fontSize: '24px' }}
-                          suffix="/1.0"
                         />
                       </Col>
                       <Col span={6}>
                         <Statistic
                           title="정밀도 (Precision)"
-                          value={optimizationResults.performance_summary.performance_metrics?.precision}
-                          precision={4}
+                          value={optimizationResults.performance_summary.performance_metrics?.precision ? (optimizationResults.performance_summary.performance_metrics.precision * 100) : 0}
+                          precision={2}
+                          suffix="%"
                           valueStyle={{ color: '#1890ff' }}
                         />
                       </Col>
                       <Col span={6}>
                         <Statistic
                           title="재현율 (Recall)"
-                          value={optimizationResults.performance_summary.performance_metrics?.recall}
-                          precision={4}
+                          value={optimizationResults.performance_summary.performance_metrics?.recall ? (optimizationResults.performance_summary.performance_metrics.recall * 100) : 0}
+                          precision={2}
+                          suffix="%"
                           valueStyle={{ color: '#fa8c16' }}
                         />
                       </Col>
                       <Col span={6}>
                         <Statistic
                           title="정확도 (Accuracy)"
-                          value={optimizationResults.performance_summary.performance_metrics?.accuracy}
-                          precision={4}
+                          value={optimizationResults.performance_summary.performance_metrics?.accuracy ? (optimizationResults.performance_summary.performance_metrics.accuracy * 100) : 0}
+                          precision={2}
+                          suffix="%"
                           valueStyle={{ color: '#722ed1' }}
                         />
                       </Col>
@@ -2080,14 +2285,15 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                       <Col span={6}>
                         <Statistic
                           title="AUC"
-                          value={optimizationResults.performance_summary.performance_metrics?.auc}
-                          precision={4}
+                          value={optimizationResults.performance_summary.performance_metrics?.auc ? (optimizationResults.performance_summary.performance_metrics.auc * 100) : 0}
+                          precision={2}
+                          suffix="%"
                           valueStyle={{ color: '#eb2f96' }}
                         />
                       </Col>
                       <Col span={18}>
                         <Alert
-                          message={`최적 F1-Score ${optimizationResults.performance_summary.performance_metrics?.f1_score?.toFixed(4)} 달성`}
+                          message={`최적 F1-Score ${optimizationResults.performance_summary.performance_metrics?.f1_score ? (optimizationResults.performance_summary.performance_metrics.f1_score * 100).toFixed(2) + '%' : 'N/A'} 달성`}
                           description="Bayesian Optimization을 통해 임계값과 가중치를 최적화하여 달성한 성능입니다."
                           type="info"
                           showIcon
@@ -2102,12 +2308,13 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                       <Col span={8}>
                         <Statistic
                           title="안전군"
-                          value={optimizationResults.risk_distribution?.['안전군']}
-                          suffix={`명 (${((optimizationResults.risk_distribution?.['안전군'] / optimizationResults.total_employees) * 100).toFixed(1)}%)`}
+                          value={optimizationResults.risk_distribution?.['안전군'] || 0}
+                          suffix={`명 (${optimizationResults.risk_distribution?.['안전군'] && optimizationResults.total_employees ? 
+                            ((optimizationResults.risk_distribution['안전군'] / optimizationResults.total_employees) * 100).toFixed(1) : '0.0'}%)`}
                           valueStyle={{ color: '#52c41a' }}
                           prefix="🟢"
                         />
-                        {optimizationResults.performance_summary.risk_statistics?.attrition_rates && (
+                        {optimizationResults.performance_summary?.risk_statistics?.attrition_rates?.['안전군'] !== undefined && (
                           <Text type="secondary">
                             실제 이직률: {(optimizationResults.performance_summary.risk_statistics.attrition_rates['안전군'] * 100).toFixed(1)}%
                           </Text>
@@ -2116,12 +2323,13 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                       <Col span={8}>
                         <Statistic
                           title="주의군"
-                          value={optimizationResults.risk_distribution?.['주의군']}
-                          suffix={`명 (${((optimizationResults.risk_distribution?.['주의군'] / optimizationResults.total_employees) * 100).toFixed(1)}%)`}
+                          value={optimizationResults.risk_distribution?.['주의군'] || 0}
+                          suffix={`명 (${optimizationResults.risk_distribution?.['주의군'] && optimizationResults.total_employees ? 
+                            ((optimizationResults.risk_distribution['주의군'] / optimizationResults.total_employees) * 100).toFixed(1) : '0.0'}%)`}
                           valueStyle={{ color: '#faad14' }}
                           prefix="🟡"
                         />
-                        {optimizationResults.performance_summary.risk_statistics?.attrition_rates && (
+                        {optimizationResults.performance_summary?.risk_statistics?.attrition_rates?.['주의군'] !== undefined && (
                           <Text type="secondary">
                             실제 이직률: {(optimizationResults.performance_summary.risk_statistics.attrition_rates['주의군'] * 100).toFixed(1)}%
                           </Text>
@@ -2130,12 +2338,13 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                       <Col span={8}>
                         <Statistic
                           title="고위험군"
-                          value={optimizationResults.risk_distribution?.['고위험군']}
-                          suffix={`명 (${((optimizationResults.risk_distribution?.['고위험군'] / optimizationResults.total_employees) * 100).toFixed(1)}%)`}
+                          value={optimizationResults.risk_distribution?.['고위험군'] || 0}
+                          suffix={`명 (${optimizationResults.risk_distribution?.['고위험군'] && optimizationResults.total_employees ? 
+                            ((optimizationResults.risk_distribution['고위험군'] / optimizationResults.total_employees) * 100).toFixed(1) : '0.0'}%)`}
                           valueStyle={{ color: '#f5222d' }}
                           prefix="🔴"
                         />
-                        {optimizationResults.performance_summary.risk_statistics?.attrition_rates && (
+                        {optimizationResults.performance_summary?.risk_statistics?.attrition_rates?.['고위험군'] !== undefined && (
                           <Text type="secondary">
                             실제 이직률: {(optimizationResults.performance_summary.risk_statistics.attrition_rates['고위험군'] * 100).toFixed(1)}%
                           </Text>
@@ -2255,32 +2464,36 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                                 <Col span={6}>
                                   <Statistic
                                     title="F1-Score"
-                                    value={adjustedRiskResults.performance_metrics.f1_score}
-                                    precision={4}
+                                    value={adjustedRiskResults.performance_metrics.f1_score ? (adjustedRiskResults.performance_metrics.f1_score * 100) : 0}
+                                    precision={2}
+                                    suffix="%"
                                     valueStyle={{ color: '#52c41a', fontSize: '20px' }}
                                   />
                                 </Col>
                                 <Col span={6}>
                                   <Statistic
-                                    title="정밀도"
-                                    value={adjustedRiskResults.performance_metrics.precision}
-                                    precision={4}
+                                    title="정밀도 (Precision)"
+                                    value={adjustedRiskResults.performance_metrics.precision ? (adjustedRiskResults.performance_metrics.precision * 100) : 0}
+                                    precision={2}
+                                    suffix="%"
                                     valueStyle={{ color: '#1890ff' }}
                                   />
                                 </Col>
                                 <Col span={6}>
                                   <Statistic
-                                    title="재현율"
-                                    value={adjustedRiskResults.performance_metrics.recall}
-                                    precision={4}
+                                    title="재현율 (Recall)"
+                                    value={adjustedRiskResults.performance_metrics.recall ? (adjustedRiskResults.performance_metrics.recall * 100) : 0}
+                                    precision={2}
+                                    suffix="%"
                                     valueStyle={{ color: '#fa8c16' }}
                                   />
                                 </Col>
                                 <Col span={6}>
                                   <Statistic
-                                    title="정확도"
-                                    value={adjustedRiskResults.performance_metrics.accuracy}
-                                    precision={4}
+                                    title="정확도 (Accuracy)"
+                                    value={adjustedRiskResults.performance_metrics.accuracy ? (adjustedRiskResults.performance_metrics.accuracy * 100) : 0}
+                                    precision={2}
+                                    suffix="%"
                                     valueStyle={{ color: '#722ed1' }}
                                   />
                                 </Col>

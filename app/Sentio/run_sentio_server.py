@@ -18,7 +18,7 @@ os.environ.setdefault('FLASK_ENV', 'development')
 
 def main():
     """Sentio 서버 실행"""
-    print("🚀 Sentio HR Text Analysis 서버 시작...")
+    print("Sentio HR Text Analysis 서버 시작...")
     print("=" * 60)
     
     try:
@@ -57,7 +57,7 @@ def main():
         sys.exit(1)
         
     except Exception as e:
-        print(f"❌ 서버 시작 오류: {e}")
+        print(f"서버 시작 오류: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':

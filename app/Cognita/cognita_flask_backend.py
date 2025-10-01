@@ -75,9 +75,9 @@ class Neo4jManager:
                     self.uri, 
                     auth=(self.username, self.password),
                     max_connection_lifetime=300,  # 5분
-                    max_connection_pool_size=5,   # 풀 크기 축소
-                    connection_acquisition_timeout=10,  # 10초
-                    connection_timeout=5,         # 5초
+                    max_connection_pool_size=20,  # 풀 크기 증가 (5→20)
+                    connection_acquisition_timeout=30,  # 타임아웃 증가 (10→30초)
+                    connection_timeout=10,        # 연결 타임아웃 증가 (5→10초)
                     encrypted=False,              # 암호화 비활성화
                     trust="TRUST_ALL_CERTIFICATES"  # 인증서 신뢰
                 )
@@ -994,16 +994,36 @@ def create_app():
                 NEO4J_CONFIG.update(saved_config)
             
             # Neo4j 연결 시도 (실패해도 서버는 계속 실행)
-            neo4j_manager, cognita_analyzer = attempt_neo4j_connection(NEO4J_CONFIG)
+            neo4j_mgr, analyzer = attempt_neo4j_connection(NEO4J_CONFIG)
             
-            # Flask 앱에 저장
-            app.neo4j_manager = neo4j_manager
-            app.cognita_analyzer = cognita_analyzer
+            # 전역 변수와 Flask 앱에 모두 저장
+            neo4j_manager = neo4j_mgr
+            cognita_analyzer = analyzer
+            app.neo4j_manager = neo4j_mgr
+            app.cognita_analyzer = analyzer
             
-            if neo4j_manager and cognita_analyzer:
+            if neo4j_mgr and analyzer:
                 logger.info("✅ Neo4j 연결 성공 - Cognita 분석 기능 활성화")
+                # 연결 성공 시 자동으로 성능 최적화 인덱스 생성
+                try:
+                    create_performance_indexes(neo4j_mgr)
+                except Exception as idx_error:
+                    logger.warning(f"인덱스 생성 실패 (무시): {str(idx_error)}")
             else:
-                logger.info("⚠️ Neo4j 연결 실패 - 기본 모드로 실행")
+                logger.warning("⚠️ Neo4j 연결 실패 - 자동 재연결 시도")
+                # 5초 후 자동 재연결 시도
+                import threading
+                def delayed_reconnect():
+                    import time
+                    time.sleep(5)
+                    logger.info("자동 재연결 시도 중...")
+                    success = reconnect_neo4j()
+                    if success:
+                        logger.info("✅ 자동 재연결 성공")
+                    else:
+                        logger.warning("❌ 자동 재연결 실패 - 수동 설정 필요")
+                
+                threading.Thread(target=delayed_reconnect, daemon=True).start()
             
             logger.info("Cognita Flask 백엔드 서비스 준비 완료")
             
@@ -1011,6 +1031,8 @@ def create_app():
             logger.error(f"서비스 초기화 실패: {str(e)}")
             # Neo4j 연결 실패는 치명적이지 않으므로 서버는 계속 실행
             logger.warning("Neo4j 연결 없이 서버를 계속 실행합니다.")
+            neo4j_manager = None
+            cognita_analyzer = None
             app.neo4j_manager = None
             app.cognita_analyzer = None
 
@@ -1059,29 +1081,53 @@ def create_app():
         nonlocal neo4j_manager, cognita_analyzer
         
         try:
+            # 기존 연결 정리
             if hasattr(app, 'neo4j_manager') and app.neo4j_manager:
-                app.neo4j_manager.close()
+                try:
+                    app.neo4j_manager.close()
+                except:
+                    pass
             
             # 저장된 설정으로 재연결 시도
             saved_config = load_neo4j_config()
             if not saved_config:
-                return False
+                # 저장된 설정이 없으면 기본 설정 사용
+                saved_config = NEO4J_CONFIG
+            
+            logger.info(f"Neo4j 재연결 시도: {saved_config.get('uri', 'Unknown URI')}")
             
             neo4j_mgr, analyzer = attempt_neo4j_connection(saved_config, max_attempts=2)
             
             if neo4j_mgr and analyzer:
+                # 전역 변수와 앱 변수 모두 업데이트
                 app.neo4j_manager = neo4j_mgr
                 app.cognita_analyzer = analyzer
                 neo4j_manager = neo4j_mgr
                 cognita_analyzer = analyzer
-                logger.info("✅ Neo4j 재연결 성공")
-                return True
+                
+                # 연결 테스트
+                if neo4j_mgr.is_connected():
+                    logger.info("✅ Neo4j 재연결 성공 - 연결 테스트 통과")
+                    return True
+                else:
+                    logger.warning("❌ Neo4j 재연결 실패 - 연결 테스트 실패")
+                    return False
             else:
-                logger.warning("❌ Neo4j 재연결 실패")
+                logger.warning("❌ Neo4j 재연결 실패 - 매니저 생성 실패")
+                # 실패 시 None으로 설정
+                app.neo4j_manager = None
+                app.cognita_analyzer = None
+                neo4j_manager = None
+                cognita_analyzer = None
                 return False
                 
         except Exception as e:
             logger.error(f"재연결 중 오류: {str(e)}")
+            # 오류 시 None으로 설정
+            app.neo4j_manager = None
+            app.cognita_analyzer = None
+            neo4j_manager = None
+            cognita_analyzer = None
             return False
     
     # 앱 생성 시 즉시 초기화
@@ -1171,18 +1217,35 @@ def create_app():
         """헬스체크 엔드포인트"""
         
         neo4j_mgr = get_neo4j_manager()
+        analyzer = get_analyzer()
+        
+        # 연결 상태 재확인 및 자동 복구 시도
+        if not neo4j_mgr or not analyzer:
+            logger.info("Neo4j 연결 없음 - 자동 재연결 시도")
+            success = reconnect_neo4j()
+            if success:
+                neo4j_mgr = get_neo4j_manager()
+                analyzer = get_analyzer()
+                logger.info("✅ 헬스체크 중 자동 재연결 성공")
+            else:
+                logger.warning("❌ 헬스체크 중 자동 재연결 실패")
         
         if not neo4j_mgr:
             return jsonify({
-                "status": "healthy",  # 서버는 정상, Neo4j만 비활성화
+                "status": "degraded",  # 서버는 정상이지만 기능 제한
                 "service": "Cognita",
                 "version": "1.0.0",
                 "neo4j_connected": False,
                 "total_employees": 0,
                 "total_relationships": 0,
                 "message": "Neo4j 연결 없이 실행 중 - Cognita 분석 기능 비활성화",
-                "timestamp": datetime.now().isoformat()
-            }), 200  # 200으로 변경 (서버 자체는 정상)
+                "timestamp": datetime.now().isoformat(),
+                "debug_info": {
+                    "neo4j_manager": "None",
+                    "analyzer": "None",
+                    "auto_reconnect_attempted": True
+                }
+            }), 200  # 서버 자체는 정상
         
         try:
             # Neo4j 연결 상태 확인
@@ -1198,22 +1261,68 @@ def create_app():
                     # 관계 수
                     result = session.run("MATCH ()-[r:COLLABORATES_WITH]->() RETURN count(r) as count")
                     relationship_count = result.single()["count"]
+                    
+                    # 부서 수
+                    result = session.run("MATCH (d:Department) RETURN count(d) as count")
+                    department_count = result.single()["count"]
             else:
-                employee_count = 0
-                relationship_count = 0
+                # 연결이 끊어진 경우 재연결 시도
+                logger.warning("Neo4j 연결 끊어짐 - 재연결 시도")
+                success = reconnect_neo4j()
+                if success:
+                    neo4j_mgr = get_neo4j_manager()
+                    is_connected = True
+                    # 재연결 후 다시 통계 조회
+                    with neo4j_mgr.driver.session() as session:
+                        result = session.run("MATCH (e:Employee) RETURN count(e) as count")
+                        employee_count = result.single()["count"]
+                        result = session.run("MATCH ()-[r:COLLABORATES_WITH]->() RETURN count(r) as count")
+                        relationship_count = result.single()["count"]
+                        result = session.run("MATCH (d:Department) RETURN count(d) as count")
+                        department_count = result.single()["count"]
+                else:
+                    employee_count = 0
+                    relationship_count = 0
+                    department_count = 0
             
             return jsonify({
                 "status": "healthy" if is_connected else "unhealthy",
+                "service": "Cognita",
+                "version": "1.0.0",
                 "neo4j_connected": is_connected,
                 "total_employees": employee_count,
                 "total_relationships": relationship_count,
-                "timestamp": datetime.now().isoformat()
+                "total_departments": department_count,
+                "timestamp": datetime.now().isoformat(),
+                "debug_info": {
+                    "neo4j_manager": "OK" if neo4j_mgr else "None",
+                    "analyzer": "OK" if analyzer else "None",
+                    "neo4j_driver": "OK" if (neo4j_mgr and neo4j_mgr.driver) else "None",
+                    "connection_verified": is_connected
+                }
             })
             
         except Exception as e:
             logger.error(f"헬스체크 실패: {str(e)}")
+            # 오류 발생 시에도 재연결 시도
+            try:
+                success = reconnect_neo4j()
+                if success:
+                    return jsonify({
+                        "status": "recovered",
+                        "service": "Cognita",
+                        "version": "1.0.0",
+                        "neo4j_connected": True,
+                        "message": "오류 후 자동 복구 성공",
+                        "timestamp": datetime.now().isoformat()
+                    })
+            except:
+                pass
+            
             return jsonify({
                 "status": "error",
+                "service": "Cognita",
+                "version": "1.0.0",
                 "neo4j_connected": False,
                 "total_employees": 0,
                 "total_relationships": 0,
@@ -1455,12 +1564,36 @@ def create_app():
         
         analyzer = get_analyzer()
         if not analyzer:
-            return jsonify({"error": "분석기가 초기화되지 않았습니다"}), 503
+            # 분석기가 없으면 자동 재연결 시도
+            logger.info("분석기 없음 - 자동 재연결 시도")
+            success = reconnect_neo4j()
+            if success:
+                analyzer = get_analyzer()
+                logger.info("✅ 직원 분석 중 자동 재연결 성공")
+            else:
+                logger.warning("❌ 직원 분석 중 자동 재연결 실패")
+                return jsonify({"error": "분석기가 초기화되지 않았습니다. Neo4j 연결을 확인해주세요."}), 503
         
         try:
-            # Neo4j 연결 상태 확인
-            if not analyzer.neo4j_manager.driver:
-                return jsonify({"error": "Neo4j 연결이 끊어졌습니다. 재연결을 시도해주세요."}), 503
+            # Neo4j 연결 상태 확인 및 자동 복구
+            if not analyzer.neo4j_manager or not analyzer.neo4j_manager.driver:
+                logger.warning("Neo4j 드라이버 없음 - 재연결 시도")
+                success = reconnect_neo4j()
+                if success:
+                    analyzer = get_analyzer()
+                    logger.info("✅ Neo4j 드라이버 복구 성공")
+                else:
+                    return jsonify({"error": "Neo4j 연결이 끊어졌습니다. 재연결을 시도해주세요."}), 503
+            
+            # 연결 상태 재확인
+            if not analyzer.neo4j_manager.is_connected():
+                logger.warning("Neo4j 연결 끊어짐 - 재연결 시도")
+                success = reconnect_neo4j()
+                if success:
+                    analyzer = get_analyzer()
+                    logger.info("✅ Neo4j 연결 복구 성공")
+                else:
+                    return jsonify({"error": "Neo4j 연결이 끊어졌습니다. 재연결을 시도해주세요."}), 503
             
             # 직원 존재 확인
             with analyzer.neo4j_manager.driver.session() as session:

@@ -75,17 +75,18 @@ def get_sentio_data_paths(analysis_type='batch'):
         'sample_texts': None
     }
     
-    print(f"🔍 Sentio 데이터 경로 확인: {uploads_dir}")
+    print(f"Sentio 데이터 경로 확인: {uploads_dir}")
     
     if os.path.exists(uploads_dir):
         files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
         if files:
-            # 가장 최근 파일 사용 (타임스탬프 기준)
-            files.sort(reverse=True)
-            print(f"📁 발견된 파일들: {files}")
+            # 가장 최근 파일 사용 (수정 시간 기준)
+            files_with_time = [(f, os.path.getmtime(os.path.join(uploads_dir, f))) for f in files]
+            files_with_time.sort(key=lambda x: x[1], reverse=True)  # 수정 시간 기준 내림차순
+            print(f"📁 발견된 파일들: {[f[0] for f in files_with_time]}")
             
             # 가장 최신 파일을 모든 용도로 사용 (Sentio 데이터는 통합 파일)
-            latest_file = files[0]
+            latest_file = files_with_time[0][0]
             latest_file_path = os.path.join(uploads_dir, latest_file)
             
             data_paths['hr_data'] = latest_file_path
@@ -94,23 +95,20 @@ def get_sentio_data_paths(analysis_type='batch'):
             
             print(f"✅ 최신 파일 사용: {latest_file}")
     
-    # batch에 파일이 없으면 post 디렉토리 확인
+    # Sentio는 배치 분석에서 post 데이터를 참고하지 않음 (키워드 분석은 독립적)
+    # batch에 파일이 없으면 기본값 사용
     if analysis_type == 'batch' and not any(data_paths.values()):
-        print("🔄 batch 디렉토리에 파일이 없어서 post 디렉토리 확인 중...")
-        post_paths = get_sentio_data_paths('post')
-        for key, value in post_paths.items():
-            if data_paths[key] is None:
-                data_paths[key] = value
+        print("⚠️ batch 디렉토리에 Sentio 데이터가 없습니다. 기본값을 사용합니다.")
     
     # 기본값으로 fallback (파일이 없는 경우에만)
     if not any(data_paths.values()):
         print("⚠️ uploads 디렉토리에 파일이 없어서 기본 경로 사용")
         if data_paths['hr_data'] is None:
-            data_paths['hr_data'] = 'data/IBM_HR.csv'
+            data_paths['hr_data'] = '../../data/IBM_HR.csv'
         if data_paths['text_data'] is None:
-            data_paths['text_data'] = 'data/IBM_HR_text.csv'
+            data_paths['text_data'] = '../../data/IBM_HR_text.csv'
         if data_paths['sample_texts'] is None:
-            data_paths['sample_texts'] = 'sample_hr_texts.csv'
+            data_paths['sample_texts'] = '../../data/IBM_HR_text.csv'
     
     print(f"📊 최종 데이터 경로: {data_paths}")
     return data_paths
@@ -165,33 +163,36 @@ def initialize_system():
         logger.info("Sentio 시스템 초기화 시작...")
         
         # 키워드 분석기 초기화 (필수 - 점수 계산을 위해 반드시 필요)
+        global keyword_analyzer
         keyword_analyzer = None
         try:
             sample_texts_path = DATA_PATH['sample_texts']
-            print(f"🔍 키워드 분석기 초기화 시도: {sample_texts_path}")
+            print(f"키워드 분석기 초기화 시도: {sample_texts_path}")
+            print(f"현재 작업 디렉토리: {os.getcwd()}")
+            print(f"절대 경로: {os.path.abspath(sample_texts_path) if sample_texts_path else 'None'}")
             
             if sample_texts_path and os.path.exists(sample_texts_path):
-                print(f"📁 파일 존재 확인됨: {sample_texts_path}")
+                print(f"파일 존재 확인됨: {sample_texts_path}")
                 keyword_analyzer = SentioKeywordAnalyzer(sample_texts_path)
                 
                 # 데이터 로드 시도
                 load_success = keyword_analyzer.load_data()
-                print(f"📊 데이터 로드 결과: {load_success}")
+                print(f"데이터 로드 결과: {load_success}")
                 
                 if load_success:
-                    logger.info("✅ 키워드 분석기 초기화 완료")
-                    print(f"📊 키워드 분석기 데이터 로드 성공: {sample_texts_path}")
-                    print(f"📈 퇴직자: {len(keyword_analyzer.resigned_data)}명, 재직자: {len(keyword_analyzer.stayed_data)}명")
+                    logger.info("키워드 분석기 초기화 완료")
+                    print(f"키워드 분석기 데이터 로드 성공: {sample_texts_path}")
+                    print(f"퇴직자: {len(keyword_analyzer.resigned_data)}명, 재직자: {len(keyword_analyzer.stayed_data)}명")
                 else:
-                    logger.error("❌ 키워드 분석기 데이터 로드 실패 - 점수 계산 불가")
+                    logger.error("키워드 분석기 데이터 로드 실패 - 점수 계산 불가")
                     keyword_analyzer = None
             else:
-                logger.error(f"❌ 텍스트 데이터 파일이 없습니다: {sample_texts_path}")
+                logger.error(f"텍스트 데이터 파일이 없습니다: {sample_texts_path}")
                 keyword_analyzer = None
                 
         except Exception as e:
-            logger.error(f"❌ 키워드 분석기 초기화 실패: {e}")
-            print(f"❌ 키워드 분석기 오류: {str(e)}")
+            logger.error(f"키워드 분석기 초기화 실패: {e}")
+            print(f"키워드 분석기 오류: {str(e)}")
             import traceback
             print(f"상세 오류: {traceback.format_exc()}")
             keyword_analyzer = None
@@ -683,11 +684,16 @@ def analyze_sentiment():
                         emp_row = df[df['EmployeeNumber'] == int(emp_id)] if 'EmployeeNumber' in df.columns else df[df['employee_id'] == int(emp_id)] if df['employee_id'].dtype != 'object' else df[df['employee_id'] == emp_id]
                         if not emp_row.empty:
                             row_data = emp_row.iloc[0].to_dict()
-                            # 여러 텍스트 컬럼을 합쳐서 사용
+                            # 여러 텍스트 컬럼을 합쳐서 사용 (persona 컬럼 및 텍스트 제외)
                             text_parts = []
-                            for col in ['SELF_REVIEW_text', 'PEER_FEEDBACK_text', 'WEEKLY_SURVEY_text', 'text']:
+                            # persona 관련 컬럼은 제외하고 텍스트 컬럼만 사용
+                            text_columns_to_use = ['SELF_REVIEW_text', 'PEER_FEEDBACK_text', 'WEEKLY_SURVEY_text', 'text']
+                            for col in text_columns_to_use:
                                 if col in row_data and pd.notna(row_data[col]):
-                                    text_parts.append(str(row_data[col]))
+                                    # persona 관련 텍스트 제외
+                                    text_content = str(row_data[col])
+                                    if not _is_persona_text(text_content):
+                                        text_parts.append(text_content)
                             combined_text = ' '.join(text_parts) if text_parts else f"직원 {emp_id}의 기본 텍스트 데이터"
                             
                             employees_data.append({
@@ -720,6 +726,7 @@ def analyze_sentiment():
             DATA_PATH = new_data_paths
             
             # 키워드 분석기 재초기화 (필수 - 점수 계산을 위해 반드시 필요)
+            global keyword_analyzer, text_processor
             try:
                 sample_texts_path = new_data_paths['sample_texts']
                 logger.info(f"🔍 {analysis_type} 분석용 키워드 분석기 재초기화: {sample_texts_path}")
@@ -763,16 +770,18 @@ def analyze_sentiment():
             employee_id = emp_data.get('employee_id')
             text_data = emp_data.get('text_data', {})
             
-            # 텍스트 데이터 추출
+            # 텍스트 데이터 추출 (persona 텍스트 제외)
             if isinstance(text_data, str):
-                # 단순 문자열인 경우
-                combined_text = text_data
+                # 단순 문자열인 경우 - persona 텍스트 확인
+                combined_text = text_data if not _is_persona_text(text_data) else ""
             else:
-                # 딕셔너리인 경우
-                self_review = text_data.get('self_review', '')
-                peer_feedback = text_data.get('peer_feedback', '')
-                weekly_survey = text_data.get('weekly_survey', '')
-                combined_text = ' '.join([str(text) for text in [self_review, peer_feedback, weekly_survey] if text])
+                # 딕셔너리인 경우 - 각 텍스트에서 persona 제외
+                text_parts = []
+                for text_key in ['self_review', 'peer_feedback', 'weekly_survey']:
+                    text_content = text_data.get(text_key, '')
+                    if text_content and not _is_persona_text(str(text_content)):
+                        text_parts.append(str(text_content))
+                combined_text = ' '.join(text_parts)
             
             # 텍스트가 없으면 기본값 사용
             if not combined_text or combined_text.strip() == '':
@@ -871,6 +880,39 @@ def analyze_sentiment():
             "text_analysis_summary": f"분석 중 오류 발생: {str(e)}",
             "analysis_timestamp": datetime.now().isoformat()
         }), 200  # 오류가 있어도 200으로 반환하여 워크플로우 중단 방지
+
+def _is_persona_text(text_content):
+    """persona 관련 텍스트인지 판별 (더 엄격한 기준)"""
+    if not text_content or pd.isna(text_content):
+        return False
+    
+    text_lower = str(text_content).lower()
+    
+    # 명확한 persona 관련 키워드만 체크 (더 엄격한 기준)
+    strict_persona_indicators = [
+        'persona', '페르소나', 'softmax_persona', 'persona_code', 'persona_type', 'persona_name',
+        'argmax_persona', 'prob_p01', 'prob_p02', 'prob_p03', 'prob_p04', 'prob_s01', 'prob_s02', 'prob_n01',
+        # 정확한 페르소나 코드만
+        'p01', 'p02', 'p03', 'p04', 'p05', 'n01', 'n02', 'n03', 's01', 's02', 's03'
+    ]
+    
+    # 엄격한 persona 텍스트 패턴 확인
+    for indicator in strict_persona_indicators:
+        if indicator in text_lower:
+            return True
+    
+    # 페르소나 분류 결과가 포함된 텍스트인지 확인 (더 정확한 패턴)
+    import re
+    persona_result_patterns = [
+        r'argmax_persona.*?:', r'softmax_persona.*?:', r'persona_code.*?:',
+        r'prob_[pns]\d+', r'score_[pns]\d+', r'risktier.*?:'
+    ]
+    
+    for pattern in persona_result_patterns:
+        if re.search(pattern, text_lower):
+            return True
+    
+    return False
 
 def determine_emotional_state(sentiment_score):
     """감정 점수를 기반으로 감정 상태 결정"""

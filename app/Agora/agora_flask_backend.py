@@ -52,7 +52,13 @@ logger = logging.getLogger(__name__)
 
 # Flask 앱 초기화
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/*": {  # 모든 경로에 CORS 적용
+        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # 전역 변수
 market_processor = None
@@ -268,6 +274,7 @@ def refresh_structura_data():
         }), 500
 
 @app.route('/analyze/market', methods=['POST'])
+@app.route('/api/analyze/market', methods=['POST'])
 def analyze_individual_market():
     """
     개별 직원 시장 분석 API
@@ -280,13 +287,18 @@ def analyze_individual_market():
         if not data:
             return jsonify({"error": "요청 데이터가 필요합니다."}), 400
         
-        employee_id = data.get('EmployeeNumber', 'unknown')
-        job_role = data.get('JobRole')
-        department = data.get('Department')
-        monthly_income = data.get('MonthlyIncome', 0)
+        employee_id = data.get('EmployeeNumber', data.get('employee_id', 'unknown'))
+        job_role = data.get('JobRole', 'Unknown')  # 기본값 설정
+        department = data.get('Department', 'Unknown')
+        monthly_income = data.get('MonthlyIncome', 50000)  # 기본값 설정
         
-        if not job_role:
-            return jsonify({"error": "JobRole이 필요합니다."}), 400
+        # 로깅 추가
+        logger.info(f"Agora 분석 요청: employee_id={employee_id}, job_role={job_role}, department={department}, income={monthly_income}")
+        
+        # JobRole이 비어있거나 None인 경우 기본값 설정
+        if not job_role or job_role.strip() == '':
+            job_role = 'Unknown'
+            logger.warning(f"JobRole이 비어있어서 기본값 'Unknown'으로 설정: employee_id={employee_id}")
         
         if not market_analyzer:
             return jsonify({"error": "시장 분석기가 초기화되지 않았습니다."}), 500
@@ -316,6 +328,9 @@ def analyze_individual_market():
         
     except Exception as e:
         logger.error(f"개별 시장 분석 오류: {str(e)}")
+        logger.error(f"요청 데이터: {data}")
+        import traceback
+        logger.error(f"상세 오류: {traceback.format_exc()}")
         return jsonify({"error": f"분석 중 오류가 발생했습니다: {str(e)}"}), 500
 
 @app.route('/analyze/job_market', methods=['POST'])
@@ -400,7 +415,8 @@ def batch_market_analysis():
             "total_analyzed": total_analyzed,
             "high_risk_employees": high_risk_count,
             "average_market_pressure": round(avg_market_pressure, 3),
-            "results": results,
+            "analysis_results": results,  # BatchAnalysis가 기대하는 필드명으로 변경
+            "results": results,  # 하위 호환성을 위해 기존 필드도 유지
             "analysis_timestamp": datetime.now().isoformat()
         }
         
@@ -548,14 +564,27 @@ def comprehensive_market_analysis():
         
         print(f"📊 Agora {analysis_type} 분석 시작")
         
-        # 필수 필드 검증
-        required_fields = ['JobRole', 'MonthlyIncome']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({
-                    'success': False,
-                    'error': f'필수 필드가 누락되었습니다: {field}'
-                }), 400
+        # employee_id만 있는 경우 (배치 분석) 기본값 설정
+        if 'employee_id' in data and len(data) == 2:  # employee_id + analysis_type만 있는 경우
+            # 기본값으로 분석 수행
+            data.update({
+                'JobRole': 'Unknown',
+                'MonthlyIncome': 50000,  # 기본 급여
+                'Department': 'Unknown',
+                'JobLevel': 1,
+                'YearsAtCompany': 1,
+                'EmployeeNumber': data.get('employee_id', 'Unknown')
+            })
+            print(f"🔄 Agora: employee_id {data['employee_id']}에 대한 기본값 설정 완료")
+        
+        # 필수 필드 검증 (완화된 버전) - 기본값 설정으로 변경
+        if 'JobRole' not in data or not data['JobRole']:
+            data['JobRole'] = 'Unknown'
+            logger.info(f"JobRole이 없어서 기본값 'Unknown'으로 설정")
+        
+        if 'MonthlyIncome' not in data or not data['MonthlyIncome']:
+            data['MonthlyIncome'] = 50000
+            logger.info(f"MonthlyIncome이 없어서 기본값 50000으로 설정")
         
         logger.info(f"종합 시장 분석 요청: {data.get('JobRole', 'Unknown')}")
         

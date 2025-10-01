@@ -115,6 +115,7 @@ class StructuraHRPredictor:
         self.data_path = data_path
         self.random_state = random_state
         self.model = None
+        self.data = None  # 데이터 저장용 속성 추가
         self.feature_columns = None
         self.optimal_threshold = 0.018  # 노트북에서 최적화된 임계값 (재현율 70% 목표)
         self.scale_pos_weight = 1.0
@@ -183,6 +184,7 @@ class StructuraHRPredictor:
             raise FileNotFoundError(f"Data file not found: {self.data_path}")
         
         df = pd.read_csv(self.data_path)
+        self.data = df  # 데이터를 인스턴스 변수에 저장
         logger.info(f"데이터 로딩 완료: {df.shape}")
         return df
     
@@ -795,9 +797,13 @@ class StructuraHRPredictor:
     def predict_single_employee(self, employee_data: Dict, employee_number: str) -> Dict:
         """단일 직원 예측 (마스터 서버 호환)"""
         try:
+            logger.info(f"🔍 직원 {employee_number} 예측 시작...")
+            
             # 예측 수행
             prediction_result = self.predict_single(employee_data)
             explanation_result = self.explain_prediction(employee_data)
+            
+            logger.info(f"📊 직원 {employee_number} 예측 결과: 확률={prediction_result.attrition_probability:.3f}, 위험도={prediction_result.risk_category}")
             
             # 통합 결과 구성
             result = {
@@ -1058,14 +1064,23 @@ class StructuraHRPredictor:
 # 유틸리티 함수들
 def get_data_path_by_analysis_type(analysis_type='batch'):
     """분석 타입에 따른 데이터 경로 반환"""
-    uploads_dir = f"../uploads/structura/{analysis_type}"
+    # 여러 가능한 경로 시도
+    possible_paths = [
+        f"../uploads/Structura/{analysis_type}",  # 대문자 S
+        f"../uploads/structura/{analysis_type}",  # 소문자 s
+        f"app/uploads/Structura/{analysis_type}",  # 절대 경로 스타일
+        f"app/uploads/structura/{analysis_type}"   # 절대 경로 스타일 소문자
+    ]
     
-    if os.path.exists(uploads_dir):
-        files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
-        if files:
-            files.sort(reverse=True)  # 최신 파일 우선
-            return os.path.join(uploads_dir, files[0])
+    for uploads_dir in possible_paths:
+        if os.path.exists(uploads_dir):
+            files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
+            if files:
+                files.sort(reverse=True)  # 최신 파일 우선
+                logger.info(f"✅ 데이터 파일 발견: {uploads_dir}/{files[0]}")
+                return os.path.join(uploads_dir, files[0])
     
+    logger.error(f"❌ 데이터 파일을 찾을 수 없습니다. 시도한 경로들: {possible_paths}")
     return None
 
 def create_app():
@@ -1073,21 +1088,20 @@ def create_app():
     
     app = Flask(__name__)
     
-    # CORS 설정 (React 연동)
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-    })
+    # CORS 설정 (React 연동) - Chronos/Sentio와 동일한 단순 설정
+    CORS(app)
     
     # 설정
     app.config['JSON_AS_ASCII'] = False
     app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
     
-    # 전역 변수
-    predictor = None
+    # 모델 캐시 (최적화된 모델 재사용)
+    app.model_cache = {
+        'trained_model': None,
+        'model_metadata': None,
+        'training_timestamp': None,
+        'data_hash': None  # 데이터 변경 감지용
+    }
     
     # ------------------------------------------------------
     # 애플리케이션 초기화
@@ -1095,43 +1109,57 @@ def create_app():
     
     def initialize_services():
         """서비스 초기화"""
-        nonlocal predictor
-        
         try:
             logger.info("Structura HR 예측 서비스 초기화 중...")
             
-            # uploads 디렉토리에서 Structura 파일 찾기 (batch 우선, post 대안)
+            # uploads 디렉토리에서 Structura 파일 찾기 (post 파일 우선)
             data_path = None
             
-            # batch 분석용 파일 먼저 확인
-            batch_dir = "../uploads/structura/batch"
-            if os.path.exists(batch_dir):
-                files = [f for f in os.listdir(batch_dir) if f.endswith('.csv')]
+            # post 분석용 파일 확인 (사후 분석과 배치 분석의 학습용)
+            post_dir = "../uploads/structura/post"
+            if os.path.exists(post_dir):
+                files = [f for f in os.listdir(post_dir) if f.endswith('.csv')]
                 if files:
                     files.sort(reverse=True)  # 최신 파일 우선
-                    data_path = os.path.join(batch_dir, files[0])
-                    logger.info(f"Structura batch 데이터 파일 발견: {data_path}")
+                    data_path = os.path.join(post_dir, files[0])
+                    logger.info(f"Structura post 데이터 파일 발견: {data_path}")
             
-            # batch 파일이 없으면 post 분석용 파일 확인
+            # post 파일이 없으면 기본 데이터 사용
             if data_path is None:
-                post_dir = "../uploads/structura/post"
-                if os.path.exists(post_dir):
-                    files = [f for f in os.listdir(post_dir) if f.endswith('.csv')]
-                    if files:
-                        files.sort(reverse=True)  # 최신 파일 우선
-                        data_path = os.path.join(post_dir, files[0])
-                        logger.info(f"Structura post 데이터 파일 발견: {data_path}")
+                # 기본 데이터 경로 (fallback)
+                default_data_path = "../data/IBM_HR.csv"
+                if os.path.exists(default_data_path):
+                    data_path = default_data_path
+                    logger.info(f"기본 데이터 파일 사용: {data_path}")
+                else:
+                    logger.warning("사용 가능한 데이터 파일이 없습니다.")
             
             # 예측기 초기화
             predictor = StructuraHRPredictor(data_path=data_path)
             
-            # 기존 모델이 있으면 로딩
+            # 기존 모델이 있으면 로딩, 없으면 즉시 훈련
             model_path = "hr_attrition_model.pkl"
             if os.path.exists(model_path):
-                predictor.load_model(model_path)
-                logger.info("기존 모델 로딩 완료")
+                try:
+                    predictor.load_model(model_path)
+                    logger.info("기존 모델 로딩 완료")
+                except Exception as e:
+                    logger.warning(f"기존 모델 로딩 실패: {e}, 새로 훈련합니다")
+                    # 모델 로딩 실패 시 새로 훈련
+                    if data_path:
+                        logger.info("🚀 서버 시작 시 모델 훈련 시작...")
+                        training_result = predictor.run_full_pipeline(optimize_hp=True, use_sampling=True)
+                        predictor.save_model(model_path)
+                        logger.info(f"✅ 초기 모델 훈련 완료: {training_result}")
             else:
-                logger.info("새 모델 훈련이 필요합니다")
+                # 모델이 없으면 즉시 훈련
+                if data_path:
+                    logger.info("🚀 서버 시작 시 모델 훈련 시작...")
+                    training_result = predictor.run_full_pipeline(optimize_hp=True, use_sampling=True)
+                    predictor.save_model(model_path)
+                    logger.info(f"✅ 초기 모델 훈련 완료: {training_result}")
+                else:
+                    logger.warning("훈련할 데이터가 없어서 모델을 생성할 수 없습니다")
             
             # Flask 앱에 저장
             app.predictor = predictor
@@ -1401,7 +1429,7 @@ def create_app():
         
         predictor = get_predictor()
         if not predictor or not predictor.model:
-            return jsonify({"error": "모델이 로딩되지 않았습니다"}), 503
+            return jsonify({"error": "모델이 로딩되지 않았습니다. 서버를 재시작하거나 /api/train 엔드포인트로 모델을 훈련해주세요."}), 503
         
         try:
             # 요청 데이터 파싱
@@ -1409,15 +1437,63 @@ def create_app():
             if not data:
                 return jsonify({"error": "예측할 직원 데이터가 필요합니다"}), 400
             
+            logger.info(f"🔮 Structura 예측 요청 받음: {type(data)} 타입")
+            
+            # employee_id만 있는 경우 batch 데이터에서 찾기
+            if 'employee_id' in data and len(data) == 1:
+                employee_id = data['employee_id']
+                logger.info(f"👤 단일 직원 ID로 예측 요청: {employee_id}")
+                
+                # batch 데이터에서 해당 직원 찾기
+                batch_dir = "../uploads/structura/batch"
+                if os.path.exists(batch_dir):
+                    files = [f for f in os.listdir(batch_dir) if f.endswith('.csv')]
+                    if files:
+                        files.sort(reverse=True)  # 최신 파일 우선
+                        batch_file = os.path.join(batch_dir, files[0])
+                        logger.info(f"📂 배치 파일에서 직원 검색: {batch_file}")
+                        
+                        import pandas as pd
+                        df = pd.read_csv(batch_file)
+                        
+                        # employee_id 또는 EmployeeNumber로 찾기
+                        employee_row = None
+                        if 'employee_id' in df.columns:
+                            employee_row = df[df['employee_id'] == int(employee_id)]
+                        elif 'EmployeeNumber' in df.columns:
+                            employee_row = df[df['EmployeeNumber'] == int(employee_id)]
+                        
+                        if employee_row is not None and len(employee_row) > 0:
+                            # 첫 번째 매칭 행을 딕셔너리로 변환
+                            employee_data = employee_row.iloc[0].to_dict()
+                            employee_number = employee_data.get('EmployeeNumber', employee_id)
+                            logger.info(f"✅ 직원 {employee_number} 데이터 발견, 예측 수행 중...")
+                            result = predictor.predict_single_employee(employee_data, str(employee_number))
+                            logger.info(f"🎯 직원 {employee_number} 예측 완료: 위험도 {result.get('attrition_probability', 0):.3f}")
+                            return jsonify(result)
+                        else:
+                            logger.warning(f"❌ 직원 ID {employee_id}를 batch 데이터에서 찾을 수 없음")
+                            return jsonify({"error": f"직원 ID {employee_id}를 batch 데이터에서 찾을 수 없습니다"}), 404
+                    else:
+                        logger.error("❌ batch 데이터 파일이 없음")
+                        return jsonify({"error": "batch 데이터 파일이 없습니다"}), 404
+                else:
+                    logger.error("❌ batch 데이터 디렉토리가 없음")
+                    return jsonify({"error": "batch 데이터 디렉토리가 없습니다"}), 404
+            
             # 단일 직원 데이터인지 확인
-            if isinstance(data, list):
+            elif isinstance(data, list):
                 # 배치 예측
+                logger.info(f"📊 배치 예측 요청: {len(data)}명")
                 results = []
                 for i, employee_data in enumerate(data):
-                    employee_number = employee_data.get('EmployeeNumber', f'BATCH_{i+1:03d}')
+                    employee_number = employee_data.get('EmployeeNumber', str(i+1))
+                    logger.info(f"🔮 배치 예측 {i+1}/{len(data)}: 직원 {employee_number}")
                     result = predictor.predict_single_employee(employee_data, employee_number)
+                    logger.info(f"✅ 직원 {employee_number} 예측 완료: 위험도 {result.get('attrition_probability', 0):.3f}")
                     results.append(result)
                 
+                logger.info(f"🎯 배치 예측 전체 완료: {len(results)}명")
                 return jsonify({
                     "predictions": results,
                     "batch_size": len(results),
@@ -1426,7 +1502,9 @@ def create_app():
             else:
                 # 단일 예측
                 employee_number = data.get('EmployeeNumber', 'SINGLE_001')
+                logger.info(f"👤 단일 직원 예측 요청: {employee_number}")
                 result = predictor.predict_single_employee(data, employee_number)
+                logger.info(f"🎯 직원 {employee_number} 예측 완료: 위험도 {result.get('attrition_probability', 0):.3f}")
                 return jsonify(result)
                 
         except Exception as e:
@@ -1524,39 +1602,74 @@ def create_app():
         
         return jsonify(model_info)
     
-    @app.route('/api/predict/batch', methods=['POST'])
+    @app.route('/api/predict/batch', methods=['POST', 'OPTIONS'])
     def predict_batch():
         """배치 예측 엔드포인트 (여러 직원 동시 처리)"""
         
+        # OPTIONS 요청 처리
+        if request.method == 'OPTIONS':
+            response = jsonify({})
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add('Access-Control-Allow-Headers', "*")
+            response.headers.add('Access-Control-Allow-Methods', "*")
+            return response
+        
+        logger.info("🚀 Structura 배치 예측 API 호출됨")
+        
         predictor = get_predictor()
         if not predictor:
+            logger.error("❌ 예측기가 초기화되지 않았습니다")
             return jsonify({"error": "예측기가 초기화되지 않았습니다"}), 503
         
         try:
             # 요청 데이터 파싱
             request_data = request.get_json()
             if not request_data:
+                logger.error("❌ 요청 데이터가 없습니다")
                 return jsonify({"error": "요청 데이터가 없습니다"}), 400
             
             # 분석 타입 확인 (기본값: batch)
             analysis_type = request_data.get('analysis_type', 'batch')
-            logger.info(f"분석 타입: {analysis_type}")
+            logger.info(f"📊 분석 타입: {analysis_type}")
             
-            # 분석 타입에 따른 데이터 경로 확인
-            data_path = get_data_path_by_analysis_type(analysis_type)
-            if data_path and data_path != predictor.data_path:
-                logger.info(f"새로운 데이터 경로로 예측기 업데이트: {data_path}")
-                predictor.data_path = data_path
+            # 사후 분석(post)인 경우: post 데이터만 사용
+            if analysis_type == 'post':
+                logger.info("🔍 사후 분석 모드: post 데이터 확인 중...")
+                post_data_path = get_data_path_by_analysis_type('post')
+                if not post_data_path:
+                    logger.error("❌ Post 분석 데이터가 없습니다")
+                    return jsonify({"error": "Post 분석 데이터가 없습니다. 먼저 사후 분석용 데이터를 업로드해주세요."}), 400
+                
+                if post_data_path != predictor.data_path:
+                    logger.info(f"🔄 사후 분석용 데이터로 예측기 업데이트: {post_data_path}")
+                    predictor.data_path = post_data_path
+                    try:
+                        predictor.load_data()
+                        logger.info(f"✅ Post 데이터 재로드 완료")
+                    except Exception as e:
+                        logger.error(f"❌ Post 데이터 재로드 실패: {e}")
+                        return jsonify({"error": f"Post 데이터 로드 실패: {str(e)}"}), 500
+                else:
+                    logger.info(f"✅ 기존 Post 데이터 경로 사용: {predictor.data_path}")
+            
+            # 배치 분석(batch)인 경우: 별도 함수에서 처리 (post로 학습 → batch로 예측)
+            elif analysis_type == 'batch':
+                logger.info("🔀 배치 분석은 별도 엔드포인트에서 처리됩니다.")
+                return jsonify({"error": "배치 분석은 /api/batch-analysis 엔드포인트를 사용해주세요."}), 400
             
             # employees 키가 있는 경우와 직접 배열인 경우 모두 처리
             if isinstance(request_data, dict) and 'employees' in request_data:
                 data = request_data['employees']
+                logger.info(f"📋 employees 키에서 {len(data)}명 데이터 추출")
             elif isinstance(request_data, list):
                 data = request_data
+                logger.info(f"📋 직접 배열에서 {len(data)}명 데이터 추출")
             else:
+                logger.error("❌ 배치 예측을 위한 직원 데이터 리스트가 필요합니다")
                 return jsonify({"error": "배치 예측을 위한 직원 데이터 리스트가 필요합니다"}), 400
             
             if not isinstance(data, list):
+                logger.error("❌ 직원 데이터는 배열 형태여야 합니다")
                 return jsonify({"error": "직원 데이터는 배열 형태여야 합니다"}), 400
             
             # 모델이 없으면 받은 데이터로 즉시 훈련
@@ -1594,13 +1707,13 @@ def create_app():
             results = []
             for i, employee_data in enumerate(data):
                 try:
-                    employee_number = employee_data.get('EmployeeNumber', f'BATCH_{i+1:03d}')
+                    employee_number = employee_data.get('EmployeeNumber', str(i+1))
                     result = predictor.predict_single_employee(employee_data, employee_number)
                     results.append(result)
                 except Exception as e:
                     # 개별 예측 실패 시 오류 정보 포함
                     results.append({
-                        'employee_number': employee_data.get('EmployeeNumber', f'BATCH_{i+1:03d}'),
+                        'employee_number': employee_data.get('EmployeeNumber', str(i+1)),
                         'error': str(e),
                         'attrition_probability': None,
                         'risk_category': 'ERROR'
@@ -1640,8 +1753,15 @@ def create_app():
             })
             
         except Exception as e:
-            logger.error(f"배치 예측 실패: {str(e)}")
-            return jsonify({"error": f"배치 예측 실패: {str(e)}"}), 500
+            logger.error(f"❌ 배치 예측 실패: {str(e)}")
+            logger.error(f"❌ 오류 상세: {type(e).__name__}")
+            import traceback
+            logger.error(f"❌ 스택 트레이스: {traceback.format_exc()}")
+            return jsonify({
+                "error": f"배치 예측 실패: {str(e)}",
+                "error_type": type(e).__name__,
+                "details": "서버 로그를 확인해주세요."
+            }), 500
     
     @app.route('/api/employee/analysis/<employee_number>', methods=['POST'])
     def employee_analysis(employee_number):
@@ -1703,8 +1823,10 @@ def create_app():
             logger.error(f"직원 분석 실패: {str(e)}")
             return jsonify({"error": f"직원 분석 실패: {str(e)}"}), 500
     
-    # 배치 분석 엔드포인트 등록
-    app.add_url_rule('/api/batch-analysis', 'batch_analysis', batch_analysis, methods=['POST'])
+    # 배치 분석 라우트 추가
+    @app.route('/api/batch-analysis', methods=['POST'])
+    def batch_analysis_route():
+        return batch_analysis()
     
     return app
 
@@ -1713,26 +1835,64 @@ def create_app():
 # ------------------------------------------------------
 
 def batch_analysis():
-    """배치 분석: Post 데이터로 학습 → Batch 데이터로 예측"""
-    global predictor
+    """배치 분석: Post 데이터로 학습 → Batch 데이터로 예측 (모델 캐싱 적용)"""
+    from flask import current_app
+    
+    # 모델 캐시 (함수 내부에서 정의)
+    if not hasattr(current_app, 'model_cache'):
+        current_app.model_cache = {
+            'trained_model': None,
+            'model_metadata': None,
+            'training_timestamp': None,
+            'data_hash': None  # 데이터 변경 감지용
+        }
+    model_cache = current_app.model_cache
     
     try:
         logger.info("🚀 Structura 배치 분석 시작: Post 데이터 학습 → Batch 데이터 예측")
         
-        # 1단계: Post 데이터로 모델 학습
+        # 1단계: Post 데이터 확인
         post_data_path = get_data_path_by_analysis_type('post')
         if not post_data_path:
             return jsonify({"error": "Post 분석 데이터가 없습니다. 먼저 사후 분석을 수행해주세요."}), 400
         
-        logger.info(f"📚 Post 데이터로 모델 학습: {post_data_path}")
+        # 데이터 해시 계산 (변경 감지용)
+        import hashlib
+        import os
+        with open(post_data_path, 'rb') as f:
+            data_hash = hashlib.md5(f.read()).hexdigest()
         
-        # 예측기 초기화 (Post 데이터로)
-        predictor = StructuraHRPredictor(data_path=post_data_path)
-        predictor.load_data()
+        # Flask app의 predictor 가져오기
+        predictor = getattr(current_app, 'predictor', None)
         
-        # 모델 학습 (하이퍼파라미터 최적화 포함)
-        training_result = predictor.train_model(optimize_hp=True)
-        logger.info(f"✅ 모델 학습 완료: {training_result}")
+        # 캐시된 모델 확인
+        if (model_cache['trained_model'] is not None and 
+            model_cache['data_hash'] == data_hash and
+            predictor is not None and predictor.model is not None):
+            logger.info("💾 캐시된 최적화 모델 사용 (재학습 생략)")
+            training_result = model_cache['model_metadata']
+        else:
+            logger.info(f"📚 Post 데이터로 모델 학습: {post_data_path}")
+            
+            # 예측기 초기화 (Post 데이터로)
+            predictor = StructuraHRPredictor(data_path=post_data_path)
+            predictor.load_data()
+            
+            # 모델 학습 (Post 데이터로 한 번만 최적화 수행하여 최고 성능 모델 생성)
+            training_result = predictor.run_full_pipeline(optimize_hp=True, use_sampling=True)
+            
+            # Flask app에 predictor 저장
+            current_app.predictor = predictor
+            
+            # 모델 캐시에 저장
+            from datetime import datetime
+            model_cache['trained_model'] = predictor.model
+            model_cache['model_metadata'] = training_result
+            model_cache['training_timestamp'] = datetime.now().isoformat()
+            model_cache['data_hash'] = data_hash
+            
+            logger.info(f"✅ 모델 학습 완료 및 캐시 저장: {training_result}")
+        
         
         # 2단계: Batch 데이터로 예측
         batch_data_path = get_data_path_by_analysis_type('batch')
@@ -1752,7 +1912,8 @@ def batch_analysis():
             try:
                 # 개별 직원 예측
                 employee_data = row.to_dict()
-                prediction = predictor.predict_single_employee(employee_data)
+                employee_number = employee_data.get('EmployeeNumber', str(idx+1))
+                prediction = predictor.predict_single_employee(employee_data, str(employee_number))
                 
                 predictions.append({
                     'employee_id': employee_data.get('EmployeeNumber', idx),
@@ -1803,7 +1964,7 @@ def batch_analysis():
 # 서버 실행 함수
 # ------------------------------------------------------
 
-def run_server(host='0.0.0.0', port=5001, debug=True):
+def run_server(host='0.0.0.0', port=5001, debug=False):
     """Flask 서버 실행 (XAI 포함 최신 버전)"""
     try:
         app = create_app()

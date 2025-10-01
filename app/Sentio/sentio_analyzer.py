@@ -153,8 +153,12 @@ class SentioKeywordAnalyzer:
             return False
     
     def extract_nouns_only(self, text: str) -> List[str]:
-        """명사 중심 키워드 추출 (개선된 방식)"""
+        """명사 중심 키워드 추출 (개선된 방식, persona 텍스트 제외)"""
         if pd.isna(text) or not text:
+            return []
+        
+        # 0단계: persona 텍스트 확인 및 제외
+        if self._is_persona_text(text):
             return []
         
         # 1단계: 텍스트 정제
@@ -300,6 +304,45 @@ class SentioKeywordAnalyzer:
         }
         
         return word in meaningless_nouns
+    
+    def _is_persona_text(self, text_content: str) -> bool:
+        """persona 관련 텍스트인지 판별"""
+        if not text_content or pd.isna(text_content):
+            return False
+        
+        text_lower = str(text_content).lower()
+        
+        # persona 관련 키워드 패턴 (강화된 버전)
+        persona_indicators = [
+            'persona', '페르소나', 'p01', 'p02', 'p03', 'p04', 'p05', 'n01', 's02',
+            '번아웃 위험군', '성장 추구형', '안정 지향형', '도전 추구형', '균형 추구형', '현상 유지자', '라이징 스타', '저평가된 전문가',
+            'burnout risk', 'growth seeker', 'stability oriented', 'challenge seeker', 'balance seeker',
+            'softmax_persona', 'persona_code', 'persona_type', 'persona_name',
+            # 추가 persona 관련 패턴
+            '위험군', '추구형', '지향형', '유지자', '전문가', '스타'
+        ]
+        
+        # persona 텍스트 패턴 확인
+        for indicator in persona_indicators:
+            if indicator in text_lower:
+                return True
+        
+        # persona 설명 패턴 (일반적인 persona 설명 형태)
+        persona_patterns = [
+            r'높은\s+업무\s+부담',
+            r'스트레스\s+수준이\s+높',
+            r'번아웃\s+위험',
+            r'성장\s+기회를\s+추구',
+            r'안정적인\s+환경을\s+선호',
+            r'새로운\s+도전을\s+추구',
+            r'일과\s+삶의\s+균형'
+        ]
+        
+        for pattern in persona_patterns:
+            if re.search(pattern, text_content):
+                return True
+        
+        return False
     
     def calculate_jdr_scores(self, text: str) -> Dict[str, Any]:
         """JD-R (Job Demands-Resources) 모델 기반 점수 계산"""
@@ -658,10 +701,21 @@ class SentioKeywordAnalyzer:
             logger.error("❌ 데이터를 먼저 로드해주세요.")
             return None
         
-        # 텍스트 컬럼 찾기
+        # 텍스트 컬럼 찾기 (persona 관련 컬럼 제외)
         if text_columns is None:
             text_columns = []
+            # persona 관련 컬럼 제외 목록
+            persona_columns_to_exclude = [
+                'Persona_Code', 'Persona_Name', 'persona_code', 'persona_name', 
+                'persona_type', 'Persona_Type', 'softmax_persona'
+            ]
+            
             for col in self.data.columns:
+                # persona 관련 컬럼은 제외
+                if col in persona_columns_to_exclude:
+                    continue
+                    
+                # 텍스트 컬럼만 포함
                 if col.endswith('_text') or 'text' in col.lower():
                     text_columns.append(col)
         
@@ -676,15 +730,17 @@ class SentioKeywordAnalyzer:
         for col in text_columns:
             logger.info(f"🔍 '{col}' 컬럼 분석 중...")
             
-            # 퇴직자 키워드 추출
+            # 퇴직자 키워드 추출 (persona 텍스트 제외)
             resigned_keywords = []
             for text in self.resigned_data[col].dropna():
-                resigned_keywords.extend(self.extract_nouns_only(text))
+                if not self._is_persona_text(text):
+                    resigned_keywords.extend(self.extract_nouns_only(text))
             
-            # 재직자 키워드 추출  
+            # 재직자 키워드 추출 (persona 텍스트 제외)
             stayed_keywords = []
             for text in self.stayed_data[col].dropna():
-                stayed_keywords.extend(self.extract_nouns_only(text))
+                if not self._is_persona_text(text):
+                    stayed_keywords.extend(self.extract_nouns_only(text))
             
             # 키워드 빈도 계산
             resigned_counter = Counter(resigned_keywords)
