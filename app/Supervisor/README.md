@@ -75,7 +75,7 @@ SUPERVISOR_PORT=5006
 FLASK_DEBUG=False
 MAX_RETRY_COUNT=3
 TIMEOUT_MINUTES=30
-MAX_BATCH_SIZE=2000
+MAX_BATCH_SIZE=10
 
 # 워커 서버 URL
 STRUCTURA_URL=http://localhost:5001
@@ -340,7 +340,7 @@ self.ahp_weights = {
 ```env
 MAX_RETRY_COUNT=3        # 최대 재시도 횟수
 TIMEOUT_MINUTES=30       # 전체 워크플로우 타임아웃
-MAX_BATCH_SIZE=2000        # 배치 분석 최대 크기
+MAX_BATCH_SIZE=10        # 배치 분석 최대 크기
 ```
 
 ### LLM 모델 변경

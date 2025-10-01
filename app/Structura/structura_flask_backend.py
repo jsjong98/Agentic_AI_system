@@ -1401,35 +1401,7 @@ def create_app():
         
         predictor = get_predictor()
         if not predictor or not predictor.model:
-            # 모델이 없으면 자동으로 학습 시도
-            logger.info("모델이 없어서 자동 학습을 시도합니다...")
-            try:
-                # post 데이터로 모델 학습
-                post_dir = "../uploads/structura/post"
-                if os.path.exists(post_dir):
-                    files = [f for f in os.listdir(post_dir) if f.endswith('.csv')]
-                    if files:
-                        files.sort(reverse=True)  # 최신 파일 우선
-                        post_file = os.path.join(post_dir, files[0])
-                        logger.info(f"post 데이터로 모델 학습: {post_file}")
-                        
-                        # 새 예측기로 학습
-                        new_predictor = StructuraHRPredictor(data_path=post_file)
-                        new_predictor.train_model()
-                        
-                        # 전역 예측기 업데이트
-                        global predictor_instance
-                        predictor_instance = new_predictor
-                        predictor = new_predictor
-                        
-                        logger.info("✅ 자동 모델 학습 완료")
-                    else:
-                        return jsonify({"error": "post 데이터 파일이 없어서 모델을 학습할 수 없습니다"}), 503
-                else:
-                    return jsonify({"error": "post 데이터 디렉토리가 없어서 모델을 학습할 수 없습니다"}), 503
-            except Exception as e:
-                logger.error(f"자동 모델 학습 실패: {e}")
-                return jsonify({"error": f"모델 학습 실패: {str(e)}"}), 503
+            return jsonify({"error": "모델이 로딩되지 않았습니다"}), 503
         
         try:
             # 요청 데이터 파싱
@@ -1437,43 +1409,8 @@ def create_app():
             if not data:
                 return jsonify({"error": "예측할 직원 데이터가 필요합니다"}), 400
             
-            # employee_id만 있는 경우 batch 데이터에서 찾기
-            if 'employee_id' in data and len(data) == 1:
-                employee_id = data['employee_id']
-                
-                # batch 데이터에서 해당 직원 찾기
-                batch_dir = "../uploads/structura/batch"
-                if os.path.exists(batch_dir):
-                    files = [f for f in os.listdir(batch_dir) if f.endswith('.csv')]
-                    if files:
-                        files.sort(reverse=True)  # 최신 파일 우선
-                        batch_file = os.path.join(batch_dir, files[0])
-                        
-                        import pandas as pd
-                        df = pd.read_csv(batch_file)
-                        
-                        # employee_id 또는 EmployeeNumber로 찾기
-                        employee_row = None
-                        if 'employee_id' in df.columns:
-                            employee_row = df[df['employee_id'] == int(employee_id)]
-                        elif 'EmployeeNumber' in df.columns:
-                            employee_row = df[df['EmployeeNumber'] == int(employee_id)]
-                        
-                        if employee_row is not None and len(employee_row) > 0:
-                            # 첫 번째 매칭 행을 딕셔너리로 변환
-                            employee_data = employee_row.iloc[0].to_dict()
-                            employee_number = employee_data.get('EmployeeNumber', employee_id)
-                            result = predictor.predict_single_employee(employee_data, str(employee_number))
-                            return jsonify(result)
-                        else:
-                            return jsonify({"error": f"직원 ID {employee_id}를 batch 데이터에서 찾을 수 없습니다"}), 404
-                    else:
-                        return jsonify({"error": "batch 데이터 파일이 없습니다"}), 404
-                else:
-                    return jsonify({"error": "batch 데이터 디렉토리가 없습니다"}), 404
-            
             # 단일 직원 데이터인지 확인
-            elif isinstance(data, list):
+            if isinstance(data, list):
                 # 배치 예측
                 results = []
                 for i, employee_data in enumerate(data):

@@ -16,7 +16,6 @@ import json
 from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
-import requests
 
 from langchain_openai import ChatOpenAI
 import openai
@@ -391,80 +390,6 @@ def system_info():
         }), 500
 
 
-def analyze_single_agent_sync(agent_name, employee_id, request_data):
-    """개별 에이전트 분석 함수 (동기 버전)"""
-    try:
-        if agent_name == 'structura':
-            # Structura 분석 - employee_id로 batch 데이터에서 자동 처리
-            url = f"{os.getenv('STRUCTURA_URL', 'http://localhost:5001')}/api/predict"
-            response = requests.post(url, json={'employee_id': employee_id, **request_data})
-            return response.json() if response.ok else {'error': f'Structura API error: {response.status_code}'}
-            
-        elif agent_name == 'cognita':
-            # Cognita 분석 - employee_id로 관계 분석
-            url = f"{os.getenv('COGNITA_URL', 'http://localhost:5002')}/api/analyze/employee/{employee_id}"
-            response = requests.get(url)
-            return response.json() if response.ok else {'error': f'Cognita API error: {response.status_code}'}
-            
-        elif agent_name == 'chronos':
-            # Chronos 분석 - employee_id로 시계열 분석
-            url = f"{os.getenv('CHRONOS_URL', 'http://localhost:5003')}/api/predict"
-            response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': 'batch'})
-            return response.json() if response.ok else {'error': f'Chronos API error: {response.status_code}'}
-            
-        elif agent_name == 'sentio':
-            # Sentio 분석 - employee_id로 감정 분석
-            url = f"{os.getenv('SENTIO_URL', 'http://localhost:5004')}/analyze_sentiment"
-            response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': 'batch'})
-            return response.json() if response.ok else {'error': f'Sentio API error: {response.status_code}'}
-            
-        elif agent_name == 'agora':
-            # Agora 분석 - employee_id로 시장 분석
-            url = f"{os.getenv('AGORA_URL', 'http://localhost:5005')}/api/agora/comprehensive-analysis"
-            response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': 'batch'})
-            return response.json() if response.ok else {'error': f'Agora API error: {response.status_code}'}
-            
-        else:
-            return {'error': f'Unknown agent: {agent_name}'}
-            
-    except Exception as e:
-        logger.error(f"Error in analyze_single_agent_sync for {agent_name}: {e}")
-        return {'error': str(e)}
-
-
-@app.route('/batch_progress/<batch_id>', methods=['GET'])
-def get_batch_progress(batch_id):
-    """배치 분석 진행률 조회"""
-    try:
-        if not hasattr(app, 'batch_progress') or batch_id not in app.batch_progress:
-            return jsonify({
-                'success': False,
-                'error': 'Batch session not found'
-            }), 404
-        
-        progress_data = app.batch_progress[batch_id]
-        
-        return jsonify({
-            'success': True,
-            'batch_id': batch_id,
-            'status': progress_data['status'],
-            'overall_progress': progress_data.get('overall_progress', 0),
-            'current_agent': progress_data.get('current_agent'),
-            'agent_progress': progress_data.get('agent_progress', {}),
-            'total_employees': progress_data['total_employees'],
-            'start_time': progress_data['start_time'],
-            'end_time': progress_data.get('end_time'),
-            'completed': progress_data['status'] in ['completed', 'failed']
-        })
-        
-    except Exception as e:
-        logger.error(f"Batch progress error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
 @app.route('/clear_sessions', methods=['POST'])
 def clear_sessions():
     """세션 정리"""
@@ -515,20 +440,13 @@ def batch_analyze():
         
         data = request.get_json()
         if not data:
-            logger.error("No JSON data provided in batch_analyze request")
             return jsonify({
                 'success': False,
                 'error': 'No JSON data provided'
             }), 400
         
-        logger.info(f"Received batch_analyze request with keys: {list(data.keys())}")
-        
         employee_ids = data.get('employee_ids', [])
-        logger.info(f"Employee IDs received: {employee_ids}")
-        logger.info(f"Employee IDs type: {type(employee_ids)}")
-        
         if not employee_ids or not isinstance(employee_ids, list):
-            logger.error(f"Invalid employee_ids: {employee_ids} (type: {type(employee_ids)})")
             return jsonify({
                 'success': False,
                 'error': 'employee_ids list is required'
@@ -538,124 +456,71 @@ def batch_analyze():
         analysis_type = data.get('analysis_type', 'batch')
         logger.info(f"Analysis type: {analysis_type}")
         
-        max_batch_size = int(os.getenv('MAX_BATCH_SIZE', '2000'))  # 대용량 배치 분석을 위해 2000으로 증가
+        max_batch_size = int(os.getenv('MAX_BATCH_SIZE', '10'))
         if len(employee_ids) > max_batch_size:
-            logger.warning(f"Large batch size detected: {len(employee_ids)} employees (max: {max_batch_size})")
             return jsonify({
                 'success': False,
-                'error': f'Batch size exceeds maximum ({max_batch_size}). 현재 요청: {len(employee_ids)}명'
+                'error': f'Batch size exceeds maximum ({max_batch_size})'
             }), 400
         
         logger.info(f"Starting batch analysis for {len(employee_ids)} employees")
         
+        # 비동기 배치 분석
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        # 배치 진행률 추적을 위한 세션 생성
-        import uuid
-        batch_id = str(uuid.uuid4())
-        
-        # 전역 배치 상태 저장소 초기화
-        if not hasattr(app, 'batch_progress'):
-            app.batch_progress = {}
-        
-        # 배치 진행률 초기화 (에이전트별 진행률 추적)
-        app.batch_progress[batch_id] = {
-            'total_employees': len(employee_ids),
-            'current_agent': 'structura',
-            'agent_progress': {
-                'structura': 0,
-                'cognita': 0,
-                'chronos': 0,
-                'sentio': 0,
-                'agora': 0
-            },
-            'overall_progress': 0,
-            'status': 'processing',
-            'start_time': datetime.now().isoformat(),
-            'results': {}
-        }
-        
-        # 에이전트별 순차 배치 분석
-        agents = ['structura', 'cognita', 'chronos', 'sentio', 'agora']
-        agent_results = {}
-        
-        for agent_idx, agent_name in enumerate(agents):
-            logger.info(f"Starting {agent_name} analysis for {len(employee_ids)} employees")
-            app.batch_progress[batch_id]['current_agent'] = agent_name
+        try:
+            # 병렬 분석 실행
+            tasks = []
+            for employee_id in employee_ids:
+                task = supervisor_workflow.analyze_employee(employee_id, analysis_type=analysis_type)
+                tasks.append(task)
             
-            # 각 에이전트별로 모든 직원 처리
-            agent_results[agent_name] = []
+            results = loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
             
-            for emp_idx, employee_id in enumerate(employee_ids):
-                logger.info(f"{agent_name}: Processing employee {emp_idx+1}/{len(employee_ids)}: {employee_id}")
+            # 결과 정리
+            batch_results = []
+            successful_count = 0
+            
+            for i, result in enumerate(results):
+                employee_id = employee_ids[i]
                 
-                try:
-                    # 개별 에이전트 분석 (employee_id만 전달)
-                    result = analyze_single_agent_sync(agent_name, employee_id, data)
-                    agent_results[agent_name].append({
-                        'employee_id': employee_id,
-                        'success': True,
-                        'result': result
-                    })
-                except Exception as e:
-                    logger.error(f"{agent_name} error for employee {employee_id}: {e}")
-                    agent_results[agent_name].append({
+                if isinstance(result, Exception):
+                    batch_results.append({
                         'employee_id': employee_id,
                         'success': False,
-                        'error': str(e)
+                        'error': str(result)
                     })
-                
-                # 에이전트별 진행률 업데이트
-                agent_progress = ((emp_idx + 1) / len(employee_ids)) * 100
-                app.batch_progress[batch_id]['agent_progress'][agent_name] = agent_progress
-                
-                # 전체 진행률 업데이트
-                overall_progress = ((agent_idx * len(employee_ids) + emp_idx + 1) / (len(agents) * len(employee_ids))) * 100
-                app.batch_progress[batch_id]['overall_progress'] = overall_progress
+                else:
+                    batch_results.append(result)
+                    if result.get('success'):
+                        successful_count += 1
+                    
+                    # 세션 저장
+                    if result.get('session_id'):
+                        active_sessions[result['session_id']] = {
+                            'employee_id': employee_id,
+                            'result': result,
+                            'created_at': datetime.now().isoformat(),
+                            'status': 'completed' if result['success'] else 'failed'
+                        }
             
-            logger.info(f"{agent_name} analysis completed for all employees")
-        
-        # 결과 통합 (에이전트별 결과를 직원별로 재구성)
-        batch_results = []
-        successful_count = 0
-        
-        for employee_id in employee_ids:
-            employee_result = {
-                'employee_id': employee_id,
+            logger.info(f"Batch analysis completed: {successful_count}/{len(employee_ids)} successful")
+            
+            return jsonify({
                 'success': True,
-                'agent_results': {}
-            }
+                'batch_results': batch_results,
+                'summary': {
+                    'total_employees': len(employee_ids),
+                    'successful_analyses': successful_count,
+                    'failed_analyses': len(employee_ids) - successful_count,
+                    'success_rate': successful_count / len(employee_ids)
+                }
+            })
             
-            # 각 에이전트 결과 수집
-            for agent_name in agents:
-                agent_result = next((r for r in agent_results[agent_name] if r['employee_id'] == employee_id), None)
-                if agent_result:
-                    employee_result['agent_results'][agent_name] = agent_result
-                    if not agent_result['success']:
-                        employee_result['success'] = False
-            
-            batch_results.append(employee_result)
-            if employee_result['success']:
-                successful_count += 1
+        finally:
+            loop.close()
         
-        # 배치 완료 상태 업데이트
-        app.batch_progress[batch_id]['status'] = 'completed'
-        app.batch_progress[batch_id]['processed_employees'] = len(employee_ids)
-        app.batch_progress[batch_id]['end_time'] = datetime.now().isoformat()
-        
-        logger.info(f"Batch analysis completed: {successful_count}/{len(employee_ids)} successful")
-            
-        return jsonify({
-            'success': True,
-            'batch_id': batch_id,  # 진행률 추적을 위한 batch_id 반환
-            'batch_results': batch_results,
-            'summary': {
-                'total_employees': len(employee_ids),
-                'successful_analyses': successful_count,
-                'failed_analyses': len(employee_ids) - successful_count,
-                'success_rate': successful_count / len(employee_ids)
-            }
-        })
-            
     except Exception as e:
         logger.error(f"Batch analysis error: {e}")
         logger.error(traceback.format_exc())

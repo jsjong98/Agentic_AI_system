@@ -165,12 +165,11 @@ def get_chronos_data_paths(analysis_type='batch'):
         if os.path.exists(search_dir):
             files = [f for f in os.listdir(search_dir) if f.endswith('.csv')]
             if files:
-                # 가장 최근 파일 사용 (수정 시간 기준)
-                files_with_time = [(f, os.path.getmtime(os.path.join(search_dir, f))) for f in files]
-                files_with_time.sort(key=lambda x: x[1], reverse=True)  # 수정 시간 기준 내림차순
-                latest_file = os.path.join(search_dir, files_with_time[0][0])
+                # 가장 최근 파일 사용 (타임스탬프 기준)
+                files.sort(reverse=True)
+                latest_file = os.path.join(search_dir, files[0])
                 data_paths['timeseries'] = latest_file
-                logger.info(f"📁 {search_dir}에서 최신 파일 발견: {files_with_time[0][0]}")
+                logger.info(f"📁 {search_dir}에서 최신 파일 발견: {files[0]}")
                 break
     
     # latest 파일 확인
@@ -1058,13 +1057,7 @@ def predict():
         
         # 요청 파라미터 파싱
         params = request.get_json() or {}
-        
-        # employee_id 단일 요청 처리
-        if 'employee_id' in params:
-            employee_ids = [params['employee_id']]
-        else:
-            employee_ids = params.get('employee_ids', [])
-            
+        employee_ids = params.get('employee_ids', [])
         analysis_type = params.get('analysis_type', 'batch')
         
         # 분석 타입에 따른 데이터 경로 확인 및 재로드
