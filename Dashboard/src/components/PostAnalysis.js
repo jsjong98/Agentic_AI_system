@@ -112,9 +112,9 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
   
   // Neo4j 연결 설정 (Cognita용)
   const [neo4jConfig] = useState({
-    uri: 'bolt://44.212.67.74:7687',
+    uri: 'bolt://13.220.63.109:7687',
     username: 'neo4j',
-    password: 'legs-augmentations-cradle'
+    password: 'coughs-laboratories-knife'
   });
   const [neo4jConnected, setNeo4jConnected] = useState(false);
   const [neo4jTesting, setNeo4jTesting] = useState(false);
@@ -1001,36 +1001,119 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                 updateAgentProgress('chronos', 100); // 실패해도 완료로 표시
               }
             } else if (agentName === 'cognita') {
-              // Cognita API - 전체 직원 분석 (샘플링 제거)
+              // Cognita API - 배치 분석으로 개선 (개별 요청 대신 배치 처리)
               predictions = [];
-              console.log(`Cognita: 전체 ${employeeIds.length}명 분석 시작...`);
+              console.log(`Cognita: 전체 ${employeeIds.length}명 배치 분석 시작...`);
+              updateAgentProgress('cognita', 10);
               
-              for (let i = 0; i < employeeIds.length; i++) {
-                try {
-                  const response = await fetch(`http://localhost:5002/api/analyze/employee/${employeeIds[i]}`);
-                  if (response.ok) {
-                    const result = await response.json();
-                    predictions.push({
-                      employee_id: employeeIds[i],
-                      risk_score: result.overall_risk_score || result.risk_score,
-                      predicted_attrition: (result.overall_risk_score || result.risk_score) > 0.5 ? 1 : 0,
-                      confidence: 0.8,
-                      actual_attrition: masterAttritionData[i]?.Attrition === 'Yes' ? 1 : 0
-                    });
+              try {
+                // 먼저 Neo4j 연결 상태 확인
+                const healthResponse = await fetch('http://localhost:5002/api/health');
+                if (!healthResponse.ok) {
+                  throw new Error(`Cognita 서버 응답 오류: ${healthResponse.status}`);
+                }
+                
+                const healthData = await healthResponse.json();
+                if (!healthData.neo4j_connected) {
+                  throw new Error('Neo4j 연결이 끊어져 있습니다. 서버 로그를 확인해주세요.');
+                }
+                
+                updateAgentProgress('cognita', 20);
+                
+                // 배치 크기를 작게 나누어 처리 (서버 과부하 방지)
+                const batchSize = 50; // 한 번에 50명씩 처리
+                const batches = [];
+                for (let i = 0; i < employeeIds.length; i += batchSize) {
+                  batches.push(employeeIds.slice(i, i + batchSize));
+                }
+                
+                console.log(`Cognita: ${batches.length}개 배치로 나누어 처리 (배치당 최대 ${batchSize}명)`);
+                
+                for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                  const batch = batches[batchIndex];
+                  console.log(`Cognita: 배치 ${batchIndex + 1}/${batches.length} 처리 중... (${batch.length}명)`);
+                  
+                  // 배치별로 개별 요청 (타임아웃과 재시도 로직 추가)
+                  for (let i = 0; i < batch.length; i++) {
+                    const employeeId = batch[i];
+                    let retryCount = 0;
+                    const maxRetries = 2;
+                    
+                    while (retryCount <= maxRetries) {
+                      try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
+                        
+                        const response = await fetch(`http://localhost:5002/api/analyze/employee/${employeeId}`, {
+                          signal: controller.signal
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (response.ok) {
+                          const result = await response.json();
+                          predictions.push({
+                            employee_id: employeeId,
+                            risk_score: result.overall_risk_score || result.risk_score || 0.5,
+                            predicted_attrition: (result.overall_risk_score || result.risk_score || 0.5) > 0.5 ? 1 : 0,
+                            confidence: 0.8,
+                            actual_attrition: masterAttritionData.find(emp => emp.EmployeeNumber === employeeId)?.Attrition === 'Yes' ? 1 : 0
+                          });
+                          break; // 성공하면 재시도 루프 종료
+                        } else if (response.status === 503 || response.status === 500) {
+                          // 서버 과부하 또는 내부 오류 시 재시도
+                          retryCount++;
+                          if (retryCount <= maxRetries) {
+                            console.warn(`Cognita 분석 재시도 ${retryCount}/${maxRetries} (직원 ${employeeId}): ${response.status}`);
+                            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // 지수 백오프
+                          } else {
+                            console.error(`Cognita 분석 최종 실패 (직원 ${employeeId}): ${response.status}`);
+                          }
+                        } else {
+                          console.error(`Cognita 분석 실패 (직원 ${employeeId}): ${response.status}`);
+                          break;
+                        }
+                      } catch (error) {
+                        retryCount++;
+                        if (error.name === 'AbortError') {
+                          console.warn(`Cognita 분석 타임아웃 재시도 ${retryCount}/${maxRetries} (직원 ${employeeId})`);
+                        } else {
+                          console.warn(`Cognita 분석 오류 재시도 ${retryCount}/${maxRetries} (직원 ${employeeId}):`, error.message);
+                        }
+                        
+                        if (retryCount <= maxRetries) {
+                          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+                        }
+                      }
+                    }
                   }
                   
-                  // 실시간 진행률 업데이트 (10명마다)
-                  if ((i + 1) % 10 === 0 || i === employeeIds.length - 1) {
-                    const progress = Math.floor(((i + 1) / employeeIds.length) * 100);
-                    updateAgentProgress('cognita', progress);
-                    console.log(`Cognita: ${i + 1}/${employeeIds.length}명 분석 완료 (${progress}%)`);
+                  // 배치 완료 후 진행률 업데이트
+                  const completedEmployees = (batchIndex + 1) * batchSize;
+                  const progress = Math.min(100, Math.floor((completedEmployees / employeeIds.length) * 80) + 20); // 20-100% 범위
+                  updateAgentProgress('cognita', progress);
+                  
+                  // 배치 간 잠시 대기 (서버 부하 완화)
+                  if (batchIndex < batches.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
                   }
-                } catch (error) {
-                  console.warn(`Cognita 분석 실패 (직원 ${employeeIds[i]}):`, error);
+                }
+                
+                console.log(`✅ Cognita: 전체 분석 완료 - ${predictions.length}/${employeeIds.length}명 성공 (성공률: ${((predictions.length / employeeIds.length) * 100).toFixed(1)}%)`);
+                updateAgentProgress('cognita', 100);
+                
+              } catch (error) {
+                console.error('❌ Cognita 배치 분석 실패:', error);
+                console.log('💡 해결 방법: 1) Neo4j 서버 상태 확인, 2) Cognita 서버 재시작, 3) 네트워크 연결 확인');
+                
+                // 실패해도 부분적인 결과가 있다면 사용
+                if (predictions.length > 0) {
+                  console.log(`⚠️ 부분적 성공: ${predictions.length}명의 결과를 사용하여 분석을 계속합니다.`);
+                  updateAgentProgress('cognita', 100);
+                } else {
+                  throw new Error(`Cognita 분석 완전 실패: ${error.message}`);
                 }
               }
-              
-              console.log(`Cognita: 전체 분석 완료 - ${predictions.length}/${employeeIds.length}명 성공`);
             } else if (agentName === 'sentio') {
               // Sentio API 호출 - 전체 직원 분석 (샘플링 제거)
               console.log(`Sentio: 전체 ${masterAttritionData.length}명 배치 분석 시작...`);
@@ -1104,9 +1187,12 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               
               for (let i = 0; i < employeeIds.length; i++) {
                 try {
+                  // 타임아웃 완전 제거 - 무제한 대기
+                  const controller = new AbortController();
                   const response = await fetch('http://localhost:5005/api/agora/comprehensive-analysis', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
                     body: JSON.stringify({
                       analysis_type: 'post', // 사후 분석 타입 전달
                       EmployeeNumber: employeeIds[i],

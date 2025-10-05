@@ -25,7 +25,7 @@
     "styled-components": "^6.0.5"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "cross-env DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -48,5 +48,8 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5006"
+  "proxy": "http://localhost:5006",
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
 }

@@ -329,6 +329,10 @@ AHP 가중치:
             "total_weighted_score": 0
         }
         
+        # worker_results가 None이거나 비어있는 경우 처리
+        if not worker_results:
+            return breakdown
+        
         total_weight = 0
         weighted_sum = 0
         
@@ -336,12 +340,14 @@ AHP 가중치:
             weight = self.ahp_weights.get(worker_type, 0.1)
             
             # 워커별 위험 점수 추출 (간단한 휴리스틱)
+            # result가 None이거나 빈 값인 경우도 처리됨
             worker_score = self._extract_risk_score_from_result(result)
             
             breakdown["worker_contributions"][worker_type.value] = {
                 "raw_score": worker_score,
                 "weight": weight,
-                "weighted_score": worker_score * weight
+                "weighted_score": worker_score * weight,
+                "status": "success" if result and isinstance(result, dict) else "failed"
             }
             
             breakdown["weighted_scores"][worker_type.value] = worker_score * weight
@@ -357,6 +363,10 @@ AHP 가중치:
     def _extract_risk_score_from_result(self, result: Dict[str, Any]) -> float:
         """워커 결과에서 위험 점수 추출"""
         try:
+            # result가 None이거나 딕셔너리가 아닌 경우 처리
+            if result is None or not isinstance(result, dict):
+                return 50.0
+            
             # 다양한 필드명으로 점수 추출 시도
             score_fields = [
                 "risk_score", "attrition_probability", "probability",
@@ -381,7 +391,8 @@ AHP 가중치:
             # 기본값
             return 50.0
             
-        except:
+        except Exception as e:
+            self.logger.warning(f"Error extracting risk score from result: {e}")
             return 50.0
     
     def _create_fallback_analysis(self, 

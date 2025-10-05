@@ -1,0 +1,30 @@
+{
+  "department": "Research & Development",
+  "job_role": "Laboratory Technician",
+  "job_level": "3",
+  "created_at": "2025-10-02T14:48:14.758681",
+  "employees": {
+    "64": {
+      "job_role": "Laboratory Technician",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:07:46.766224",
+      "folder_path": "Laboratory_Technician/3/employee_64"
+    },
+    "425": {
+      "job_role": "Laboratory Technician",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:07:47.031887",
+      "folder_path": "Laboratory_Technician/3/employee_425"
+    },
+    "944": {
+      "job_role": "Laboratory Technician",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:07:47.309156",
+      "folder_path": "Laboratory_Technician/3/employee_944"
+    }
+  },
+  "statistics": {
+    "total_employees": 3
+  },
+  "last_updated": "2025-10-04T12:07:47.309156"
+}

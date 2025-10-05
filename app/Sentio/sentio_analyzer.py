@@ -28,6 +28,9 @@ class SentioKeywordAnalyzer:
         self.resigned_data = None
         self.stayed_data = None
         
+        # Sentio.ipynb에서 검증된 최적 임계값
+        self.optimal_threshold = 0.45
+        
         # 강화된 불용어 리스트
         self.stopwords = self._initialize_comprehensive_stopwords()
         
@@ -345,48 +348,153 @@ class SentioKeywordAnalyzer:
         return False
     
     def calculate_jdr_scores(self, text: str) -> Dict[str, Any]:
-        """JD-R (Job Demands-Resources) 모델 기반 점수 계산"""
+        """JD-R (Job Demands-Resources) 모델 기반 점수 계산 (Sentio.ipynb 방식)"""
         
-        # 직무 요구 관련 키워드 (부정적 요인)
-        job_demands_keywords = {
-            '업무량', '야근', '스트레스', '압박', '마감', '과로', '번아웃', '피로',
-            '바쁘다', '힘들다', '어렵다', '복잡하다', '많다', '부족하다', '급하다',
-            '걱정', '불안', '긴장', '부담', '책임', '문제', '어려움', '곤란',
-            '시간부족', '인력부족', '자원부족', '예산부족', '지원부족'
+        if pd.isna(text) or not isinstance(text, str):
+            return {
+                'job_demands_score': 0.0,
+                'job_resources_deficiency_score': 0.5,
+                'detected_keywords': [],
+                'job_demands_matches': [],
+                'job_resources_deficiency_matches': []
+            }
+        
+        # Sentio.ipynb에서 통계적으로 검증된 키워드 사전 (정확히 동일하게 구현)
+        VALIDATED_JDR_KEYWORDS = {
+            'high_risk_indicators': {
+                # 통계적으로 입증된 고위험 키워드 (p<0.001)
+                'burnout': {
+                    'keywords': ['소진', '번아웃', '탈진', '에너지 고갈', '지쳐간다'],
+                    'weight': 2.37,  # 오즈비 기반 가중치
+                    'evidence': 'p<0.001, 매우 강한 통계적 유의성'
+                },
+                'pressure_stress': {
+                    'keywords': ['압박', '압박감', '스트레스', '부담감', '긴장감'],
+                    'weight': 2.35,  # 오즈비 기반 가중치
+                    'evidence': 'p<0.001, 매우 강한 통계적 유의성'
+                },
+                'dissatisfaction': {
+                    'keywords': ['불만', '불만족', '짜증', '화나다', '실망', '의문', '아쉬운', '아쉬움', '부족', '차이', '보정되지', '반영되지'],
+                    'weight': 1.50,  # 오즈비 기반 가중치
+                    'evidence': 'p<0.05, 통계적 유의성'
+                }
+            },
+            'medium_risk_indicators': {
+                # 경계선상 키워드들 (통계적 유의성은 없지만 오즈비 1 이상)
+                'recognition_issues': {
+                    'keywords': ['인정', '저평가', '과소평가', '무시', '평가', '기여도', '공정', '공정한', '정당', '보상'],
+                    'weight': 1.44,
+                    'evidence': 'p=0.11, 경계선상 유의성'
+                },
+                'workload_issues': {
+                    'keywords': ['과로', '초과근무', '업무량', '과중'],
+                    'weight': 1.24,
+                    'evidence': 'p=0.21, 경계선상'
+                }
+            },
+            'protective_factors': {
+                # 퇴사 위험을 낮추는 긍정적 요인들 (p<0.05)
+                'work_life_balance': {
+                    'keywords': ['워라밸', '일과 삶', '균형', '밸런스', '만족', '만족도', '만족스러운'],
+                    'weight': 0.40,  # 보호 효과 (낮을수록 좋음)
+                    'evidence': 'p<0.001, 매우 강한 보호 효과'
+                },
+                'growth_opportunities': {
+                    'keywords': ['성장', '발전', '승진', '기회', '미래', '커리어', '목표', '달성', '기여', '확대'],
+                    'weight': 0.58,
+                    'evidence': 'p<0.001, 강한 보호 효과'
+                },
+                'social_support': {
+                    'keywords': ['도움', '지원', '서포트', '협력', '팀', '동료', '함께', '협업'],
+                    'weight': 0.75,
+                    'evidence': 'p<0.05, 보호 효과'
+                }
+            }
         }
         
-        # 직무 자원 결핍 관련 키워드 (자원 부족)
-        job_resources_deficiency_keywords = {
-            '지원부족', '도움없음', '혼자', '외롭다', '소통부족', '피드백부족',
-            '교육부족', '훈련부족', '정보부족', '자료부족', '장비부족', '시설부족',
-            '인정받지못함', '성장기회없음', '발전없음', '승진어려움', '보상부족',
-            '불공정', '차별', '무시', '배제', '소외', '관심없음', '방치',
-            '자율성부족', '권한없음', '결정권없음', '참여기회없음'
-        }
+        detected_keywords = []
         
-        # 텍스트에서 키워드 추출
-        detected_keywords = self.extract_nouns_only(text)
+        # 디버깅: 입력 텍스트 확인
+        logger.debug(f"🔍 JD-R 분석 시작 - 텍스트 길이: {len(text)}자")
+        logger.debug(f"📝 텍스트 내용 (처음 200자): {text[:200]}...")
         
-        # 각 카테고리별 매칭 키워드 찾기
+        # 직무 요구 점수 계산
+        job_demands_raw = 0.0
+        demands_categories_found = set()
         job_demands_matches = []
+        
+        # 고위험 지표
+        for category_name, category_data in VALIDATED_JDR_KEYWORDS['high_risk_indicators'].items():
+            if category_name not in demands_categories_found:
+                for keyword in category_data['keywords']:
+                    if keyword in text:
+                        job_demands_raw += category_data['weight']
+                        demands_categories_found.add(category_name)
+                        detected_keywords.append(keyword)
+                        job_demands_matches.append(keyword)
+                        logger.debug(f"🔴 고위험 키워드 발견: '{keyword}' (카테고리: {category_name}, 가중치: {category_data['weight']})")
+                        break
+        
+        # 중위험 지표
+        for category_name, category_data in VALIDATED_JDR_KEYWORDS['medium_risk_indicators'].items():
+            if category_name not in demands_categories_found:
+                for keyword in category_data['keywords']:
+                    if keyword in text:
+                        job_demands_raw += category_data['weight']
+                        demands_categories_found.add(category_name)
+                        detected_keywords.append(keyword)
+                        job_demands_matches.append(keyword)
+                        logger.debug(f"🟡 중위험 키워드 발견: '{keyword}' (카테고리: {category_name}, 가중치: {category_data['weight']})")
+                        break
+        
+        # 직무 자원 결핍 점수 계산
+        base_deficiency = 0.72
+        protection_found = 0.0
+        protection_categories_found = set()
         job_resources_deficiency_matches = []
         
-        for keyword in detected_keywords:
-            if keyword in job_demands_keywords:
-                job_demands_matches.append(keyword)
-            if keyword in job_resources_deficiency_keywords:
-                job_resources_deficiency_matches.append(keyword)
+        for category_name, category_data in VALIDATED_JDR_KEYWORDS['protective_factors'].items():
+            if category_name not in protection_categories_found:
+                for keyword in category_data['keywords']:
+                    if keyword in text:
+                        protection_strength = (1 - category_data['weight']) * 1.2
+                        protection_found += protection_strength
+                        protection_categories_found.add(category_name)
+                        detected_keywords.append(keyword)
+                        job_resources_deficiency_matches.append(keyword)
+                        logger.debug(f"🟢 보호 키워드 발견: '{keyword}' (카테고리: {category_name}, 보호 강도: {protection_strength:.3f})")
+                        break
         
-        # 점수 계산 (키워드 빈도 기반, 0-1 정규화)
-        total_keywords = len(detected_keywords) if detected_keywords else 1
+        protection_found = min(protection_found, 0.6)
+        job_resources_deficiency_score = max(0.1, base_deficiency - protection_found)
         
-        job_demands_score = min(len(job_demands_matches) / total_keywords * 2.0, 1.0)
-        job_resources_deficiency_score = min(len(job_resources_deficiency_matches) / total_keywords * 2.0, 1.0)
+        # 점수 정규화
+        max_possible_demands = 6.5
+        job_demands_score = min(job_demands_raw / max_possible_demands, 1.0)
+        job_resources_deficiency_score = min(max(job_resources_deficiency_score, 0.0), 1.0)
+        
+        # 강화된 디버깅: 점수 계산 과정 상세 로그
+        logger.debug(f"📊 JD-R 점수 계산 결과:")
+        logger.debug(f"  - 직무요구 원점수: {job_demands_raw:.3f} / 최대: {max_possible_demands}")
+        logger.debug(f"  - 직무요구 정규화점수: {job_demands_score:.3f}")
+        logger.debug(f"  - 기본 자원결핍: {base_deficiency:.3f}")
+        logger.debug(f"  - 보호요인 발견: {protection_found:.3f}")
+        logger.debug(f"  - 자원결핍 최종점수: {job_resources_deficiency_score:.3f}")
+        logger.debug(f"  - 감지된 키워드 총 {len(detected_keywords)}개: {detected_keywords}")
+        
+        # 키워드가 전혀 없는 경우 경고
+        if not detected_keywords:
+            logger.warning(f"⚠️ JD-R 분석에서 키워드가 전혀 감지되지 않았습니다. 텍스트: '{text[:100]}...'")
+        
+        # 디버깅: 키워드가 감지된 경우 로그 출력
+        if job_demands_matches or job_resources_deficiency_matches:
+            logger.info(f"✅ 키워드 감지 - 직무요구: {job_demands_matches}, 자원결핍보호: {job_resources_deficiency_matches}")
+            logger.info(f"📈 최종 점수 - 직무요구: {job_demands_score:.3f}, 자원결핍: {job_resources_deficiency_score:.3f}")
         
         return {
             'job_demands_score': job_demands_score,
             'job_resources_deficiency_score': job_resources_deficiency_score,
-            'detected_keywords': detected_keywords,
+            'detected_keywords': list(set(detected_keywords)),
             'job_demands_matches': job_demands_matches,
             'job_resources_deficiency_matches': job_resources_deficiency_matches
         }
@@ -417,26 +525,32 @@ class SentioKeywordAnalyzer:
         # JD-R 지표 계산
         jdr_result = self.calculate_jdr_scores(combined_text)
         
-        # 심리적 위험 점수 계산 (개선된 가중치)
+        # 심리적 위험 점수 계산 (Sentio.ipynb 방식: 50:50 비율)
         psychological_risk_score = (
-            jdr_result['job_demands_score'] * 0.75 +
-            jdr_result['job_resources_deficiency_score'] * 0.25
+            jdr_result['job_demands_score'] * 0.5 +
+            jdr_result['job_resources_deficiency_score'] * 0.5
         )
         psychological_risk_score = min(max(psychological_risk_score, 0.0), 1.0)
         
-        # 최적 임계값 (기본값, 실제로는 학습을 통해 결정)
+        # 디버깅 정보 (개발용)
+        if len(jdr_result['detected_keywords']) > 0:
+            logger.debug(f"직원 {employee_id}: 직무요구={jdr_result['job_demands_score']:.3f}, 자원결핍={jdr_result['job_resources_deficiency_score']:.3f}, 최종점수={psychological_risk_score:.3f}, 키워드={jdr_result['detected_keywords'][:3]}")
+        
+        # 최적 임계값 (Sentio.ipynb에서 검증된 값: 0.45)
         optimal_threshold = getattr(self, 'optimal_threshold', 0.45)
         
         # 이진 예측 (최적 임계값 사용)
         attrition_prediction = 1 if psychological_risk_score > optimal_threshold else 0
         
-        # 위험 수준 결정 (개선된 기준)
-        if psychological_risk_score >= 0.7:
+        # 위험 수준 결정 (Sentio.ipynb 기준과 동일)
+        if psychological_risk_score > 0.55:
             risk_level = 'HIGH'
-        elif psychological_risk_score >= 0.3:
+        elif psychological_risk_score > 0.35:
             risk_level = 'MEDIUM'
-        else:
+        elif psychological_risk_score > 0.2:
             risk_level = 'LOW'
+        else:
+            risk_level = 'VERY_LOW'
         
         # 하위 호환성을 위한 기존 필드들
         sentiment_score = 1.0 - psychological_risk_score  # 감정 점수는 위험 점수의 역

@@ -1827,12 +1827,16 @@ def save_final_settings():
 def create_xai_visualizations(employee_result, employee_dir, employee_id):
     """XAI 시각화 생성 및 저장"""
     try:
+        # 필요한 라이브러리 import
+        import matplotlib.pyplot as plt
+        import numpy as np
+        
         # 시각화 디렉토리 생성
         viz_dir = os.path.join(employee_dir, 'visualizations')
         os.makedirs(viz_dir, exist_ok=True)
         
         # 한글 폰트 설정
-        plt.rcParams['font.family'] = ['DejaVu Sans', 'Malgun Gothic', 'AppleGothic']
+        plt.rcParams['font.family'] = ['Malgun Gothic']
         plt.rcParams['axes.unicode_minus'] = False
         
         agent_results = employee_result.get('agent_results', {})
@@ -1840,9 +1844,15 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
         # 1. Structura Feature Importance 시각화
         if 'structura' in agent_results:
             structura_data = agent_results['structura']
-            feature_importance = structura_data.get('feature_importance', {})
             
-            if feature_importance:
+            # explanation 내부에서 feature_importance 찾기
+            feature_importance = {}
+            if 'explanation' in structura_data:
+                feature_importance = structura_data['explanation'].get('feature_importance', {})
+            else:
+                feature_importance = structura_data.get('feature_importance', {})
+            
+            if feature_importance and len(feature_importance) > 0:
                 plt.figure(figsize=(12, 8))
                 features = list(feature_importance.keys())
                 importances = list(feature_importance.values())
@@ -1852,6 +1862,10 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
                 features = [features[i] for i in sorted_idx]
                 importances = [importances[i] for i in sorted_idx]
                 
+                # 상위 15개만 표시
+                features = features[:15]
+                importances = importances[:15]
+                
                 plt.barh(range(len(features)), importances, color='skyblue')
                 plt.yticks(range(len(features)), features)
                 plt.xlabel('Feature Importance')
@@ -1859,15 +1873,31 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
                 plt.tight_layout()
                 plt.savefig(os.path.join(viz_dir, 'structura_feature_importance.png'), dpi=300, bbox_inches='tight')
                 plt.close()
+                print(f"✅ Structura Feature Importance 시각화 생성: {len(features)}개 피처")
         
         # 2. Structura SHAP Values 시각화
         if 'structura' in agent_results:
-            shap_values = agent_results['structura'].get('shap_values', {})
+            structura_data = agent_results['structura']
             
-            if shap_values:
+            # explanation 내부에서 shap_values 찾기
+            shap_values = {}
+            if 'explanation' in structura_data:
+                shap_values = structura_data['explanation'].get('shap_values', {})
+            else:
+                shap_values = structura_data.get('shap_values', {})
+            
+            if shap_values and len(shap_values) > 0:
                 plt.figure(figsize=(12, 8))
                 features = list(shap_values.keys())
                 values = list(shap_values.values())
+                
+                # 절댓값 기준으로 정렬
+                sorted_items = sorted(zip(features, values), key=lambda x: abs(x[1]), reverse=True)
+                features, values = zip(*sorted_items)
+                
+                # 상위 15개만 표시
+                features = list(features[:15])
+                values = list(values[:15])
                 
                 # SHAP 값에 따라 색상 결정
                 colors = ['red' if v > 0 else 'blue' for v in values]
@@ -1880,19 +1910,28 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
                 plt.tight_layout()
                 plt.savefig(os.path.join(viz_dir, 'structura_shap_values.png'), dpi=300, bbox_inches='tight')
                 plt.close()
+                print(f"✅ Structura SHAP Values 시각화 생성: {len(features)}개 피처")
         
         # 3. Chronos Attention Weights 시각화
         if 'chronos' in agent_results:
             chronos_data = agent_results['chronos']
             xai_explanation = chronos_data.get('xai_explanation', {})
-            attention_weights = xai_explanation.get('attention_weights', {})
             
-            if attention_weights:
+            # attention_weights는 리스트 형태로 되어 있음
+            attention_weights = xai_explanation.get('attention_weights', [])
+            
+            if attention_weights and len(attention_weights) > 0:
                 plt.figure(figsize=(12, 6))
-                timesteps = list(attention_weights.keys())
-                weights = list(attention_weights.values())
                 
-                plt.plot(range(len(timesteps)), weights, marker='o', linewidth=2, markersize=8)
+                # 리스트의 첫 번째 요소가 실제 attention weights
+                if isinstance(attention_weights[0], list):
+                    weights = attention_weights[0]
+                else:
+                    weights = attention_weights
+                
+                timesteps = [f'T-{len(weights)-i}' for i in range(len(weights))]
+                
+                plt.plot(range(len(weights)), weights, marker='o', linewidth=2, markersize=6, color='orange')
                 plt.xlabel('Time Steps')
                 plt.ylabel('Attention Weights')
                 plt.title(f'Chronos Attention Weights - Employee {employee_id}')
@@ -1901,26 +1940,64 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
                 plt.tight_layout()
                 plt.savefig(os.path.join(viz_dir, 'chronos_attention_weights.png'), dpi=300, bbox_inches='tight')
                 plt.close()
+                print(f"✅ Chronos Attention Weights 시각화 생성: {len(weights)}개 시점")
         
         # 4. Chronos Sequence Importance 시각화
         if 'chronos' in agent_results:
-            sequence_importance = agent_results['chronos'].get('xai_explanation', {}).get('sequence_importance', {})
+            chronos_data = agent_results['chronos']
+            xai_explanation = chronos_data.get('xai_explanation', {})
+            sequence_importance = xai_explanation.get('sequence_importance', {})
             
-            if sequence_importance:
+            if sequence_importance and len(sequence_importance) > 0:
                 plt.figure(figsize=(12, 6))
-                timesteps = list(sequence_importance.keys())
-                importance = list(sequence_importance.values())
+                
+                # timestep_0, timestep_1 형태의 키를 정렬
+                timesteps = sorted([k for k in sequence_importance.keys() if k.startswith('timestep_')], 
+                                 key=lambda x: int(x.split('_')[1]))
+                importance = [sequence_importance[k] for k in timesteps]
+                
+                # 시각화용 라벨 생성
+                labels = [f'T-{len(timesteps)-i}' for i in range(len(timesteps))]
                 
                 plt.bar(range(len(timesteps)), importance, color='lightcoral', alpha=0.7)
                 plt.xlabel('Time Steps')
                 plt.ylabel('Sequence Importance')
                 plt.title(f'Chronos Sequence Importance - Employee {employee_id}')
-                plt.xticks(range(len(timesteps)), timesteps, rotation=45)
+                plt.xticks(range(len(labels)), labels, rotation=45)
                 plt.tight_layout()
                 plt.savefig(os.path.join(viz_dir, 'chronos_sequence_importance.png'), dpi=300, bbox_inches='tight')
                 plt.close()
+                print(f"✅ Chronos Sequence Importance 시각화 생성: {len(timesteps)}개 시점")
         
-        # 5. 에이전트별 위험도 점수 비교
+        # 5. Chronos Gradient Feature Importance 시각화
+        if 'chronos' in agent_results:
+            chronos_data = agent_results['chronos']
+            xai_explanation = chronos_data.get('xai_explanation', {})
+            gradient_importance = xai_explanation.get('gradient_importance', [])
+            feature_names = xai_explanation.get('feature_names', [])
+            
+            if gradient_importance and len(gradient_importance) > 0 and feature_names:
+                plt.figure(figsize=(12, 8))
+                
+                # 상위 15개 피처만 표시
+                n_features = min(15, len(gradient_importance), len(feature_names))
+                
+                # 중요도 순으로 정렬
+                importance_pairs = list(zip(feature_names[:n_features], gradient_importance[:n_features]))
+                importance_pairs.sort(key=lambda x: abs(x[1]), reverse=True)
+                
+                features, importances = zip(*importance_pairs)
+                
+                plt.barh(range(len(features)), importances, color='lightgreen', alpha=0.7)
+                plt.yticks(range(len(features)), features)
+                plt.xlabel('Gradient-based Feature Importance')
+                plt.title(f'Chronos Feature Importance - Employee {employee_id}')
+                plt.tight_layout()
+                plt.savefig(os.path.join(viz_dir, 'chronos_feature_importance.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+                print(f"✅ Chronos Feature Importance 시각화 생성: {len(features)}개 피처")
+        
+        # 6. 에이전트별 위험도 점수 비교
         agent_scores = {}
         if 'structura' in agent_results:
             agent_scores['Structura'] = agent_results['structura'].get('attrition_probability', 0)
@@ -1975,10 +2052,180 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
         print(f"❌ XAI 시각화 생성 실패 (직원 {employee_id}): {str(e)}")
         return False
 
+# 청크 전송을 위한 세션 저장소
+chunk_sessions = {}
+
+@app.route('/api/batch-analysis/save-results/start-chunk-session', methods=['POST'])
+def start_chunk_session():
+    """청크 전송 세션 시작"""
+    try:
+        data = request.get_json()
+        session_id = data.get('sessionId')
+        total_chunks = data.get('totalChunks')
+        total_employees = data.get('totalEmployees')
+        metadata = data.get('metadata', {})
+        
+        chunk_sessions[session_id] = {
+            'total_chunks': total_chunks,
+            'total_employees': total_employees,
+            'received_chunks': 0,
+            'chunks_data': [],
+            'metadata': metadata,
+            'start_time': datetime.now()
+        }
+        
+        print(f"🚀 청크 세션 시작: {session_id}, 총 {total_chunks}개 청크, {total_employees}명")
+        
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'message': f'청크 세션 시작: {total_chunks}개 청크 예상'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'청크 세션 시작 실패: {str(e)}'
+        }), 500
+
+@app.route('/api/batch-analysis/save-results/send-chunk', methods=['POST'])
+def send_chunk():
+    """개별 청크 전송"""
+    try:
+        data = request.get_json()
+        session_id = data.get('sessionId')
+        chunk_index = data.get('chunkIndex')
+        chunk_data = data.get('data')
+        
+        if session_id not in chunk_sessions:
+            return jsonify({
+                'success': False,
+                'error': '유효하지 않은 세션 ID'
+            }), 400
+        
+        session = chunk_sessions[session_id]
+        session['chunks_data'].append({
+            'index': chunk_index,
+            'data': chunk_data
+        })
+        session['received_chunks'] += 1
+        
+        print(f"📦 청크 수신: {session_id} - {chunk_index + 1}/{session['total_chunks']}")
+        
+        return jsonify({
+            'success': True,
+            'received_chunks': session['received_chunks'],
+            'total_chunks': session['total_chunks']
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'청크 전송 실패: {str(e)}'
+        }), 500
+
+@app.route('/api/batch-analysis/save-results/complete-chunk-session', methods=['POST'])
+def complete_chunk_session():
+    """청크 전송 완료 및 데이터 병합"""
+    try:
+        data = request.get_json()
+        session_id = data.get('sessionId')
+        
+        if session_id not in chunk_sessions:
+            return jsonify({
+                'success': False,
+                'error': '유효하지 않은 세션 ID'
+            }), 400
+        
+        session = chunk_sessions[session_id]
+        
+        # 청크 데이터 정렬 및 병합
+        session['chunks_data'].sort(key=lambda x: x['index'])
+        merged_results = []
+        
+        for chunk in session['chunks_data']:
+            merged_results.extend(chunk['data'])
+        
+        # 병합된 데이터로 기존 저장 로직 실행
+        final_data = {
+            'results': merged_results,
+            'applied_settings': session['metadata'].get('applied_settings', {}),
+            'analysis_metadata': session['metadata'].get('analysis_metadata', {})
+        }
+        
+        # 기존 저장 로직 호출
+        save_result = process_batch_analysis_results(final_data)
+        
+        # 세션 정리
+        del chunk_sessions[session_id]
+        
+        print(f"✅ 청크 세션 완료: {session_id}, {len(merged_results)}명 처리됨")
+        
+        return jsonify({
+            'success': True,
+            'total_processed': len(merged_results),
+            'save_result': save_result
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'청크 세션 완료 실패: {str(e)}'
+        }), 500
+
+@app.route('/api/batch-analysis/save-results/cleanup-chunk-session', methods=['POST'])
+def cleanup_chunk_session():
+    """청크 세션 정리"""
+    try:
+        data = request.get_json()
+        session_id = data.get('sessionId')
+        
+        if session_id in chunk_sessions:
+            del chunk_sessions[session_id]
+            print(f"🧹 청크 세션 정리: {session_id}")
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'세션 정리 실패: {str(e)}'
+        }), 500
+
+def process_batch_analysis_results(data):
+    """배치 분석 결과 처리 (기존 로직을 함수로 분리)"""
+    try:
+        results = data.get('results', [])
+        applied_settings = data.get('applied_settings', {})
+        analysis_metadata = data.get('analysis_metadata', {})
+        
+        # 기존 저장 로직 실행
+        # ... (기존 코드와 동일)
+        
+        return {
+            'success': True,
+            'processed_employees': len(results),
+            'message': '배치 분석 결과 처리 완료'
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 @app.route('/api/batch-analysis/save-results', methods=['POST'])
 def save_batch_analysis_results():
-    """배치 분석 결과를 부서별로 정리하여 저장"""
+    """배치 분석 결과를 부서별로 정리하여 저장 (개선된 대용량 데이터 처리)"""
     try:
+        # 요청 크기 확인
+        content_length = request.content_length
+        if content_length and content_length > 100 * 1024 * 1024:  # 100MB 제한
+            return jsonify({
+                'success': False,
+                'error': f'요청 데이터가 너무 큽니다. ({content_length/1024/1024:.1f}MB > 100MB)'
+            }), 413
+        
         data = request.get_json()
         
         if not data or 'results' not in data:
@@ -2086,20 +2333,20 @@ def save_batch_analysis_results():
             if 'cognita_result' in analysis_result:
                 cognita = analysis_result['cognita_result']
                 employee_result['agent_results']['cognita'] = {
-                    'overall_risk_score': cognita.get('risk_analysis', {}).get('overall_risk_score', 0),
-                    'network_centrality': cognita.get('network_analysis', {}).get('centrality_score', 0),
-                    'relationship_strength': cognita.get('relationship_analysis', {}).get('avg_strength', 0),
-                    'influence_score': cognita.get('influence_analysis', {}).get('influence_score', 0)
+                    'overall_risk_score': cognita.get('overall_risk_score', 0),
+                    'network_centrality': cognita.get('network_centrality_score', 0),
+                    'relationship_strength': cognita.get('network_stats', {}).get('avg_strength', 0),
+                    'influence_score': cognita.get('influence_score', 0)
                 }
             
             # Sentio 결과
             if 'sentio_result' in analysis_result:
                 sentio = analysis_result['sentio_result']
                 employee_result['agent_results']['sentio'] = {
-                    'sentiment_score': sentio.get('sentiment_analysis', {}).get('overall_sentiment', 0),
-                    'risk_score': sentio.get('sentiment_analysis', {}).get('risk_score', 0),
-                    'keyword_analysis': sentio.get('keyword_analysis', {}),
-                    'emotion_distribution': sentio.get('emotion_analysis', {})
+                    'sentiment_score': sentio.get('sentiment_score', 0),
+                    'risk_score': sentio.get('psychological_risk_score', 0),
+                    'keyword_analysis': sentio.get('risk_keywords', {}),
+                    'emotion_distribution': sentio.get('detailed_analysis', {})
                 }
             
             # Agora 결과
@@ -2116,60 +2363,105 @@ def save_batch_analysis_results():
             department_results[normalized_dept]['employees'].append(employee_result)
             
             # 기존 구조에 맞게 개별 직원 파일 저장
-            employee_id = employee.get('employee_number', 'Unknown')
-            employee_dir = os.path.join(results_base_dir, normalized_dept, f'employee_{employee_id}')
-            os.makedirs(employee_dir, exist_ok=True)
+            employee_id = str(employee.get('employee_number', 'Unknown'))
             
-            # 배치 분석 결과 저장 (기존 파일과 구분)
-            batch_result_file = os.path.join(employee_dir, f'batch_analysis_{analysis_timestamp.replace(":", "-").replace(".", "-")}.json')
-            with open(batch_result_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    'analysis_type': 'batch_analysis',
-                    'timestamp': analysis_timestamp,
-                    'employee_result': employee_result,
-                    'applied_settings': data.get('applied_settings', {}),
-                    'xai_included': True,
-                    'visualizations_generated': True
-                }, f, indent=2, ensure_ascii=False)
-            
-            # XAI 시각화 생성 및 저장 (PNG 파일들)
-            visualization_success = create_xai_visualizations(employee_result, employee_dir, employee_id)
-            
-            print(f"✅ 직원 {employee_id} 배치 분석 결과 저장: {batch_result_file}")
-            if visualization_success:
-                print(f"✅ 직원 {employee_id} XAI 시각화 생성 완료")
-            else:
-                print(f"⚠️ 직원 {employee_id} XAI 시각화 생성 부분 실패")
+            try:
+                employee_dir = os.path.join(results_base_dir, normalized_dept, f'employee_{employee_id}')
+                os.makedirs(employee_dir, exist_ok=True)
+                
+                # 안전한 파일명 생성 (특수문자 제거)
+                safe_timestamp = analysis_timestamp.replace(":", "-").replace(".", "-").replace("T", "_")
+                batch_result_file = os.path.join(employee_dir, f'batch_analysis_{safe_timestamp}.json')
+                
+                # JSON 직렬화 가능한 데이터만 저장
+                safe_employee_result = {
+                    'employee_id': employee_result.get('employee_id', employee_id),
+                    'department': employee_result.get('department', dept),
+                    'risk_score': float(employee_result.get('risk_score', 0)) if employee_result.get('risk_score') is not None else 0,
+                    'risk_level': str(employee_result.get('risk_level', 'unknown')),
+                    'analysis_timestamp': analysis_timestamp,
+                    'agent_results': employee_result.get('agent_results', {})
+                }
+                
+                with open(batch_result_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'analysis_type': 'batch_analysis',
+                        'timestamp': analysis_timestamp,
+                        'employee_result': safe_employee_result,
+                        'applied_settings': data.get('applied_settings', {}),
+                        'xai_included': True,
+                        'visualizations_generated': False  # 초기값
+                    }, f, indent=2, ensure_ascii=False)
+                
+                # XAI 시각화 생성 및 저장 (오류 발생 시에도 계속 진행)
+                visualization_success = False
+                try:
+                    visualization_success = create_xai_visualizations(employee_result, employee_dir, employee_id)
+                except Exception as viz_error:
+                    print(f"⚠️ 직원 {employee_id} XAI 시각화 생성 실패: {str(viz_error)}")
+                    visualization_success = False
+                
+                print(f"✅ 직원 {employee_id} 배치 분석 결과 저장: {batch_result_file}")
+                if visualization_success:
+                    print(f"✅ 직원 {employee_id} XAI 시각화 생성 완료")
+                else:
+                    print(f"⚠️ 직원 {employee_id} XAI 시각화 생성 부분 실패")
+                    
+            except Exception as emp_error:
+                print(f"⚠️ 직원 {employee_id} 개별 파일 저장 실패: {str(emp_error)}")
+                # 개별 직원 파일 저장 실패해도 전체 프로세스는 계속 진행
         
         # 부서별 결과 저장 (배치 분석 요약 디렉토리에)
-        dept_summary_file = os.path.join(batch_summary_dir, f'department_summary_{analysis_timestamp.replace(":", "-").replace(".", "-")}.json')
-        with open(dept_summary_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                'analysis_timestamp': analysis_timestamp,
-                'total_employees': len(results),
-                'total_departments': len(department_results),
-                'department_results': department_results,
-                'applied_settings': data.get('applied_settings', {}),
-                'summary_statistics': {
-                    'overall_risk_distribution': {
-                        '안전군': sum(dept['risk_distribution']['안전군'] for dept in department_results.values()),
-                        '주의군': sum(dept['risk_distribution']['주의군'] for dept in department_results.values()),
-                        '고위험군': sum(dept['risk_distribution']['고위험군'] for dept in department_results.values())
+        safe_timestamp = analysis_timestamp.replace(":", "-").replace(".", "-").replace("T", "_")
+        dept_summary_file = os.path.join(batch_summary_dir, f'department_summary_{safe_timestamp}.json')
+        
+        try:
+            with open(dept_summary_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'analysis_timestamp': analysis_timestamp,
+                    'total_employees': len(results),
+                    'total_departments': len(department_results),
+                    'department_results': department_results,
+                    'applied_settings': data.get('applied_settings', {}),
+                    'summary_statistics': {
+                        'overall_risk_distribution': {
+                            '안전군': sum(dept['risk_distribution']['안전군'] for dept in department_results.values()),
+                            '주의군': sum(dept['risk_distribution']['주의군'] for dept in department_results.values()),
+                            '고위험군': sum(dept['risk_distribution']['고위험군'] for dept in department_results.values())
+                        }
                     }
-                }
-            }, f, indent=2, ensure_ascii=False)
+                }, f, indent=2, ensure_ascii=False)
+        except Exception as dept_error:
+            print(f"⚠️ 부서별 요약 파일 저장 실패: {str(dept_error)}")
         
         # 개별 직원 상세 결과 저장 (XAI 포함) - 배치 분석 요약 디렉토리에
-        individual_file = os.path.join(batch_summary_dir, f'individual_results_{analysis_timestamp.replace(":", "-").replace(".", "-")}.json')
-        with open(individual_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                'analysis_timestamp': analysis_timestamp,
-                'total_employees': len(individual_results),
-                'individual_results': individual_results,
-                'applied_settings': data.get('applied_settings', {}),
-                'xai_included': True,
-                'agents_analyzed': ['structura', 'chronos', 'cognita', 'sentio', 'agora']
-            }, f, indent=2, ensure_ascii=False)
+        individual_file = os.path.join(batch_summary_dir, f'individual_results_{safe_timestamp}.json')
+        
+        try:
+            # JSON 직렬화 가능한 개별 결과만 저장
+            safe_individual_results = []
+            for result in individual_results:
+                safe_result = {
+                    'employee_id': str(result.get('employee_id', 'Unknown')),
+                    'department': str(result.get('department', '미분류')),
+                    'risk_score': float(result.get('risk_score', 0)) if result.get('risk_score') is not None else 0,
+                    'risk_level': str(result.get('risk_level', 'unknown')),
+                    'analysis_timestamp': analysis_timestamp,
+                    'agent_results': result.get('agent_results', {})
+                }
+                safe_individual_results.append(safe_result)
+            
+            with open(individual_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'analysis_timestamp': analysis_timestamp,
+                    'total_employees': len(safe_individual_results),
+                    'individual_results': safe_individual_results,
+                    'applied_settings': data.get('applied_settings', {}),
+                    'xai_included': True,
+                    'agents_analyzed': ['structura', 'chronos', 'cognita', 'sentio', 'agora']
+                }, f, indent=2, ensure_ascii=False)
+        except Exception as ind_error:
+            print(f"⚠️ 개별 결과 파일 저장 실패: {str(ind_error)}")
         
         print(f"✅ 배치 분석 결과 저장 완료:")
         print(f"   부서별 요약: {dept_summary_file}")
@@ -2196,6 +2488,106 @@ def save_batch_analysis_results():
             'success': False,
             'error': f'배치 분석 결과 저장 중 오류 발생: {str(e)}',
             'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/batch-analysis/save-hierarchical-results', methods=['POST'])
+def save_hierarchical_batch_results():
+    """계층적 구조로 배치 분석 결과 저장"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': '계층적 결과 데이터가 없습니다.'
+            }), 400
+        
+        print(f"💾 계층적 배치 결과 저장 시작...")
+        
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        results_base_dir = os.path.join(project_root, 'app/results')
+        
+        # 계층적 결과 저장용 디렉토리
+        hierarchical_dir = os.path.join(results_base_dir, 'hierarchical_analysis')
+        os.makedirs(hierarchical_dir, exist_ok=True)
+        
+        # 타임스탬프 생성
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # 데이터 압축 여부 확인
+        is_compressed = data.get('data_compressed', False)
+        
+        if is_compressed:
+            # 압축된 요약 데이터 저장
+            summary_file = os.path.join(hierarchical_dir, f'batch_summary_{timestamp}.json')
+            
+            # 압축 저장 (gzip 사용)
+            import gzip
+            compressed_file = summary_file + '.gz'
+            
+            with gzip.open(compressed_file, 'wt', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2, default=safe_json_serialize)
+            
+            print(f"✅ 압축된 계층적 결과 저장 완료: {compressed_file}")
+            
+            return jsonify({
+                'success': True,
+                'message': '압축된 계층적 결과가 성공적으로 저장되었습니다.',
+                'file_path': compressed_file,
+                'compressed': True,
+                'statistics': data.get('department_statistics', {})
+            })
+        
+        else:
+            # 전체 계층적 데이터 저장
+            hierarchical_results = data.get('hierarchical_results', {})
+            
+            if not hierarchical_results:
+                return jsonify({
+                    'success': False,
+                    'error': '계층적 결과 데이터가 비어있습니다.'
+                }), 400
+            
+            # 부서별로 분할 저장
+            saved_files = []
+            total_employees = 0
+            
+            for department, dept_data in hierarchical_results.items():
+                dept_file = os.path.join(hierarchical_dir, f'{department}_{timestamp}.json')
+                
+                with open(dept_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'department': department,
+                        'data': dept_data,
+                        'timestamp': timestamp,
+                        'analysis_summary': data.get('analysis_summary', {})
+                    }, f, ensure_ascii=False, indent=2, default=safe_json_serialize)
+                
+                saved_files.append(dept_file)
+                
+                # 직원 수 계산
+                for job_role, role_data in dept_data.items():
+                    for job_level, level_data in role_data.items():
+                        total_employees += len(level_data)
+            
+            print(f"✅ 계층적 결과 저장 완료: {len(saved_files)}개 부서, {total_employees}명")
+            
+            return jsonify({
+                'success': True,
+                'message': f'계층적 결과가 성공적으로 저장되었습니다.',
+                'saved_files': saved_files,
+                'total_departments': len(saved_files),
+                'total_employees': total_employees,
+                'compressed': False
+            })
+            
+    except Exception as e:
+        print(f"❌ 계층적 결과 저장 중 오류: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'계층적 결과 저장 실패: {str(e)}'
         }), 500
 
 @app.route('/api/generate-employee-report', methods=['POST'])

@@ -1,0 +1,180 @@
+{
+  "department": "Research & Development",
+  "job_role": "Research Director",
+  "job_level": "3",
+  "created_at": "2025-10-02T14:48:45.150953",
+  "employees": {
+    "28": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:38.152500",
+      "folder_path": "Research_Director/3/employee_28"
+    },
+    "73": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:38.332538",
+      "folder_path": "Research_Director/3/employee_73"
+    },
+    "101": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:38.552587",
+      "folder_path": "Research_Director/3/employee_101"
+    },
+    "102": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:38.720456",
+      "folder_path": "Research_Director/3/employee_102"
+    },
+    "126": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:38.875660",
+      "folder_path": "Research_Director/3/employee_126"
+    },
+    "296": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:39.036684",
+      "folder_path": "Research_Director/3/employee_296"
+    },
+    "306": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:39.194720",
+      "folder_path": "Research_Director/3/employee_306"
+    },
+    "337": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:39.355542",
+      "folder_path": "Research_Director/3/employee_337"
+    },
+    "380": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:39.504579",
+      "folder_path": "Research_Director/3/employee_380"
+    },
+    "421": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:39.683106",
+      "folder_path": "Research_Director/3/employee_421"
+    },
+    "461": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:39.872022",
+      "folder_path": "Research_Director/3/employee_461"
+    },
+    "564": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:40.070746",
+      "folder_path": "Research_Director/3/employee_564"
+    },
+    "727": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:40.251718",
+      "folder_path": "Research_Director/3/employee_727"
+    },
+    "742": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:40.435756",
+      "folder_path": "Research_Director/3/employee_742"
+    },
+    "817": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:40.596788",
+      "folder_path": "Research_Director/3/employee_817"
+    },
+    "844": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:40.758325",
+      "folder_path": "Research_Director/3/employee_844"
+    },
+    "950": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:40.908360",
+      "folder_path": "Research_Director/3/employee_950"
+    },
+    "1015": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:41.049878",
+      "folder_path": "Research_Director/3/employee_1015"
+    },
+    "1166": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:41.183402",
+      "folder_path": "Research_Director/3/employee_1166"
+    },
+    "1242": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:41.345431",
+      "folder_path": "Research_Director/3/employee_1242"
+    },
+    "1468": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:41.521219",
+      "folder_path": "Research_Director/3/employee_1468"
+    },
+    "1656": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:41.697257",
+      "folder_path": "Research_Director/3/employee_1656"
+    },
+    "1800": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:41.861771",
+      "folder_path": "Research_Director/3/employee_1800"
+    },
+    "1911": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:42.008808",
+      "folder_path": "Research_Director/3/employee_1911"
+    },
+    "1979": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:42.167244",
+      "folder_path": "Research_Director/3/employee_1979"
+    },
+    "2000": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:42.350847",
+      "folder_path": "Research_Director/3/employee_2000"
+    },
+    "2015": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:42.519505",
+      "folder_path": "Research_Director/3/employee_2015"
+    },
+    "2017": {
+      "job_role": "Research Director",
+      "job_level": "3",
+      "last_updated": "2025-10-04T12:08:42.716360",
+      "folder_path": "Research_Director/3/employee_2017"
+    }
+  },
+  "statistics": {
+    "total_employees": 28
+  },
+  "last_updated": "2025-10-04T12:08:42.716360"
+}

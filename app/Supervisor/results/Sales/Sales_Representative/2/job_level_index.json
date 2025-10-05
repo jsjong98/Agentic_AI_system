@@ -1,0 +1,54 @@
+{
+  "department": "Sales",
+  "job_role": "Sales Representative",
+  "job_level": "2",
+  "created_at": "2025-10-02T14:47:14.956743",
+  "employees": {
+    "42": {
+      "job_role": "Sales Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-04T12:05:57.410143",
+      "folder_path": "Sales_Representative/2/employee_42"
+    },
+    "205": {
+      "job_role": "Sales Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-04T12:05:57.529107",
+      "folder_path": "Sales_Representative/2/employee_205"
+    },
+    "467": {
+      "job_role": "Sales Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-04T12:05:57.646756",
+      "folder_path": "Sales_Representative/2/employee_467"
+    },
+    "783": {
+      "job_role": "Sales Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-04T12:05:57.779249",
+      "folder_path": "Sales_Representative/2/employee_783"
+    },
+    "1710": {
+      "job_role": "Sales Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-04T12:05:57.913392",
+      "folder_path": "Sales_Representative/2/employee_1710"
+    },
+    "1835": {
+      "job_role": "Sales Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-04T12:05:58.059605",
+      "folder_path": "Sales_Representative/2/employee_1835"
+    },
+    "1864": {
+      "job_role": "Sales Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-04T12:05:58.193401",
+      "folder_path": "Sales_Representative/2/employee_1864"
+    }
+  },
+  "statistics": {
+    "total_employees": 7
+  },
+  "last_updated": "2025-10-04T12:05:58.193401"
+}

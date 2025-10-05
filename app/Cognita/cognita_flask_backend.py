@@ -20,9 +20,15 @@ import numpy as np
 from neo4j import GraphDatabase
 import time
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# 로깅 설정 - INFO 레벨로 핵심 로그만 출력
+logging.basicConfig(
+    level=logging.INFO,  # DEBUG → INFO로 변경 (핵심 로그만)
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+# Neo4j 드라이버 로깅 레벨 조정 (너무 많은 DEBUG 로그 방지)
+logging.getLogger("neo4j").setLevel(logging.WARNING)
 
 # ------------------------------------------------------
 # 데이터 모델 정의
@@ -74,12 +80,16 @@ class Neo4jManager:
                 self.driver = GraphDatabase.driver(
                     self.uri, 
                     auth=(self.username, self.password),
-                    max_connection_lifetime=300,  # 5분
-                    max_connection_pool_size=20,  # 풀 크기 증가 (5→20)
-                    connection_acquisition_timeout=30,  # 타임아웃 증가 (10→30초)
-                    connection_timeout=10,        # 연결 타임아웃 증가 (5→10초)
+                    max_connection_lifetime=600,  # 10분으로 증가 (배치 처리용)
+                    max_connection_pool_size=50,  # 풀 크기 대폭 증가 (20→50)
+                    connection_acquisition_timeout=60,  # 타임아웃 증가 (30→60초)
+                    connection_timeout=15,        # 연결 타임아웃 증가 (10→15초)
                     encrypted=False,              # 암호화 비활성화
-                    trust="TRUST_ALL_CERTIFICATES"  # 인증서 신뢰
+                    trust="TRUST_ALL_CERTIFICATES",  # 인증서 신뢰
+                    # 배치 처리를 위한 추가 설정
+                    max_transaction_retry_time=30,  # 트랜잭션 재시도 시간
+                    resolver=None,  # DNS 해결 최적화
+                    keep_alive=True  # 연결 유지
                 )
                 
                 # 연결 테스트 (더 간단하고 안전한 방법)
@@ -119,14 +129,22 @@ class Neo4jManager:
         self.driver = None
     
     def is_connected(self) -> bool:
-        """연결 상태 확인"""
+        """연결 상태 확인 (개선된 버전)"""
         if not self.driver:
+            logger.debug("Neo4j driver가 None입니다")
             return False
         try:
-            with self.driver.session() as session:
-                session.run("RETURN 1")
-            return True
-        except:
+            # 더 빠른 연결 테스트 (타임아웃 설정)
+            with self.driver.session(database="neo4j") as session:
+                result = session.run("RETURN 1 as test")
+                record = result.single()
+                if record and record["test"] == 1:
+                    return True
+                else:
+                    logger.debug("Neo4j 연결 테스트 응답 오류")
+                    return False
+        except Exception as e:
+            logger.debug(f"Neo4j 연결 상태 확인 실패: {str(e)}")
             return False
 
 # ------------------------------------------------------
@@ -143,29 +161,89 @@ class CognitaRiskAnalyzer:
     def analyze_employee_risk(self, employee_id: str) -> RiskMetrics:
         """특정 직원의 종합 위험도 분석"""
         
-        logger.info(f"직원 {employee_id} 위험도 분석 시작")
+        # 개별 분석 시에는 로그 최소화 (배치 분석에서 너무 많은 로그 방지)
+        # logger.info(f"직원 {employee_id} 위험도 분석 시작")
+        
+        # Neo4j 연결 상태 확인 및 재연결 시도
+        if not self.neo4j_manager or not self.neo4j_manager.driver:
+            logger.warning(f"Neo4j 연결이 없습니다. 기본값으로 분석을 진행합니다.")
+            return self._create_default_risk_metrics(employee_id)
+        
+        # Neo4j 데이터 존재 여부 확인
+        try:
+            with self.neo4j_manager.driver.session() as session:
+                # 직원 기본 정보 확인
+                result = session.run(
+                    "MATCH (e:Employee {employee_id: $employee_id}) RETURN e.name as name, e.department as dept",
+                    employee_id=employee_id
+                )
+                employee_record = result.single()
+                if employee_record:
+                    logger.debug(f"  직원 기본 정보: 이름={employee_record.get('name', 'N/A')}, 부서={employee_record.get('dept', 'N/A')}")
+                else:
+                    logger.warning(f"  직원 {employee_id} 기본 정보를 찾을 수 없습니다")
+                
+                # 관계 데이터 존재 여부 확인
+                result = session.run("""
+                    MATCH (e:Employee {employee_id: $employee_id})
+                    OPTIONAL MATCH (e)-[r1:COLLABORATES_WITH]-()
+                    OPTIONAL MATCH (e)-[r2:REPORTS_TO]-()
+                    OPTIONAL MATCH (e)-[r3:PARTICIPATES_IN]-()
+                    RETURN count(r1) as collab_count, count(r2) as report_count, count(r3) as project_count
+                """, employee_id=employee_id)
+                relation_record = result.single()
+                if relation_record:
+                    logger.debug(f"  관계 데이터: 협업={relation_record.get('collab_count', 0)}, 보고={relation_record.get('report_count', 0)}, 프로젝트={relation_record.get('project_count', 0)}")
+        except Exception as e:
+            logger.warning(f"  Neo4j 데이터 확인 중 오류: {str(e)}")
         
         # 1. 관리자 안정성 분석
         manager_score = self.analyze_manager_stability(employee_id)
+        # 개별 분석 시에는 상세 로그 최소화 (핵심 정보만)
+        if manager_score is None:
+            logger.warning(f"직원 {employee_id}: 관리자 분석 실패, 기본값 사용")
+            manager_score = 0.5
         
         # 2. 팀 변동성 분석  
         team_volatility = self.analyze_team_volatility(employee_id)
+        if team_volatility is None:
+            logger.warning(f"직원 {employee_id}: 팀 변동성 분석 실패, 기본값 사용")
+            team_volatility = 0.5
         
         # 3. 사회적 네트워크 중심성 분석
-        centrality_score, network_stats = self.analyze_network_centrality(employee_id)
+        centrality_result = self.analyze_network_centrality(employee_id)
+        if isinstance(centrality_result, tuple) and len(centrality_result) == 2:
+            centrality_score, network_stats = centrality_result
+            if centrality_score is None:
+                logger.warning(f"직원 {employee_id}: 네트워크 중심성 분석 실패, 기본값 사용")
+                centrality_score = 0.5
+        else:
+            logger.warning(f"직원 {employee_id}: 네트워크 중심성 분석 오류, 기본값 사용")
+            centrality_score = 0.5
+            network_stats = {}
         
         # 4. 사회적 고립 지수 계산
         isolation_score = self.calculate_social_isolation(employee_id)
+        if isolation_score is None:
+            logger.warning(f"직원 {employee_id}: 사회적 고립 분석 실패, 기본값 사용")
+            isolation_score = 0.5
         
         # 5. 종합 위험 점수 계산
         overall_score = self.calculate_overall_risk_score(
             manager_score, team_volatility, centrality_score, isolation_score
         )
+        if overall_score is None:
+            logger.warning(f"직원 {employee_id}: 종합 점수 계산 실패, 기본값 사용")
+            overall_score = 0.5
         
         # 6. 위험 범주 및 주요 요인 결정
         risk_category, risk_factors = self.determine_risk_category(
             manager_score, team_volatility, centrality_score, isolation_score
         )
+        logger.info(f"  - 위험 범주: {risk_category}, 주요 요인: {risk_factors}")
+        
+        # 개별 분석 완료 로그는 최소화 (필요시에만)
+        # logger.info(f"직원 {employee_id} 분석 완료: {overall_score:.3f} ({risk_category})")
         
         return RiskMetrics(
             employee_id=employee_id,
@@ -180,7 +258,7 @@ class CognitaRiskAnalyzer:
         )
 
     def analyze_manager_stability(self, employee_id: str) -> float:
-        """관리자 안정성 분석 - 최적화된 버전"""
+        """관리자 안정성 분석 - 최적화된 버전 (Cognita.ipynb와 동일)"""
         
         # 단순화된 쿼리로 성능 향상
         query = """
@@ -198,31 +276,36 @@ class CognitaRiskAnalyzer:
             count(subordinate) as manager_load
         """
         
-        with self.neo4j_manager.driver.session() as session:
-            result = session.run(query, employee_id=employee_id)
-            record = result.single()
-            
-            if not record:
-                return 0.7  # 기본 불안정성 점수
-            
-            manager_load = record.get('manager_load', 0)
-            reporting_frequency = record.get('reporting_frequency', 'rarely')
-            
-            instability_score = 0.0
-            
-            # 직속 관리자 부재
-            if not record.get('direct_manager'):
-                instability_score += 0.5
-            
-            # 관리자 과부하 (단순화된 계산)
-            if manager_load > 12:
-                instability_score += 0.3
-            
-            # 보고 빈도 (단순화된 매핑)
-            frequency_penalty = {'daily': 0.0, 'weekly': 0.1, 'monthly': 0.2, 'rarely': 0.3}
-            instability_score += frequency_penalty.get(reporting_frequency, 0.3)
-            
-            return min(instability_score, 1.0)
+        try:
+            with self.neo4j_manager.driver.session() as session:
+                result = session.run(query, employee_id=employee_id)
+                record = result.single()
+                
+                if not record:
+                    return 0.7  # 기본 불안정성 점수
+                
+                manager_load = record.get('manager_load', 0)
+                reporting_frequency = record.get('reporting_frequency', 'rarely')
+                
+                instability_score = 0.0
+                
+                # 직속 관리자 부재
+                if not record.get('direct_manager'):
+                    instability_score += 0.5
+                
+                # 관리자 과부하 (단순화된 계산)
+                if manager_load > 12:
+                    instability_score += 0.3
+                
+                # 보고 빈도 (단순화된 매핑)
+                frequency_penalty = {'daily': 0.0, 'weekly': 0.1, 'monthly': 0.2, 'rarely': 0.3}
+                instability_score += frequency_penalty.get(reporting_frequency, 0.3)
+                
+                return min(instability_score, 1.0)
+                
+        except Exception as e:
+            logger.warning(f"직원 {employee_id}: 관리자 분석 실패, 기본값 사용")
+            return 0.5
 
     def analyze_network_centrality(self, employee_id: str) -> Tuple[float, Dict[str, float]]:
         """네트워크 중심성 분석 - 샘플링으로 최적화"""
@@ -235,9 +318,10 @@ class CognitaRiskAnalyzer:
         OPTIONAL MATCH (emp)-[collab:COLLABORATES_WITH]-(colleague:Employee)
         WHERE collab.collaboration_strength IS NOT NULL
         
-        // 전체 협업 관계 분석 (LIMIT 제거)
+        // 상위 협업 관계만 샘플링 (강도 기준)
         WITH emp, collab, colleague
         ORDER BY collab.collaboration_strength DESC
+        LIMIT 50  // 최대 50개 관계만 분석
         
         // 프로젝트 연결 (현재 활성 프로젝트만)
         OPTIONAL MATCH (emp)-[:PARTICIPATES_IN]->(proj:Project {status: 'active'})<-[:PARTICIPATES_IN]-(proj_colleague:Employee)
@@ -261,6 +345,7 @@ class CognitaRiskAnalyzer:
             record = result.single()
             
             if not record:
+                logger.debug(f"    네트워크 중심성 - 직원 {employee_id}: 데이터 없음")
                 return 0.0, {}
             
             direct_connections = record.get('direct_connections', 0)
@@ -269,6 +354,9 @@ class CognitaRiskAnalyzer:
             excellent_count = record.get('excellent_count', 0)
             poor_count = record.get('poor_count', 0)
             frequent_count = record.get('frequent_count', 0)
+            
+            logger.debug(f"    네트워크 중심성 - 직원 {employee_id}: 직접연결={direct_connections}, 평균강도={avg_strength:.3f}, 프로젝트연결={project_connections}")
+            logger.debug(f"      관계품질: 우수={excellent_count}, 나쁨={poor_count}, 빈번한상호작용={frequent_count}")
             
             # 단순화된 중심성 계산
             degree_centrality = min(direct_connections / 15.0, 1.0)  # 15명 기준
@@ -284,6 +372,8 @@ class CognitaRiskAnalyzer:
             # 상호작용 점수
             interaction_score = min(frequent_count / 5.0, 1.0)  # 5명 기준
             
+            logger.debug(f"      중심성 구성요소: 연결도={degree_centrality:.3f}, 강도={strength_centrality:.3f}, 프로젝트={project_centrality:.3f}, 상호작용={interaction_score:.3f}")
+            
             # 가중 평균 (단순화)
             centrality_score = (
                 degree_centrality * 0.4 +
@@ -291,6 +381,8 @@ class CognitaRiskAnalyzer:
                 project_centrality * 0.2 +
                 interaction_score * 0.1
             )
+            
+            logger.debug(f"    네트워크 중심성 최종 점수: {centrality_score:.3f}")
             
             network_stats = {
                 'degree_centrality': degree_centrality,
@@ -304,7 +396,7 @@ class CognitaRiskAnalyzer:
             return centrality_score, network_stats
 
     def calculate_social_isolation(self, employee_id: str) -> float:
-        """사회적 고립 지수 계산 - 경량화된 버전"""
+        """사회적 고립 지수 계산 - 경량화된 버전 (Cognita.ipynb와 동일)"""
         
         # 핵심 지표만 조회하는 단순화된 쿼리
         query = """
@@ -370,7 +462,7 @@ class CognitaRiskAnalyzer:
             return min(isolation_score, 1.0)
 
     def analyze_team_volatility(self, employee_id: str) -> float:
-        """팀 변동성 분석 - 단순화된 버전"""
+        """팀 변동성 분석 - 단순화된 버전 (Cognita.ipynb와 동일)"""
         
         # 핵심 팀 정보만 조회
         query = """
@@ -426,6 +518,12 @@ class CognitaRiskAnalyzer:
         
         low_centrality_score = 1.0 - centrality_score
         
+        logger.debug(f"    종합 위험 점수 계산:")
+        logger.debug(f"      사회적 고립: {isolation_score:.3f} × {weights['social_isolation']} = {isolation_score * weights['social_isolation']:.3f}")
+        logger.debug(f"      낮은 중심성: {low_centrality_score:.3f} × {weights['low_centrality']} = {low_centrality_score * weights['low_centrality']:.3f}")
+        logger.debug(f"      관리자 불안정: {manager_score:.3f} × {weights['manager_instability']} = {manager_score * weights['manager_instability']:.3f}")
+        logger.debug(f"      팀 변동성: {team_volatility:.3f} × {weights['team_volatility']} = {team_volatility * weights['team_volatility']:.3f}")
+        
         overall_score = (
             isolation_score * weights['social_isolation'] +
             low_centrality_score * weights['low_centrality'] +
@@ -433,7 +531,10 @@ class CognitaRiskAnalyzer:
             team_volatility * weights['team_volatility']
         )
         
-        return min(overall_score, 1.0)
+        final_score = min(overall_score, 1.0)
+        logger.debug(f"      종합 점수 합계: {overall_score:.3f} → 최종: {final_score:.3f}")
+        
+        return final_score
 
     def determine_risk_category(self, manager_score: float, team_volatility: float,
                                centrality_score: float, isolation_score: float) -> Tuple[str, List[str]]:
@@ -469,7 +570,31 @@ class CognitaRiskAnalyzer:
             risk_factors.append("구조적_불안정성")
         
         return risk_category, risk_factors
-
+    
+    def _create_default_risk_metrics(self, employee_id: str) -> RiskMetrics:
+        """Neo4j 연결이 없을 때 기본 위험도 메트릭 생성"""
+        logger.info(f"직원 {employee_id}에 대한 기본 위험도 메트릭 생성")
+        
+        # 기본값으로 중간 위험도 설정
+        default_score = 0.5
+        
+        return RiskMetrics(
+            employee_id=employee_id,
+            manager_instability_score=default_score,
+            team_volatility_index=default_score,
+            social_isolation_index=default_score,
+            network_centrality_score=default_score,
+            overall_risk_score=default_score,
+            risk_category="Medium",
+            risk_factors=["Neo4j 연결 없음 - 기본값 사용"],
+            network_stats={
+                "degree_centrality": default_score,
+                "betweenness_centrality": default_score,
+                "closeness_centrality": default_score,
+                "eigenvector_centrality": default_score
+            }
+        )
+    
     def batch_analyze_department(self, department_name: str, sample_size: int = None) -> List[RiskMetrics]:
         """부서 전체 분석 - 모든 직원 분석 후 상위 위험도만 반환"""
         
@@ -940,9 +1065,9 @@ def create_app():
     
     # Neo4j 설정 (최적화된 연결 정보)
     NEO4J_CONFIG = {
-        "uri": os.getenv("NEO4J_URI", "bolt://44.212.67.74:7687"),
+        "uri": os.getenv("NEO4J_URI", "bolt://13.220.63.109:7687"),
         "username": os.getenv("NEO4J_USERNAME", "neo4j"),
-        "password": os.getenv("NEO4J_PASSWORD", "legs-augmentations-cradle")
+        "password": os.getenv("NEO4J_PASSWORD", "coughs-laboratories-knife")
     }
     
     # 전역 변수
@@ -1001,6 +1126,11 @@ def create_app():
             cognita_analyzer = analyzer
             app.neo4j_manager = neo4j_mgr
             app.cognita_analyzer = analyzer
+            
+            # 디버깅: 초기화 상태 확인
+            logger.debug(f"neo4j_mgr: {neo4j_mgr}")
+            logger.debug(f"analyzer: {analyzer}")
+            logger.debug(f"app.cognita_analyzer 설정됨: {hasattr(app, 'cognita_analyzer')}")
             
             if neo4j_mgr and analyzer:
                 logger.info("✅ Neo4j 연결 성공 - Cognita 분석 기능 활성화")
@@ -1789,6 +1919,96 @@ def create_app():
         except Exception as e:
             logger.error(f"부서 분석 실패: {str(e)}")
             return jsonify({"error": f"부서 분석 실패: {str(e)}"}), 500
+
+    @app.route('/api/analyze/batch', methods=['POST'])
+    def batch_analyze():
+        """배치 위험도 분석 - 프론트엔드 배치 분석용"""
+        
+        # 디버깅: analyzer 상태 확인
+        logger.debug(f"app.cognita_analyzer 존재: {hasattr(app, 'cognita_analyzer')}")
+        if hasattr(app, 'cognita_analyzer'):
+            logger.debug(f"app.cognita_analyzer 값: {app.cognita_analyzer}")
+        
+        analyzer = get_analyzer()
+        if not analyzer:
+            logger.error("분석기가 초기화되지 않았습니다 - Neo4j 연결 상태를 확인하세요")
+            return jsonify({"error": "분석기가 초기화되지 않았습니다"}), 503
+        
+        try:
+            # 요청 데이터 파싱
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "요청 데이터가 없습니다"}), 400
+            
+            employee_ids = data.get('employee_ids', [])
+            if not employee_ids:
+                return jsonify({"error": "employee_ids가 필요합니다"}), 400
+            
+            logger.info(f"배치 위험도 분석 시작: {len(employee_ids)}명")
+            
+            # 각 직원별 위험도 분석
+            results = []
+            for i, emp_id in enumerate(employee_ids):
+                try:
+                    logger.debug(f"직원 {emp_id} 분석 시작 ({i+1}/{len(employee_ids)})")
+                    
+                    # 100명마다 연결 상태 확인 및 재연결 시도
+                    if i > 0 and i % 100 == 0:
+                        logger.info(f"배치 분석 진행률: {i}/{len(employee_ids)}명 완료 - 연결 상태 확인 중...")
+                        
+                        # 현재 analyzer의 Neo4j 연결 상태 확인
+                        if not analyzer.neo4j_manager or not analyzer.neo4j_manager.is_connected():
+                            logger.warning(f"Neo4j 연결이 끊어짐 - 재연결 시도 중...")
+                            
+                            # 재연결 시도
+                            if reconnect_neo4j():
+                                analyzer = get_analyzer()
+                                logger.info(f"✅ Neo4j 재연결 성공 - 분석 계속 진행")
+                            else:
+                                logger.warning(f"❌ Neo4j 재연결 실패 - 기본값으로 분석 계속")
+                    
+                    risk_metrics = analyzer.analyze_employee_risk(str(emp_id))
+                    
+                    # 프론트엔드가 기대하는 형식으로 변환
+                    result = {
+                        "employee_id": str(emp_id),
+                        "cognita_score": round(risk_metrics.overall_risk_score, 3),
+                        "risk_level": risk_metrics.risk_category.upper(),
+                        "social_isolation": round(risk_metrics.social_isolation_index, 3),
+                        "network_centrality": round(risk_metrics.network_centrality_score, 3),
+                        "manager_instability": round(risk_metrics.manager_instability_score, 3),
+                        "team_volatility": round(risk_metrics.team_volatility_index, 3),
+                        "risk_factors": risk_metrics.risk_factors
+                    }
+                    results.append(result)
+                    logger.debug(f"직원 {emp_id} 분석 완료: 위험도={result['cognita_score']}")
+                    
+                except Exception as e:
+                    logger.warning(f"직원 {emp_id} 분석 실패: {str(e)}")
+                    # 실패 시 기본값 반환
+                    results.append({
+                        "employee_id": str(emp_id),
+                        "cognita_score": 0.5,
+                        "risk_level": "MEDIUM",
+                        "social_isolation": 0.5,
+                        "network_centrality": 0.5,
+                        "manager_instability": 0.5,
+                        "team_volatility": 0.5,
+                        "risk_factors": ["분석_실패"]
+                    })
+            
+            logger.info(f"배치 위험도 분석 완료: {len(results)}명")
+            
+            return jsonify({
+                "status": "success",
+                "total_analyzed": len(results),
+                "analysis_results": results,
+                "analysis_timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"배치 분석 실패: {str(e)}")
+            return jsonify({"error": f"배치 분석 실패: {str(e)}"}), 500
 
     @app.route('/api/analyze/collaboration', methods=['POST'])
     def analyze_collaboration():
