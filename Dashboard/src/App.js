@@ -16,6 +16,7 @@ import ReportGeneration from './components/ReportGeneration';
 import RelationshipAnalysis from './components/RelationshipAnalysis';
 import GroupStatistics from './components/GroupStatistics';
 import { apiService } from './services/apiService';
+import storageManager from './utils/storageManager';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -131,15 +132,47 @@ const App = () => {
   useEffect(() => {
     checkServerStatus();
     
-    // localStorage에서 배치 분석 결과 복원
+    // localStorage에서 배치 분석 결과 복원 (청크 지원)
     try {
+      // 먼저 일반 저장 방식 확인
       const storedResults = localStorage.getItem('batchAnalysisResults');
       const storedTimestamp = localStorage.getItem('lastAnalysisTimestamp');
       
       if (storedResults && storedTimestamp) {
         setGlobalBatchResults(JSON.parse(storedResults));
         setLastAnalysisTimestamp(storedTimestamp);
-        console.log('배치 분석 결과 복원됨:', JSON.parse(storedResults));
+        console.log('배치 분석 결과 복원됨 (일반 저장):', JSON.parse(storedResults).length + '명');
+      } else {
+        // 청크 저장 방식 확인
+        const metadata = localStorage.getItem('batchAnalysisMetadata');
+        if (metadata) {
+          const meta = JSON.parse(metadata);
+          if (meta.storage_type === 'chunked') {
+            console.log(`청크 데이터 복원 시작: ${meta.total_chunks}개 청크`);
+            
+            const allResults = [];
+            for (let i = 0; i < meta.total_chunks; i++) {
+              const chunkData = localStorage.getItem(`batchAnalysisResults_chunk_${i}`);
+              if (chunkData) {
+                allResults.push(...JSON.parse(chunkData));
+              }
+            }
+            
+            if (allResults.length > 0) {
+              setGlobalBatchResults(allResults);
+              setLastAnalysisTimestamp(meta.timestamp);
+              console.log(`청크 데이터 복원 완료: ${allResults.length}명`);
+            }
+          }
+        } else {
+          // 요약 데이터만 있는 경우
+          const summaryData = localStorage.getItem('batchAnalysisResultsSummary');
+          if (summaryData) {
+            const summary = JSON.parse(summaryData);
+            console.log('요약 데이터만 복원됨:', summary);
+            setLastAnalysisTimestamp(summary.timestamp);
+          }
+        }
       }
     } catch (error) {
       console.error('배치 결과 복원 실패:', error);
@@ -179,13 +212,136 @@ const App = () => {
     const timestamp = new Date().toISOString();
     setLastAnalysisTimestamp(timestamp);
     
-    // localStorage에도 저장
+    // localStorage에 원본 데이터 전체 저장 (용량 초과 시 청크 단위로 분할 저장)
     try {
+      // 먼저 전체 결과 저장 시도
       localStorage.setItem('batchAnalysisResults', JSON.stringify(results));
       localStorage.setItem('lastAnalysisTimestamp', timestamp);
       console.log('배치 분석 결과 전역 업데이트:', results);
     } catch (error) {
-      console.error('배치 결과 저장 실패:', error);
+      if (error.name === 'QuotaExceededError') {
+        console.warn('LocalStorage 용량 초과 - 청크 단위로 분할 저장합니다.');
+        try {
+          // 기존 데이터 정리
+          localStorage.removeItem('batchAnalysisResults');
+          
+          // 데이터 구조 확인 및 안전한 청크 분할
+          const resultArray = results.results || results.data || (Array.isArray(results) ? results : []);
+          
+          if (!Array.isArray(resultArray) || resultArray.length === 0) {
+            console.error('유효하지 않은 결과 데이터 구조:', results);
+            throw new Error('Invalid results structure');
+          }
+          
+          // 동적 청크 크기 계산 (메모리 효율성 고려)
+          const chunkSize = Math.max(100, Math.min(500, Math.floor(4000000 / JSON.stringify(resultArray[0] || {}).length)));
+          const chunks = [];
+          
+          for (let i = 0; i < resultArray.length; i += chunkSize) {
+            chunks.push(resultArray.slice(i, i + chunkSize));
+          }
+          
+          // 각 청크를 개별 키로 저장 (안전한 저장)
+          let savedChunks = 0;
+          for (let i = 0; i < chunks.length; i++) {
+            try {
+              const chunkData = {
+                chunk_index: i,
+                total_chunks: chunks.length,
+                data: chunks[i],
+                timestamp: timestamp
+              };
+              localStorage.setItem(`batchAnalysisResults_chunk_${i}`, JSON.stringify(chunkData));
+              savedChunks++;
+            } catch (chunkError) {
+              console.error(`청크 ${i} 저장 실패:`, chunkError);
+              break; // 더 이상 저장할 수 없으면 중단
+            }
+          }
+          
+          // 메타데이터 저장
+          const metadata = {
+            total_employees: resultArray.length,
+            saved_employees: Math.min(savedChunks * chunkSize, resultArray.length),
+            total_chunks: chunks.length,
+            saved_chunks: savedChunks,
+            chunk_size: chunkSize,
+            timestamp: timestamp,
+            storage_type: 'chunked',
+            original_structure: {
+              has_results: !!results.results,
+              has_data: !!results.data,
+              is_array: Array.isArray(results)
+            }
+          };
+          
+          localStorage.setItem('batchAnalysisMetadata', JSON.stringify(metadata));
+          localStorage.setItem('lastAnalysisTimestamp', timestamp);
+          console.log(`청크 분할 저장 완료: ${savedChunks}/${chunks.length}개 청크, 총 ${Math.min(savedChunks * chunkSize, resultArray.length)}/${resultArray.length}명`);
+        } catch (secondError) {
+          console.error('청크 저장도 실패:', secondError);
+          // 최후의 수단: 요약 데이터만 저장
+          try {
+            localStorage.clear();
+            
+            // 안전한 데이터 추출
+            const resultArray = results.results || results.data || (Array.isArray(results) ? results : []);
+            
+            const summaryResults = {
+              total_employees: resultArray.length,
+              timestamp: timestamp,
+              summary: {
+                high_risk: resultArray.filter(r => {
+                  const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                  return score && score >= 0.7;
+                }).length,
+                medium_risk: resultArray.filter(r => {
+                  const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                  return score && score >= 0.3 && score < 0.7;
+                }).length,
+                low_risk: resultArray.filter(r => {
+                  const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                  return score && score < 0.3;
+                }).length
+              },
+              departments: [...new Set(resultArray.map(r => 
+                r.analysis_result?.employee_data?.Department || 
+                r.department || 
+                'Unknown'
+              ))],
+              storage_type: 'summary_only',
+              error_info: {
+                original_error: secondError.message,
+                data_structure: {
+                  has_results: !!results.results,
+                  has_data: !!results.data,
+                  is_array: Array.isArray(results),
+                  result_count: resultArray.length
+                }
+              }
+            };
+            
+            localStorage.setItem('batchAnalysisResultsSummary', JSON.stringify(summaryResults));
+            localStorage.setItem('lastAnalysisTimestamp', timestamp);
+            console.log('⚠️ 요약 데이터만 저장 완료:', summaryResults);
+          } catch (finalError) {
+            console.error('❌ 모든 저장 방식 실패:', finalError);
+            // 최종 실패 시에도 타임스탬프는 저장 시도
+            try {
+              localStorage.setItem('lastAnalysisTimestamp', timestamp);
+              localStorage.setItem('batchAnalysisError', JSON.stringify({
+                error: finalError.message,
+                timestamp: timestamp,
+                attempted_storage: 'all_methods_failed'
+              }));
+            } catch (timestampError) {
+              console.error('타임스탬프 저장도 실패:', timestampError);
+            }
+          }
+        }
+      } else {
+        console.error('배치 결과 저장 실패:', error);
+      }
     }
   };
 

@@ -997,6 +997,145 @@ def generate_batch_csv():
         logger.error(f"배치 CSV 분석 오류: {str(e)}")
         return jsonify({"error": f"분석 중 오류가 발생했습니다: {str(e)}"}), 500
 
+@app.route('/analyze/batch', methods=['POST'])
+def batch_analyze():
+    """
+    배치 감정 분석 - 프론트엔드 배치 분석용
+    입력: 직원 텍스트 데이터 목록
+    출력: 각 직원별 감정 분석 결과
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'employees' not in data:
+            return jsonify({"error": "직원 데이터 목록이 필요합니다."}), 400
+        
+        employees = data['employees']
+        
+        if not keyword_analyzer:
+            return jsonify({"error": "키워드 분석기가 초기화되지 않았습니다."}), 500
+        
+        logger.info(f"배치 감정 분석 시작: {len(employees)}명")
+        
+        # 텍스트 데이터 추출 및 분석
+        results = []
+        for i, emp in enumerate(employees):
+            try:
+                emp_id = emp.get('employee_id')
+                logger.debug(f"직원 {emp_id} 감정 분석 시작 ({i+1}/{len(employees)})")
+                text_data = emp.get('text_data', {})
+                
+                # 텍스트 결합 (상세 디버깅 추가)
+                self_review = text_data.get('self_review', '')
+                peer_feedback = text_data.get('peer_feedback', '')
+                weekly_survey = text_data.get('weekly_survey', '')
+                
+                logger.info(f"🔍 직원 {emp_id} 텍스트 데이터 상세:")
+                logger.info(f"  - self_review 길이: {len(str(self_review))}자")
+                logger.info(f"  - peer_feedback 길이: {len(str(peer_feedback))}자") 
+                logger.info(f"  - weekly_survey 길이: {len(str(weekly_survey))}자")
+                logger.info(f"  - self_review 내용 (처음 100자): '{str(self_review)[:100]}...'")
+                logger.info(f"  - peer_feedback 내용 (처음 100자): '{str(peer_feedback)[:100]}...'")
+                logger.info(f"  - weekly_survey 내용 (처음 100자): '{str(weekly_survey)[:100]}...'")
+                
+                combined_text = ' '.join([
+                    str(self_review),
+                    str(peer_feedback), 
+                    str(weekly_survey)
+                ]).strip()
+                
+                logger.info(f"📝 직원 {emp_id} 결합된 텍스트 길이: {len(combined_text)}자")
+                logger.info(f"📝 결합된 텍스트 내용 (처음 200자): '{combined_text[:200]}...'")
+                
+                if not combined_text or combined_text == 'nannannan':
+                    logger.warning(f"⚠️ 직원 {emp_id}의 텍스트가 비어있거나 모두 NaN입니다!")
+                
+                if not combined_text:
+                    # 텍스트가 없는 경우 기본값
+                    results.append({
+                        "employee_id": str(emp_id),
+                        "sentio_score": 0.5,
+                        "risk_level": "MEDIUM",
+                        "psychological_risk_score": 0.5,
+                        "job_demands_score": 0.5,
+                        "job_resources_deficiency_score": 0.5,
+                        "sentiment_score": 0.0,
+                        "attrition_prediction": 0
+                    })
+                    continue
+                
+                # 키워드 분석 수행 - 올바른 메서드 사용
+                analysis_result = keyword_analyzer.analyze_employee_text(emp_id, 
+                    text_data.get('self_review', ''),
+                    text_data.get('peer_feedback', ''), 
+                    text_data.get('weekly_survey', ''))
+                
+                # 강화된 디버깅: 분석 결과 상세 확인
+                logger.info(f"🔍 직원 {emp_id} 분석 결과:")
+                logger.info(f"  - 결과 타입: {type(analysis_result)}")
+                logger.info(f"  - 텍스트 길이: {len(combined_text)}자")
+                
+                if isinstance(analysis_result, dict):
+                    logger.info(f"  - psychological_risk_score: {analysis_result.get('psychological_risk_score', 'Missing')}")
+                    logger.info(f"  - risk_level: {analysis_result.get('risk_level', 'Missing')}")
+                    logger.info(f"  - detected_keywords: {analysis_result.get('detected_keywords', [])}")
+                    logger.info(f"  - job_demands_matches: {analysis_result.get('job_demands_matches', [])}")
+                    logger.info(f"  - job_resources_deficiency_matches: {analysis_result.get('job_resources_deficiency_matches', [])}")
+                    
+                    # JD-R 지표 상세 확인
+                    jdr_indicators = analysis_result.get('jd_r_indicators', {})
+                    if isinstance(jdr_indicators, dict):
+                        logger.info(f"  - job_demands_score: {jdr_indicators.get('job_demands_score', 'Missing')}")
+                        logger.info(f"  - job_resources_deficiency_score: {jdr_indicators.get('job_resources_deficiency_score', 'Missing')}")
+                else:
+                    logger.error(f"❌ 직원 {emp_id} 분석 결과가 딕셔너리가 아닙니다!")
+                
+                # JD-R 지표에서 점수 추출 (중첩된 구조 처리)
+                jdr_indicators = analysis_result.get('jd_r_indicators', {})
+                job_demands_score = jdr_indicators.get('job_demands_score', 0.5) if isinstance(jdr_indicators, dict) else 0.5
+                job_resources_deficiency_score = jdr_indicators.get('job_resources_deficiency_score', 0.5) if isinstance(jdr_indicators, dict) else 0.5
+                
+                # 프론트엔드가 기대하는 형식으로 변환
+                result = {
+                    "employee_id": str(emp_id),
+                    "sentio_score": round(analysis_result.get('psychological_risk_score', 0.5), 3),
+                    "risk_level": analysis_result.get('risk_level', 'MEDIUM').upper(),
+                    "psychological_risk_score": round(analysis_result.get('psychological_risk_score', 0.5), 3),
+                    "job_demands_score": round(job_demands_score, 3),
+                    "job_resources_deficiency_score": round(job_resources_deficiency_score, 3),
+                    "sentiment_score": round(analysis_result.get('sentiment_score', 0.0), 3),
+                    "attrition_prediction": analysis_result.get('attrition_prediction', 0)
+                }
+                results.append(result)
+                logger.debug(f"직원 {emp_id} 분석 완료: sentio_score={result['sentio_score']}")
+                
+            except Exception as e:
+                logger.warning(f"직원 {emp.get('employee_id')} 분석 실패: {str(e)}")
+                # 실패 시 기본값 반환
+                results.append({
+                    "employee_id": str(emp.get('employee_id')),
+                    "sentio_score": 0.5,
+                    "risk_level": "MEDIUM",
+                    "psychological_risk_score": 0.5,
+                    "job_demands_score": 0.5,
+                    "job_resources_deficiency_score": 0.5,
+                    "sentiment_score": 0.0,
+                    "attrition_prediction": 0
+                })
+        
+        logger.info(f"배치 감정 분석 완료: {len(results)}명")
+        
+        return jsonify({
+            "status": "success",
+            "total_analyzed": len(results),
+            "analysis_results": results,
+            "analysis_timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"배치 감정 분석 오류: {str(e)}")
+        return jsonify({"error": f"분석 중 오류가 발생했습니다: {str(e)}"}), 500
+
 # ============================================================================
 # 오류 처리
 # ============================================================================

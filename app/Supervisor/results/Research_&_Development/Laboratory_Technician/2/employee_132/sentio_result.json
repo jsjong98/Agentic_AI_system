@@ -1,0 +1,7 @@
+{
+  "employee_id": "132",
+  "risk_score": 0.03,
+  "predicted_attrition": 0,
+  "confidence": 0.8,
+  "actual_attrition": 0
+}

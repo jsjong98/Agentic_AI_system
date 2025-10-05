@@ -1,0 +1,210 @@
+{
+  "department": "Human Resources",
+  "job_role": "Human Resources",
+  "job_level": "1",
+  "created_at": "2025-10-02T14:48:59.353903",
+  "employees": {
+    "133": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:00.835488",
+      "folder_path": "Human_Resources/1/employee_133"
+    },
+    "177": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:00.924010",
+      "folder_path": "Human_Resources/1/employee_177"
+    },
+    "321": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.035600",
+      "folder_path": "Human_Resources/1/employee_321"
+    },
+    "470": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.151589",
+      "folder_path": "Human_Resources/1/employee_470"
+    },
+    "566": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.271107",
+      "folder_path": "Human_Resources/1/employee_566"
+    },
+    "608": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.388309",
+      "folder_path": "Human_Resources/1/employee_608"
+    },
+    "829": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.519401",
+      "folder_path": "Human_Resources/1/employee_829"
+    },
+    "847": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.652918",
+      "folder_path": "Human_Resources/1/employee_847"
+    },
+    "869": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.792464",
+      "folder_path": "Human_Resources/1/employee_869"
+    },
+    "878": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:01.940780",
+      "folder_path": "Human_Resources/1/employee_878"
+    },
+    "910": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:02.070387",
+      "folder_path": "Human_Resources/1/employee_910"
+    },
+    "1049": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:02.201913",
+      "folder_path": "Human_Resources/1/employee_1049"
+    },
+    "1152": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:02.318940",
+      "folder_path": "Human_Resources/1/employee_1152"
+    },
+    "1164": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:02.438457",
+      "folder_path": "Human_Resources/1/employee_1164"
+    },
+    "1207": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:02.566540",
+      "folder_path": "Human_Resources/1/employee_1207"
+    },
+    "1314": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:02.691065",
+      "folder_path": "Human_Resources/1/employee_1314"
+    },
+    "1461": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:02.841940",
+      "folder_path": "Human_Resources/1/employee_1461"
+    },
+    "1467": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.010431",
+      "folder_path": "Human_Resources/1/employee_1467"
+    },
+    "1499": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.158685",
+      "folder_path": "Human_Resources/1/employee_1499"
+    },
+    "1683": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.293208",
+      "folder_path": "Human_Resources/1/employee_1683"
+    },
+    "1714": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.435085",
+      "folder_path": "Human_Resources/1/employee_1714"
+    },
+    "1746": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.583606",
+      "folder_path": "Human_Resources/1/employee_1746"
+    },
+    "1747": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.720637",
+      "folder_path": "Human_Resources/1/employee_1747"
+    },
+    "1778": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.849835",
+      "folder_path": "Human_Resources/1/employee_1778"
+    },
+    "1805": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:03.976355",
+      "folder_path": "Human_Resources/1/employee_1805"
+    },
+    "1818": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:04.103877",
+      "folder_path": "Human_Resources/1/employee_1818"
+    },
+    "1842": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:04.231192",
+      "folder_path": "Human_Resources/1/employee_1842"
+    },
+    "1844": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:04.360722",
+      "folder_path": "Human_Resources/1/employee_1844"
+    },
+    "1858": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:04.496792",
+      "folder_path": "Human_Resources/1/employee_1858"
+    },
+    "1865": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:04.650933",
+      "folder_path": "Human_Resources/1/employee_1865"
+    },
+    "1944": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:04.783260",
+      "folder_path": "Human_Resources/1/employee_1944"
+    },
+    "1972": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:04.916298",
+      "folder_path": "Human_Resources/1/employee_1972"
+    },
+    "1987": {
+      "job_role": "Human Resources",
+      "job_level": "1",
+      "last_updated": "2025-10-04T12:09:05.042536",
+      "folder_path": "Human_Resources/1/employee_1987"
+    }
+  },
+  "statistics": {
+    "total_employees": 33
+  },
+  "last_updated": "2025-10-04T12:09:05.042536"
+}

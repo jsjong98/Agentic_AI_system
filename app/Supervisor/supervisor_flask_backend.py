@@ -2700,8 +2700,14 @@ def batch_export_csv(batch_id):
                         row[f'{worker}_score'] = worker_result['risk_score']
                     elif worker == 'chronos' and 'prediction_score' in worker_result:
                         row[f'{worker}_score'] = worker_result['prediction_score']
-                    elif worker == 'sentio' and 'risk_score' in worker_result:
-                        row[f'{worker}_score'] = worker_result['risk_score']
+                    elif worker == 'sentio':
+                        # psychological_risk_score를 우선적으로 사용 (JD-R 모델 기반)
+                        if 'psychological_risk_score' in worker_result:
+                            row[f'{worker}_score'] = worker_result['psychological_risk_score']
+                        elif 'risk_score' in worker_result:
+                            row[f'{worker}_score'] = worker_result['risk_score']
+                        elif 'sentiment_score' in worker_result:
+                            row[f'{worker}_score'] = 1.0 - worker_result['sentiment_score']
                     elif worker == 'agora' and 'overall_risk_score' in worker_result:
                         row[f'{worker}_score'] = worker_result['overall_risk_score']
             
@@ -3019,6 +3025,11 @@ def save_hierarchical_batch_results():
                 for job_level, employees in job_levels.items():
                     for employee_id, employee_result in employees.items():
                         try:
+                            # employee_result가 None이거나 dict가 아닌 경우 처리
+                            if not employee_result or not isinstance(employee_result, dict):
+                                logger.warning(f"직원 {employee_id}의 결과 데이터가 유효하지 않음: {type(employee_result)}")
+                                continue
+                            
                             # hierarchical_result_manager를 통해 저장
                             employee_data = employee_result.get('employee_data', {})
                             agent_results = employee_result.get('agent_results', {})
@@ -3153,8 +3164,14 @@ def extract_scores_from_worker_results(worker_results):
     # Sentio 점수 추출
     if 'sentio' in worker_results and 'error' not in worker_results['sentio']:
         sentio_data = worker_results['sentio']
-        if 'risk_score' in sentio_data:
+        # psychological_risk_score를 우선적으로 사용 (JD-R 모델 기반)
+        if 'psychological_risk_score' in sentio_data:
+            scores['sentio_score'] = sentio_data['psychological_risk_score']
+        elif 'risk_score' in sentio_data:
             scores['sentio_score'] = sentio_data['risk_score']
+        # sentiment_score도 대안으로 사용 가능
+        elif 'sentiment_score' in sentio_data:
+            scores['sentio_score'] = 1.0 - sentio_data['sentiment_score']  # 감정 점수를 위험 점수로 변환
     
     # Agora 점수 추출
     if 'agora' in worker_results and 'error' not in worker_results['agora']:

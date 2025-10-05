@@ -47,7 +47,7 @@ class AgoraMarketAnalyzer:
         """개별 직원 시장 분석"""
         
         try:
-            employee_id = employee_data.get('EmployeeNumber', 'unknown')
+            employee_id = employee_data.get('employee_id') or employee_data.get('EmployeeNumber', 'unknown')
             job_role = employee_data.get('JobRole', '')
             department = employee_data.get('Department', '')
             
@@ -277,7 +277,10 @@ class AgoraMarketAnalyzer:
             # 순차 처리 (API 제한 고려)
             for i, employee_data in enumerate(employees_data):
                 try:
+                    emp_id = employee_data.get('employee_id') or employee_data.get('EmployeeNumber', 'unknown')
+                    logger.debug(f"직원 {emp_id} 시장 분석 시작 ({i+1}/{len(employees_data)})")
                     result = self.analyze_employee_market(employee_data, include_llm)
+                    logger.debug(f"직원 {emp_id} 분석 완료: agora_score={result.get('agora_score', 'N/A')}")
                     results.append(result)
                     
                     # 진행 상황 로깅
@@ -285,7 +288,7 @@ class AgoraMarketAnalyzer:
                         logger.info(f"배치 분석 진행: {i + 1}/{len(employees_data)} 완료")
                     
                 except Exception as e:
-                    employee_id = employee_data.get('EmployeeNumber', 'unknown')
+                    employee_id = employee_data.get('employee_id') or employee_data.get('EmployeeNumber', 'unknown')
                     logger.error(f"직원 {employee_id} 분석 실패: {e}")
                     
                     # 실패한 직원에 대한 기본 결과 생성

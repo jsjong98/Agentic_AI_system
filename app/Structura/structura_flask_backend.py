@@ -449,17 +449,20 @@ class StructuraHRPredictor:
         # SHAP 설정
         if SHAP_AVAILABLE:
             try:
-                logger.info("SHAP 설명기 설정 중...")
+                logger.info("🔍 SHAP 설명기 설정 중...")
                 self.shap_explainer = shap.TreeExplainer(self.model)
-                logger.info("SHAP 설정 완료")
+                logger.info("✅ SHAP 설정 완료")
             except Exception as e:
-                logger.warning(f"SHAP 설정 실패: {str(e)}")
+                logger.error(f"❌ SHAP 설정 실패: {str(e)}")
                 self.shap_explainer = None
+        else:
+            logger.warning("⚠️ SHAP 라이브러리가 설치되지 않았습니다")
+            self.shap_explainer = None
         
         # LIME 설정
         if LIME_AVAILABLE:
             try:
-                logger.info("LIME 설명기 설정 중...")
+                logger.info("🔍 LIME 설명기 설정 중...")
                 # 샘플링된 훈련 데이터 (LIME 배경용)
                 sample_size = min(1000, len(X_train))
                 sample_indices = np.random.choice(len(X_train), sample_size, replace=False)
@@ -478,10 +481,19 @@ class StructuraHRPredictor:
                     mode='classification',
                     random_state=self.random_state
                 )
-                logger.info("LIME 설정 완료")
+                logger.info("✅ LIME 설정 완료")
             except Exception as e:
-                logger.warning(f"LIME 설정 실패: {str(e)}")
+                logger.error(f"❌ LIME 설정 실패: {str(e)}")
                 self.lime_explainer = None
+        else:
+            logger.warning("⚠️ LIME 라이브러리가 설치되지 않았습니다")
+            self.lime_explainer = None
+        
+        # XAI 설정 상태 로깅
+        logger.info(f"🔍 XAI 설정 상태:")
+        logger.info(f"  - SHAP explainer: {'✅ 활성화' if self.shap_explainer else '❌ 비활성화'}")
+        logger.info(f"  - LIME explainer: {'✅ 활성화' if self.lime_explainer else '❌ 비활성화'}")
+        logger.info(f"  - Feature columns: {len(self.feature_columns)}개")
     
     def _get_default_params(self) -> Dict:
         """기본 하이퍼파라미터 (노트북에서 최적화된 값)"""
@@ -546,50 +558,64 @@ class StructuraHRPredictor:
         )
 
     def explain_prediction(self, employee_data: Dict) -> ExplainabilityResult:
-        """예측 설명 (xAI)"""
+        """예측 설명 (xAI) - 실제 XAI 데이터 생성"""
         # 딕셔너리를 DataFrame으로 변환
         df = pd.DataFrame([employee_data])
         
         # 전처리 적용 (개별 직원용)
-        df = self._preprocess_single_employee(df)
+        df_processed = self._preprocess_single_employee(df)
         
-        # 피처 중요도 (모델 기본)
+        # 피처 중요도 (모델 기본) - 실제 데이터만 사용
         feature_importance = {}
-        if self.model and self.feature_columns:
+        if self.model and hasattr(self.model, 'feature_importances_') and self.feature_columns:
             for feature, importance in zip(self.feature_columns, self.model.feature_importances_):
                 feature_importance[feature] = float(importance)
+            logger.info(f"실제 Feature Importance 계산 완료: {len(feature_importance)}개 피처")
+        else:
+            logger.warning("모델이 훈련되지 않았거나 피처 중요도를 계산할 수 없습니다")
         
-        # SHAP 값
-        shap_values = None
-        if self.shap_explainer:
+        # SHAP 값 - 실제 계산만 수행
+        shap_values = {}
+        if self.shap_explainer and len(df_processed) > 0:
             try:
-                shap_vals = self.shap_explainer.shap_values(df[self.feature_columns])
-                shap_values = {}
+                # 실제 SHAP 계산
+                shap_vals = self.shap_explainer.shap_values(df_processed[self.feature_columns])
+                if isinstance(shap_vals, list):
+                    shap_vals = shap_vals[1] if len(shap_vals) > 1 else shap_vals[0]
+                
                 for feature, shap_val in zip(self.feature_columns, shap_vals[0]):
                     shap_values[feature] = float(shap_val)
+                logger.info(f"실제 SHAP 값 계산 완료: {len(shap_values)}개 피처")
             except Exception as e:
                 logger.warning(f"SHAP 분석 실패: {str(e)}")
+                shap_values = {}
+        else:
+            logger.warning("SHAP explainer가 초기화되지 않았습니다")
         
-        # LIME 설명
-        lime_explanation = None
-        if self.lime_explainer:
+        # LIME 설명 - 실제 계산만 수행
+        lime_explanation = {}
+        if self.lime_explainer and len(df_processed) > 0:
             try:
                 def predict_fn(x):
                     return self.model.predict_proba(pd.DataFrame(x, columns=self.feature_columns))
                 
                 explanation = self.lime_explainer.explain_instance(
-                    df[self.feature_columns].values[0],
+                    df_processed[self.feature_columns].values[0],
                     predict_fn,
-                    num_features=10
+                    num_features=8
                 )
                 
                 lime_explanation = {
-                    'features': [item[0] for item in explanation.as_list()],
-                    'values': [item[1] for item in explanation.as_list()],
-                    'intercept': float(explanation.intercept[1])
+                    'features': [str(item[0]) for item in explanation.as_list()],
+                    'values': [float(item[1]) for item in explanation.as_list()],
+                    'intercept': float(explanation.intercept[1]) if hasattr(explanation, 'intercept') else 0.0
                 }
+                logger.info(f"실제 LIME 설명 생성 완료: {len(lime_explanation['features'])}개 피처")
             except Exception as e:
                 logger.warning(f"LIME 분석 실패: {str(e)}")
+                lime_explanation = {}
+        else:
+            logger.warning("LIME explainer가 초기화되지 않았습니다")
         
         # 상위 위험/보호 요인 추출
         importance_items = list(feature_importance.items()) if feature_importance else []
@@ -601,17 +627,17 @@ class StructuraHRPredictor:
             shap_items.sort(key=lambda x: abs(x[1]), reverse=True)
             
             top_risk_factors = [
-                {"feature": feat, "impact": val, "type": "risk"}
-                for feat, val in shap_items[:5] if val > 0
-            ]
+                {"feature": feat, "impact": float(val), "type": "risk"}
+                for feat, val in shap_items if val > 0
+            ][:5]
             top_protective_factors = [
-                {"feature": feat, "impact": abs(val), "type": "protective"}
-                for feat, val in shap_items[:5] if val < 0
-            ]
+                {"feature": feat, "impact": float(abs(val)), "type": "protective"}
+                for feat, val in shap_items if val < 0
+            ][:5]
         else:
             # 피처 중요도 기반
             top_risk_factors = [
-                {"feature": feat, "impact": val, "type": "risk"}
+                {"feature": feat, "impact": float(val), "type": "risk"}
                 for feat, val in importance_items[:5]
             ]
             top_protective_factors = []
@@ -795,7 +821,7 @@ class StructuraHRPredictor:
             raise
 
     def predict_single_employee(self, employee_data: Dict, employee_number: str) -> Dict:
-        """단일 직원 예측 (마스터 서버 호환)"""
+        """단일 직원 예측 (마스터 서버 호환) - 실제 XAI 데이터 포함"""
         try:
             logger.info(f"🔍 직원 {employee_number} 예측 시작...")
             
@@ -805,7 +831,13 @@ class StructuraHRPredictor:
             
             logger.info(f"📊 직원 {employee_number} 예측 결과: 확률={prediction_result.attrition_probability:.3f}, 위험도={prediction_result.risk_category}")
             
-            # 통합 결과 구성
+            # XAI 데이터 로깅
+            logger.info(f"🔍 XAI 데이터 생성 결과:")
+            logger.info(f"  - Feature Importance: {len(explanation_result.feature_importance)}개 피처")
+            logger.info(f"  - SHAP Values: {len(explanation_result.shap_values) if explanation_result.shap_values else 0}개 피처")
+            logger.info(f"  - LIME Explanation: {'있음' if explanation_result.lime_explanation else '없음'}")
+            
+            # 통합 결과 구성 - XAI 데이터를 최상위 레벨에도 포함
             result = {
                 'employee_number': employee_number,
                 'attrition_probability': prediction_result.attrition_probability,
@@ -813,9 +845,27 @@ class StructuraHRPredictor:
                 'risk_category': prediction_result.risk_category,
                 'confidence_score': prediction_result.confidence_score,
                 'prediction_timestamp': prediction_result.prediction_timestamp,
+                
+                # XAI 데이터를 최상위 레벨에 포함 (기존 호환성)
+                'feature_importance': explanation_result.feature_importance or {},
+                'shap_values': explanation_result.shap_values or {},
+                'lime_explanation': explanation_result.lime_explanation or {},
+                'model_interpretation': {
+                    'top_risk_factors': explanation_result.top_risk_factors,
+                    'top_protective_factors': explanation_result.top_protective_factors
+                },
+                'xai_explanation': {
+                    'feature_importance': explanation_result.feature_importance or {},
+                    'shap_values': explanation_result.shap_values or {},
+                    'lime_explanation': explanation_result.lime_explanation or {},
+                    'interpretation_method': 'XGBoost + SHAP + LIME'
+                },
+                
+                # explanation 구조 (새로운 구조)
                 'explanation': {
-                    'feature_importance': explanation_result.feature_importance,
-                    'shap_values': explanation_result.shap_values,
+                    'feature_importance': explanation_result.feature_importance or {},
+                    'shap_values': explanation_result.shap_values or {},
+                    'lime_explanation': explanation_result.lime_explanation or {},
                     'top_risk_factors': explanation_result.top_risk_factors,
                     'top_protective_factors': explanation_result.top_protective_factors,
                     'individual_explanation': {

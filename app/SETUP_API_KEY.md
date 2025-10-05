@@ -23,9 +23,9 @@ touch .env
 OPENAI_API_KEY=your-actual-api-key-here
 
 # Neo4j 설정 (이미 설정됨)
-NEO4J_URI=bolt://44.212.67.74:7687
+NEO4J_URI=bolt://13.220.63.109:7687
 NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=legs-augmentations-cradle
+NEO4J_PASSWORD=coughs-laboratories-knife
 
 # Flask 설정
 FLASK_ENV=development
