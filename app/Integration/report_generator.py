@@ -8,6 +8,7 @@ import numpy as np
 import json
 import time
 import logging
+import os
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
@@ -648,6 +649,307 @@ class ReportGenerator:
             
         except Exception as e:
             return {'error': f'파일 저장 실패: {str(e)}'}
+    
+    def generate_comprehensive_report(self, employee_id, comprehensive_report, agent_data, 
+                                     employee_info, analysis_summary, visualization_files):
+        """저장된 파일 데이터로부터 종합 보고서 생성 (XAI, 원인 분석, LLM 인사이트 포함)"""
+        try:
+            import os
+            import openai
+            
+            # 1. 기본 정보 추출
+            overall_assessment = comprehensive_report.get('comprehensive_assessment', {})
+            risk_score = overall_assessment.get('overall_risk_score', 0)
+            risk_level = overall_assessment.get('overall_risk_level', 'UNKNOWN')
+            risk_indicator = overall_assessment.get('risk_indicator', '❓')
+            confidence = overall_assessment.get('confidence_level', 'LOW')
+            
+            # 위험도 레벨 한글 변환
+            risk_level_kr = {
+                'HIGH': '🔴 고위험군',
+                'MEDIUM': '🟡 주의군',
+                'LOW': '🟢 안전군',
+                'UNKNOWN': '❓ 미분류'
+            }.get(risk_level, '❓ 미분류')
+            
+            # 직원 기본 정보
+            emp_data = employee_info.get('employee_data', {})
+            department = emp_data.get('Department', '미분류')
+            job_role = emp_data.get('JobRole', '미분류')
+            age = emp_data.get('Age', 'N/A')
+            years_at_company = emp_data.get('YearsAtCompany', 'N/A')
+            job_satisfaction = emp_data.get('JobSatisfaction', 'N/A')
+            work_life_balance = emp_data.get('WorkLifeBalance', 'N/A')
+            
+            # 2. 에이전트별 점수 추출 (개선된 로직)
+            agent_scores = self._extract_agent_scores(comprehensive_report, agent_data)
+            
+            # 3. XAI 분석
+            xai_analysis = self._analyze_xai(agent_data, employee_id)
+            
+            # 4. 근본 원인 분석
+            root_cause = self._analyze_root_cause(agent_data, employee_info, department, job_role)
+            
+            # 5. GPT-5-Nano LLM 인사이트 생성
+            llm_insights = self._generate_gpt5_nano_insights(
+                employee_id, department, job_role, age, years_at_company,
+                job_satisfaction, work_life_balance, agent_scores, 
+                risk_level, risk_score, xai_analysis, root_cause
+            )
+            
+            # 6. 보고서 생성
+            rule_based_interpretation = comprehensive_report.get('rule_based_interpretation', '')
+            
+            report = self._format_comprehensive_report(
+                employee_id=employee_id,
+                department=department,
+                job_role=job_role,
+                age=age,
+                years_at_company=years_at_company,
+                job_satisfaction=job_satisfaction,
+                work_life_balance=work_life_balance,
+                risk_indicator=risk_indicator,
+                risk_level_kr=risk_level_kr,
+                risk_score=risk_score,
+                confidence=confidence,
+                agent_scores=agent_scores,
+                rule_based_interpretation=rule_based_interpretation,
+                xai_analysis=xai_analysis,
+                root_cause=root_cause,
+                llm_insights=llm_insights,
+                visualization_files=visualization_files,
+                comprehensive_report=comprehensive_report
+            )
+            
+            return report
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"종합 보고서 생성 실패: {str(e)}")
+            logger.error(traceback.format_exc())
+            return f"보고서 생성 중 오류가 발생했습니다: {str(e)}"
+    
+    def _extract_agent_scores(self, comprehensive_report, agent_data):
+        """에이전트별 점수 추출"""
+        worker_contributions = comprehensive_report.get('worker_contributions', {})
+        scores = {}
+        
+        # Structura
+        if 'structura' in worker_contributions:
+            scores['structura'] = worker_contributions['structura'].get('score', 0)
+        elif 'structura' in agent_data and 'prediction' in agent_data['structura']:
+            scores['structura'] = agent_data['structura']['prediction'].get('attrition_probability', 0)
+        else:
+            scores['structura'] = 0
+        
+        # Chronos
+        if 'chronos' in worker_contributions:
+            scores['chronos'] = worker_contributions['chronos'].get('score', 0)
+        elif 'chronos' in agent_data and 'prediction' in agent_data['chronos']:
+            scores['chronos'] = agent_data['chronos']['prediction'].get('risk_score', 0)
+        else:
+            scores['chronos'] = 0
+        
+        # Cognita
+        if 'cognita' in worker_contributions:
+            scores['cognita'] = worker_contributions['cognita'].get('score', 0)
+        elif 'cognita' in agent_data and 'risk_analysis' in agent_data['cognita']:
+            scores['cognita'] = agent_data['cognita']['risk_analysis'].get('overall_risk_score', 0)
+        else:
+            scores['cognita'] = 0
+        
+        # Sentio
+        if 'sentio' in worker_contributions:
+            scores['sentio'] = worker_contributions['sentio'].get('score', 0)
+        elif 'sentio' in agent_data:
+            sentio_data = agent_data['sentio']
+            scores['sentio'] = sentio_data.get('psychological_risk_score',
+                                             sentio_data.get('risk_score', 0))
+        else:
+            scores['sentio'] = 0
+        
+        # Agora
+        if 'agora' in worker_contributions:
+            scores['agora'] = worker_contributions['agora'].get('score', 0)
+        elif 'agora' in agent_data:
+            agora_data = agent_data['agora']
+            if 'market_analysis' in agora_data:
+                scores['agora'] = agora_data['market_analysis'].get('risk_score', 0)
+            else:
+                scores['agora'] = agora_data.get('agora_score', 0)
+        else:
+            scores['agora'] = 0
+        
+        return scores
+    
+    def _analyze_xai(self, agent_data, employee_id):
+        """XAI 분석 (Structura, Chronos)"""
+        xai_summary = ""
+        
+        # Structura XAI
+        if 'structura' in agent_data and 'explanation' in agent_data['structura']:
+            explanation = agent_data['structura']['explanation']
+            xai_summary += "📊 **Structura XAI 분석:**\n"
+            
+            if 'feature_importance' in explanation:
+                xai_summary += "  주요 영향 변수:\n"
+                for feat in explanation['feature_importance'][:5]:
+                    xai_summary += f"    - {feat.get('feature', 'N/A')}: {feat.get('importance', 0):.3f}\n"
+            
+            if 'individual_explanation' in explanation:
+                ind_exp = explanation['individual_explanation']
+                if 'top_risk_factors' in ind_exp:
+                    xai_summary += "  주요 위험 요인:\n"
+                    for factor in ind_exp['top_risk_factors'][:3]:
+                        xai_summary += f"    - {factor.get('factor', 'N/A')}\n"
+            
+            xai_summary += "\n"
+        
+        return xai_summary.strip() if xai_summary else "XAI 데이터가 저장되지 않았습니다."
+    
+    def _analyze_root_cause(self, agent_data, employee_info, department, job_role):
+        """근본 원인 분석 (Sentio, Agora, Cognita)"""
+        root_cause = ""
+        
+        # Sentio
+        if 'sentio' in agent_data:
+            sentio_data = agent_data['sentio']
+            root_cause += "🧠 **Sentio 심리·감정 분석:**\n"
+            if 'sentiment_analysis' in sentio_data:
+                sentiment = sentio_data['sentiment_analysis']
+                root_cause += f"  감정 상태: {sentiment.get('sentiment_label', 'N/A')}\n"
+            if 'jd_r_analysis' in sentio_data:
+                jdr = sentio_data['jd_r_analysis']
+                root_cause += f"  직무 요구/자원 균형: {jdr.get('balance_status', 'N/A')}\n"
+            root_cause += "\n"
+        
+        # Agora
+        if 'agora' in agent_data:
+            agora_data = agent_data['agora']
+            root_cause += "🌍 **Agora 시장 분석:**\n"
+            if 'market_analysis' in agora_data:
+                market = agora_data['market_analysis']
+                root_cause += f"  시장 압력: {market.get('market_pressure_index', 0):.3f}\n"
+                root_cause += f"  보상 격차: {market.get('compensation_gap', 0):.3f}\n"
+            root_cause += "\n"
+        
+        return root_cause.strip() if root_cause else "원인 분석 데이터가 부족합니다."
+    
+    def _generate_gpt5_nano_insights(self, employee_id, department, job_role, age, years_at_company,
+                                    job_satisfaction, work_life_balance, agent_scores, 
+                                    risk_level, risk_score, xai_analysis, root_cause):
+        """GPT-5-Nano를 사용한 LLM 인사이트 생성"""
+        try:
+            import os
+            import openai
+            
+            if not os.getenv('OPENAI_API_KEY'):
+                return ""
+            
+            client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            
+            prompt = f"""직원 {employee_id}의 퇴사 위험도 분석 결과입니다.
+
+**기본 정보:**
+- 부서: {department}, 직무: {job_role}
+- 나이: {age}세, 재직: {years_at_company}년
+- 만족도: {job_satisfaction}/4, 워라밸: {work_life_balance}/4
+
+**AI 에이전트 분석:**
+- Structura: {agent_scores.get('structura', 0):.1%}
+- Chronos: {agent_scores.get('chronos', 0):.1%}
+- Cognita: {agent_scores.get('cognita', 0):.1%}
+- Sentio: {agent_scores.get('sentio', 0):.1%}
+- Agora: {agent_scores.get('agora', 0):.1%}
+
+**XAI 분석:** {xai_analysis}
+**원인 분석:** {root_cause}
+
+위 정보를 바탕으로 다음을 제공해주세요:
+1. 주요 위험 요인 3가지와 구체적 설명
+2. 즉시 실행 가능한 개선 방안 3가지
+3. 장기적 관리 전략 2가지"""
+
+            response = client.responses.create(
+                model="gpt-5-nano-2025-08-07",
+                input=prompt,
+                reasoning={"effort": "medium"},
+                text={"verbosity": "medium"}
+            )
+            
+            return "\n\n🤖 LLM 기반 심층 분석 (GPT-5-Nano)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + response.output_text
+            
+        except Exception as e:
+            logger.error(f"LLM 인사이트 생성 실패: {e}")
+            return ""
+    
+    def _format_comprehensive_report(self, **kwargs):
+        """종합 보고서 포맷팅"""
+        return f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         📊 직원 퇴사 위험도 종합 분석 보고서
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 기본 정보
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• 직원 ID        : {kwargs['employee_id']}
+• 소속 부서      : {kwargs['department']}
+• 직무           : {kwargs['job_role']}
+• 나이           : {kwargs['age']}세
+• 재직 기간      : {kwargs['years_at_company']}년
+• 직무 만족도    : {kwargs['job_satisfaction']}/4
+• 워라밸         : {kwargs['work_life_balance']}/4
+
+🎯 종합 위험도 평가
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{kwargs['risk_indicator']} 위험도 등급  : {kwargs['risk_level_kr']}
+📊 종합 위험 점수 : {kwargs['risk_score']:.3f} / 1.0 ({kwargs['risk_score']*100:.1f}%)
+🎲 신뢰도 수준    : {kwargs['confidence']}
+
+📈 다중 에이전트 분석 결과
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏢 Structura: {kwargs['agent_scores']['structura']:.3f} ({kwargs['agent_scores']['structura']*100:.1f}%)
+⏰ Chronos: {kwargs['agent_scores']['chronos']:.3f} ({kwargs['agent_scores']['chronos']*100:.1f}%)
+🔗 Cognita: {kwargs['agent_scores']['cognita']:.3f} ({kwargs['agent_scores']['cognita']*100:.1f}%)
+🧠 Sentio: {kwargs['agent_scores']['sentio']:.3f} ({kwargs['agent_scores']['sentio']*100:.1f}%)
+🌍 Agora: {kwargs['agent_scores']['agora']:.3f} ({kwargs['agent_scores']['agora']*100:.1f}%)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 AI 분석 인사이트
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{kwargs['rule_based_interpretation']}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 XAI 설명 가능한 AI 분석
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{kwargs['xai_analysis']}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 근본 원인 분석
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{kwargs['root_cause']}
+{kwargs['llm_insights']}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 시각화 자료
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{"• 총 " + str(len(kwargs['visualization_files'])) + "개의 시각화 차트" if kwargs['visualization_files'] else "• 시각화 자료 없음"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 보고서 생성: {kwargs['comprehensive_report'].get('analysis_timestamp', 'N/A')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    
+    def generate_llm_based_report(self, employee_id, department, risk_level, risk_score, 
+                                 agent_scores, agent_data, employee_info):
+        """LLM 기반 보고서 생성 (하위 호환성)"""
+        # ReportGenerator의 기존 메서드 활용
+        return self.generate_text_report(employee_id, use_llm=True)
     
     def generate_batch_reports(self, employee_ids: List[str], output_dir: str = "reports") -> Dict[str, Any]:
         """여러 직원의 레포트를 일괄 생성"""

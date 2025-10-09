@@ -1,0 +1,7 @@
+{
+  "prediction": {
+    "attrition_probability": 0.004092574119567871,
+    "confidence_score": 0.7,
+    "risk_category": "LOW"
+  }
+}

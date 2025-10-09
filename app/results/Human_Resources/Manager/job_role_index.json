@@ -1,0 +1,30 @@
+{
+  "department": "Human Resources",
+  "job_role": "Manager",
+  "created_at": "2025-10-06T18:24:22.745188",
+  "job_levels": {
+    "4": [
+      "148",
+      "1352",
+      "1408",
+      "1550"
+    ],
+    "5": [
+      "140",
+      "644",
+      "731",
+      "734",
+      "1338",
+      "1625",
+      "1973"
+    ]
+  },
+  "statistics": {
+    "total_employees": 11,
+    "job_level_count": {
+      "4": 4,
+      "5": 7
+    }
+  },
+  "last_updated": "2025-10-08T18:12:18.171164"
+}

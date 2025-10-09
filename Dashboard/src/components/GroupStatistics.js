@@ -7,19 +7,16 @@ import {
   Statistic,
   Table,
   Tag,
-  Alert,
   Space,
   Select,
   Typography,
   Progress,
-  Divider,
   Spin,
   message
 } from 'antd';
 import {
   TeamOutlined,
   BarChartOutlined,
-  TrophyOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
   WarningOutlined,
@@ -55,89 +52,136 @@ const GroupStatistics = ({
       loadStatistics();
       setDataSource('server');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalBatchResults]);
 
-  // 부서 인덱스에서 직원 정보 가져오기
-  const getEmployeeMetadata = async (employeeNumber) => {
+  // 배치 분석 결과에서 직원 정보 가져오기
+  const getEmployeeMetadata = (employeeNumber, employeeData) => {
     try {
-      // 부서별 인덱스 파일들을 확인
-      const departments = ['Human_Resources', 'Research_&_Development', 'Sales', 'Manufacturing', 'Information_Technology'];
+      // 1. 현재 직원 데이터에서 직접 추출
+      if (employeeData) {
+        // 직원 데이터에서 메타데이터 추출 (여러 경로 시도)
+        const department = employeeData.department || 
+                          employeeData.Department ||
+                          employeeData.analysis_result?.employee_data?.Department ||
+                          employeeData.employee_data?.Department ||
+                          'Unknown';
+        
+        const job_role = employeeData.job_role || 
+                        employeeData.JobRole ||
+                        employeeData.analysis_result?.employee_data?.JobRole ||
+                        employeeData.employee_data?.JobRole ||
+                        'Unknown';
+        
+        const position = employeeData.position || 
+                        employeeData.Position ||
+                        employeeData.job_level ||
+                        employeeData.JobLevel ||
+                        employeeData.analysis_result?.employee_data?.JobLevel ||
+                        employeeData.employee_data?.JobLevel ||
+                        'Unknown';
+        
+        return {
+          department,
+          job_role,
+          position
+        };
+      }
       
-      for (const dept of departments) {
-        try {
-          const response = await fetch(`/api/results/${dept}/department_index.json`);
-          if (response.ok) {
-            const deptIndex = await response.json();
-            if (deptIndex.employees && deptIndex.employees[employeeNumber]) {
-              return {
-                department: deptIndex.department,
-                job_role: deptIndex.employees[employeeNumber].job_role,
-                position: deptIndex.employees[employeeNumber].position
-              };
-            }
-          }
-        } catch (error) {
-          // 해당 부서에 직원이 없으면 다음 부서 확인
-          continue;
+      // 2. globalBatchResults에서 찾기 (fallback)
+      const results = Array.isArray(globalBatchResults) ? globalBatchResults : 
+                     (globalBatchResults && globalBatchResults.results) ? globalBatchResults.results : [];
+      
+      if (results && results.length > 0) {
+        const employee = results.find(emp => 
+          emp.employee_number === employeeNumber || 
+          emp.employee_id === employeeNumber ||
+          emp.id === employeeNumber ||
+          String(emp.employee_number) === String(employeeNumber)
+        );
+        
+        if (employee) {
+          const department = employee.department || 
+                            employee.Department ||
+                            employee.analysis_result?.employee_data?.Department ||
+                            'Unknown';
+          
+          const job_role = employee.job_role || 
+                          employee.JobRole ||
+                          employee.analysis_result?.employee_data?.JobRole ||
+                          'Unknown';
+          
+          const position = employee.position || 
+                          employee.Position ||
+                          employee.job_level ||
+                          employee.JobLevel ||
+                          employee.analysis_result?.employee_data?.JobLevel ||
+                          'Unknown';
+          
+          return {
+            department,
+            job_role,
+            position
+          };
         }
       }
-      return null;
+      
+      // 3. 찾지 못한 경우 기본값 반환 (경고 없이)
+      return {
+        department: 'Unknown',
+        job_role: 'Unknown',
+        position: 'Unknown'
+      };
     } catch (error) {
       console.error('직원 메타데이터 조회 실패:', error);
-      return null;
+      return {
+        department: 'Unknown',
+        job_role: 'Unknown',
+        position: 'Unknown'
+      };
     }
   };
 
   // 배치 분석 결과로부터 통계 생성
-  const generateStatisticsFromBatchResults = async () => {
-    if (!globalBatchResults || !globalBatchResults.results) return;
+  const generateStatisticsFromBatchResults = () => {
+    // globalBatchResults가 배열인지 객체인지 확인
+    const results = Array.isArray(globalBatchResults) ? globalBatchResults : 
+                   (globalBatchResults && globalBatchResults.results) ? globalBatchResults.results : [];
+    
+    if (!results || results.length === 0) {
+      console.warn('배치 분석 결과가 없습니다.');
+      return;
+    }
+    
+    console.log('📊 배치 결과 통계 생성 시작:', {
+      totalResults: results.length,
+      firstEmployee: results[0],
+      groupBy: groupBy
+    });
     
     setIsLoading(true);
     try {
-      const results = globalBatchResults.results;
       const groupedStats = {};
       
-      // 직원 메타데이터 캐시
-      const employeeMetadataCache = {};
-      
-      // 직원 메타데이터를 먼저 수집
-      for (const employee of results) {
-        const employeeNumber = employee.employee_number;
-        if (!employeeMetadataCache[employeeNumber]) {
-          const metadata = await getEmployeeMetadata(employeeNumber);
-          employeeMetadataCache[employeeNumber] = metadata;
-        }
-      }
-      
-      // 그룹화 로직 개선 (메타데이터 사용)
+      // 그룹화 로직 개선 (직접 메타데이터 추출)
       results.forEach(employee => {
         let groupKey = 'Unknown';
         const employeeNumber = employee.employee_number;
-        const metadata = employeeMetadataCache[employeeNumber];
+        
+        // 현재 직원 데이터에서 직접 메타데이터 추출
+        const metadata = getEmployeeMetadata(employeeNumber, employee);
         
         // 부서별 그룹화
         if (groupBy === 'department') {
-          groupKey = metadata?.department ||
-                    employee.analysis_result?.employee_data?.Department ||
-                    employee.department ||
-                    employee.Department ||
-                    'Unknown';
+          groupKey = metadata.department;
         }
         // 직무별 그룹화
         else if (groupBy === 'job_role') {
-          groupKey = metadata?.job_role ||
-                    employee.analysis_result?.employee_data?.JobRole ||
-                    employee.job_role ||
-                    employee.JobRole ||
-                    'Unknown';
+          groupKey = metadata.job_role;
         }
         // 직급별 그룹화 (position 사용)
         else if (groupBy === 'job_level') {
-          groupKey = metadata?.position ||
-                    employee.analysis_result?.employee_data?.JobLevel ||
-                    employee.job_level ||
-                    employee.JobLevel ||
-                    'Unknown';
+          groupKey = metadata.position;
           
           // JobLevel이 숫자인 경우 텍스트로 변환
           if (typeof groupKey === 'number') {
@@ -151,6 +195,8 @@ const GroupStatistics = ({
             groupKey = levelMap[groupKey] || `Level ${groupKey}`;
           }
         }
+        
+        console.log(`👤 직원 ${employeeNumber}: ${groupBy}=${groupKey}, 메타데이터:`, metadata);
         
         if (!groupedStats[groupKey]) {
           groupedStats[groupKey] = {
@@ -166,29 +212,68 @@ const GroupStatistics = ({
           
         groupedStats[groupKey].total_employees++;
         
-        // 위험도 점수 추출 (0-1 범위로 정규화)
-        const riskScore = employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score || 0;
+        // 위험도 점수 추출 - 여러 경로 시도
+        let riskScore = 0;
+        
+        // 1. 저장된 risk_score 사용 (배치 분석 결과)
+        if (employee.risk_score && employee.risk_score > 0) {
+          riskScore = employee.risk_score;
+        }
+        // 2. combined_analysis 경로 시도
+        else if (employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score) {
+          riskScore = employee.analysis_result.combined_analysis.integrated_assessment.overall_risk_score;
+        }
+        // 3. 개별 에이전트 점수들로 직접 계산
+        else if (employee.agent_results || employee.analysis_result) {
+          const agentResults = employee.agent_results || employee.analysis_result;
+          
+          // 각 에이전트 점수 추출
+          const structuraScore = agentResults.structura?.attrition_probability || 0;
+          const chronosScore = agentResults.chronos?.risk_score || 0;
+          const cognitaScore = agentResults.cognita?.overall_risk_score || 0;
+          const sentioScore = agentResults.sentio?.risk_score || 0;
+          const agoraScore = agentResults.agora?.market_risk_score || 0;
+          
+          // 간단한 평균으로 통합 (실제로는 가중평균을 사용해야 함)
+          const scores = [structuraScore, chronosScore, cognitaScore, sentioScore, agoraScore];
+          const validScores = scores.filter(score => score > 0);
+          
+          if (validScores.length > 0) {
+            riskScore = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+          }
+        }
+        
         groupedStats[groupKey].risk_scores.push(riskScore);
         
         console.log(`🔍 직원 ${employee.employee_number} 위험도:`, riskScore, `${groupBy}:`, groupKey);
         
-        // 위험도 분류 (0-1 범위 기준)
+        // 위험도 분류 (0-1 범위 기준) - 배치 분석과 동일한 임계값 사용
         if (riskScore >= 0.7) {
           groupedStats[groupKey].high_risk++;
-        } else if (riskScore >= 0.4) {
+        } else if (riskScore >= 0.3) {
           groupedStats[groupKey].medium_risk++;
         } else {
           groupedStats[groupKey].low_risk++;
         }
       });
       
-      // 평균 위험도 계산 (이미 0-1 범위이므로 100으로 나누지 않음)
+      // 평균 위험도 계산 및 최종 통계 정리
       Object.keys(groupedStats).forEach(groupKey => {
         const scores = groupedStats[groupKey].risk_scores;
         if (scores.length > 0) {
           groupedStats[groupKey].avg_risk_score = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+        } else {
+          groupedStats[groupKey].avg_risk_score = 0;
         }
-        console.log(`📊 ${groupKey} ${groupBy} 통계:`, groupedStats[groupKey]);
+        
+        console.log(`📊 ${groupKey} ${groupBy} 최종 통계:`, {
+          total: groupedStats[groupKey].total_employees,
+          high: groupedStats[groupKey].high_risk,
+          medium: groupedStats[groupKey].medium_risk,
+          low: groupedStats[groupKey].low_risk,
+          avgScore: groupedStats[groupKey].avg_risk_score
+        });
+        
         delete groupedStats[groupKey].risk_scores; // 임시 배열 제거
       });
       
@@ -207,6 +292,7 @@ const GroupStatistics = ({
       
     } catch (error) {
       console.error('배치 결과 통계 생성 실패:', error);
+      message.error('통계 생성 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -223,13 +309,22 @@ const GroupStatistics = ({
         params.append('department', newDepartment);
       }
 
-      const response = await fetch(`http://localhost:5006/api/statistics/group?${params}`);
+      // 먼저 저장된 파일에서 로드 시도 (Integration 서버 5007)
+      console.log('📁 저장된 파일에서 통계 로드 시도...');
+      let response = await fetch(`http://localhost:5007/api/statistics/load-from-files?${params}`);
       
       if (!response.ok) {
-        throw new Error('통계 로드 실패');
+        console.log('📁 저장된 파일 로드 실패, 기존 API 시도...');
+        // 저장된 파일 로드 실패 시 기존 API 사용 (Supervisor 5006)
+        response = await fetch(`http://localhost:5006/api/statistics/group?${params}`);
+        
+        if (!response.ok) {
+          throw new Error('통계 로드 실패');
+        }
       }
 
       const data = await response.json();
+      console.log('📊 통계 로드 성공:', data);
       setStatistics(data);
       
       // 부서 목록 업데이트 (부서별 통계일 때)
@@ -285,8 +380,8 @@ const GroupStatistics = ({
   };
 
   const getRiskLevelFromScore = (score) => {
-    if (score > 0.7) return 'HIGH';
-    if (score > 0.4) return 'MEDIUM';
+    if (score >= 0.7) return 'HIGH';
+    if (score >= 0.3) return 'MEDIUM';
     return 'LOW';
   };
 
@@ -417,10 +512,10 @@ const GroupStatistics = ({
                       </Tag>
                     </div>
                   )}
-                  {dataSource === 'server' && (
+                  {dataSource === 'server' && statistics && (
                     <div style={{ marginTop: '8px' }}>
-                      <Tag color="blue">
-                        서버 저장 데이터 기반
+                      <Tag color={statistics.data_source === 'saved_files' ? 'purple' : 'blue'}>
+                        {statistics.data_source === 'saved_files' ? '저장된 파일 기반' : '서버 저장 데이터 기반'}
                       </Tag>
                     </div>
                   )}
@@ -435,7 +530,7 @@ const GroupStatistics = ({
                   >
                     <Option value="department">부서별</Option>
                     <Option value="job_role">직무별</Option>
-                    <Option value="position">직급별</Option>
+                    <Option value="job_level">직급별</Option>
                   </Select>
                   
                   {groupBy === 'job_role' && (

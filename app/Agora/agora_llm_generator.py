@@ -32,7 +32,7 @@ class AgoraLLMGenerator:
             self.llm_available = False
             logger.warning("OpenAI API 키가 없습니다. 규칙 기반 해석만 사용됩니다.")
         
-        self.model = "gpt-4o-mini"  # 실제 사용 가능한 모델로 변경
+        self.model = "gpt-5-nano-2025-08-07"  # GPT-5-Nano 모델 사용
         
         # 직무별 시장 컨텍스트 (Agora.ipynb와 동일한 구조)
         self.market_context = {
@@ -74,24 +74,15 @@ class AgoraLLMGenerator:
             # LLM 프롬프트 구성
             prompt = self._build_market_analysis_prompt(analysis_result)
             
-            # 표준 OpenAI Chat Completions API 사용
-            response = self.client.chat.completions.create(
+            # GPT-5-Nano Responses API 사용
+            response = self.client.responses.create(
                 model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 시장 분석 및 외부 기회 평가 전문가입니다."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=1000,
-                temperature=0.7
+                input=prompt,
+                reasoning={"effort": "medium"},
+                text={"verbosity": "medium"}
             )
             
-            interpretation = response.choices[0].message.content.strip()
+            interpretation = response.output_text.strip()
             
             # API 호출 제한 고려
             time.sleep(0.1)

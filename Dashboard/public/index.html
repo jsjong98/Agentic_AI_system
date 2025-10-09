@@ -9,8 +9,8 @@
       name="description"
       content="Retain Sentinel 360"
     />
-    <!-- Chrome 확장 프로그램 충돌 방지 -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; object-src 'none';">
+    <!-- Chrome 확장 프로그램 호환성을 위한 완화된 CSP -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' chrome-extension:; object-src 'none'; connect-src 'self' http://localhost:* ws://localhost:* chrome-extension:;">
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Retain Sentinel 360</title>

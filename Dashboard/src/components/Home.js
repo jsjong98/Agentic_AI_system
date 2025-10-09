@@ -73,6 +73,81 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingIntervalRef = useRef(null);
+  const welcomeMessageShown = useRef(false); // 환영 메시지 표시 여부 추적
+
+  // Chrome 확장 프로그램 오류 필터링
+  useEffect(() => {
+    const originalError = console.error;
+    console.error = (...args) => {
+      // Chrome 확장 프로그램 관련 오류 필터링
+      const errorMessage = args.join(' ');
+      if (errorMessage.includes('chrome-extension://') || 
+          errorMessage.includes('ERR_FAILED') ||
+          errorMessage.includes('net::ERR_')) {
+        // Chrome 확장 프로그램 오류는 무시
+        return;
+      }
+      // 실제 애플리케이션 오류만 출력
+      originalError.apply(console, args);
+    };
+
+    return () => {
+      console.error = originalError;
+    };
+  }, []);
+
+  // 타이핑 효과 함수 (useEffect보다 먼저 정의)
+  const startTypingEffect = useCallback((messageId, fullText, onComplete, shouldScroll = true) => {
+    // 기존 타이핑 효과가 있다면 중단
+    if (typingIntervalRef.current) {
+      clearTimeout(typingIntervalRef.current);
+    }
+
+    setTypingMessageId(messageId);
+    setTypingText('');
+    
+    let currentIndex = 0;
+    const baseTypingSpeed = 25; // 기본 타이핑 속도 (밀리초)
+    
+    const typeNextChar = () => {
+      if (currentIndex < fullText.length) {
+        const nextChar = fullText[currentIndex];
+        setTypingText(fullText.substring(0, currentIndex + 1));
+        currentIndex++;
+        
+        // 자동 스크롤 (타이핑 중에도) - shouldScroll이 true이고 사용자가 메시지를 보낸 후에만
+        if (shouldScroll && userHasSentMessage && !isInitialLoad) {
+          setTimeout(() => {
+            chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, 10);
+        }
+        
+        // 문장 부호나 줄바꿈에서 약간 더 긴 지연
+        let delay = baseTypingSpeed;
+        if (nextChar === '.' || nextChar === '!' || nextChar === '?') {
+          delay = 300; // 문장 끝에서 더 긴 지연
+        } else if (nextChar === '\n') {
+          delay = 200; // 줄바꿈에서 중간 지연
+        } else if (nextChar === ',') {
+          delay = 150; // 쉼표에서 짧은 지연
+        }
+        
+        typingIntervalRef.current = setTimeout(typeNextChar, delay);
+      } else {
+        // 타이핑 완료
+        setTypingMessageId(null);
+        setTypingText('');
+        
+        // 최종 메시지를 채팅에 추가
+        if (onComplete) {
+          onComplete();
+        }
+      }
+    };
+    
+    // 타이핑 시작
+    typingIntervalRef.current = setTimeout(typeNextChar, baseTypingSpeed);
+  }, [userHasSentMessage, isInitialLoad]);
 
   // 초기 환영 메시지 및 예측 데이터 로드
   useEffect(() => {
@@ -82,6 +157,11 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
 
   // 히스토리 로드 후 환영 메시지 설정
   useEffect(() => {
+    // 환영 메시지가 이미 표시되었다면 실행하지 않음
+    if (welcomeMessageShown.current) {
+      return;
+    }
+
     const welcomeContent = predictionHistory.length > 0
       ? '안녕하세요! Retain Sentinel 360 AI 어시스턴트입니다. 저장된 분석 결과를 바탕으로 질문에 답변해드리겠습니다.'
       : '안녕하세요! Retain Sentinel 360 AI 어시스턴트입니다. 먼저 배치 분석을 실행하시면 분석 결과에 대해 질문하실 수 있습니다.';
@@ -93,6 +173,9 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       timestamp: new Date().toISOString()
     };
 
+    // 환영 메시지 표시 플래그 설정
+    welcomeMessageShown.current = true;
+
     // 환영 메시지도 타이핑 효과로 표시 (초기 로드 시에는 스크롤하지 않음)
     setTimeout(() => {
       startTypingEffect(welcomeMessage.id, welcomeContent, () => {
@@ -100,7 +183,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
         setIsInitialLoad(false); // 초기 로드 완료
       }, false); // 스크롤하지 않음
     }, 500); // 0.5초 후 타이핑 시작
-  }, [predictionHistory]); // startTypingEffect는 컴포넌트 내부 함수로 안정적이므로 dependency에서 제외
+  }, [predictionHistory, startTypingEffect]); // startTypingEffect 의존성 추가
 
   // 전역 배치 결과가 업데이트될 때 예측 히스토리도 업데이트
   useEffect(() => {
@@ -139,57 +222,6 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
-  // 타이핑 효과 함수
-  const startTypingEffect = useCallback((messageId, fullText, onComplete, shouldScroll = true) => {
-    // 기존 타이핑 효과가 있다면 중단
-    if (typingIntervalRef.current) {
-      clearTimeout(typingIntervalRef.current);
-    }
-
-    setTypingMessageId(messageId);
-    setTypingText('');
-    
-    let currentIndex = 0;
-    const baseTypingSpeed = 25; // 기본 타이핑 속도 (밀리초)
-    
-    const typeNextChar = () => {
-      if (currentIndex < fullText.length) {
-        const nextChar = fullText[currentIndex];
-        setTypingText(fullText.substring(0, currentIndex + 1));
-        currentIndex++;
-        
-        // 자동 스크롤 (타이핑 중에도) - shouldScroll이 true이고 사용자가 메시지를 보낸 후에만
-        if (shouldScroll && userHasSentMessage && !isInitialLoad) {
-          setTimeout(() => scrollToBottom(), 10);
-        }
-        
-        // 문장 부호나 줄바꿈에서 약간 더 긴 지연
-        let delay = baseTypingSpeed;
-        if (nextChar === '.' || nextChar === '!' || nextChar === '?') {
-          delay = 300; // 문장 끝에서 더 긴 지연
-        } else if (nextChar === '\n') {
-          delay = 200; // 줄바꿈에서 중간 지연
-        } else if (nextChar === ',') {
-          delay = 150; // 쉼표에서 짧은 지연
-        }
-        
-        typingIntervalRef.current = setTimeout(typeNextChar, delay);
-      } else {
-        // 타이핑 완료
-        setTypingMessageId(null);
-        setTypingText('');
-        
-        // 최종 메시지를 채팅에 추가
-        if (onComplete) {
-          onComplete();
-        }
-      }
-    };
-    
-    // 타이핑 시작
-    typingIntervalRef.current = setTimeout(typeNextChar, baseTypingSpeed);
-  }, [userHasSentMessage, isInitialLoad]);
 
   // 컴포넌트 언마운트 시 타이핑 효과 정리
   useEffect(() => {
@@ -297,7 +329,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       console.error('LLM API 호출 오류:', error);
       
       // API 호출 실패 시 fallback으로 기존 로직 사용
-      const fallbackResponse = generateBotResponse(messageToSend);
+      const fallbackResponse = await generateBotResponse(messageToSend);
       const fallbackContent = `⚠️ AI 서버 연결에 실패했습니다. 기본 응답을 제공합니다.\n\n${fallbackResponse.content}`;
       fallbackResponse.content = fallbackContent;
       
@@ -313,7 +345,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
   };
 
   // AI 응답 생성 (실제 데이터 기반)
-  const generateBotResponse = (userInput) => {
+  const generateBotResponse = async (userInput) => {
     const latestPrediction = predictionHistory.length > 0 ? predictionHistory[0] : null;
     
     // 기본 응답 템플릿
@@ -380,6 +412,84 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
         
         return response;
       },
+      '검색': async (searchQuery) => {
+        try {
+          const response = await fetch(`http://localhost:5006/api/search/employees?query=${encodeURIComponent(searchQuery)}&limit=10`);
+          const data = await response.json();
+          
+          if (data.success && data.employees.length > 0) {
+            let result = `🔍 "${searchQuery}" 검색 결과 (${data.total}명):\n\n`;
+            
+            data.employees.forEach((emp, index) => {
+              const riskIcon = emp.risk_level === 'HIGH' ? '🔴' : 
+                             emp.risk_level === 'MEDIUM' ? '🟡' : '🟢';
+              result += `${index + 1}. 직원 ${emp.employee_id}\n`;
+              result += `   • 부서: ${emp.department.replace('_', ' ')}\n`;
+              result += `   • 직무: ${emp.job_role}\n`;
+              result += `   • 직급: Level ${emp.job_level}\n`;
+              result += `   • 위험도: ${riskIcon} ${emp.risk_level}\n\n`;
+            });
+            
+            result += `💡 특정 직원의 상세 정보를 보려면 "직원 [번호] 상세"라고 입력하세요.`;
+            return result;
+          } else {
+            return `"${searchQuery}"에 대한 검색 결과가 없습니다.\n\n` +
+                   `💡 검색 팁:\n` +
+                   `• 직원 번호로 검색: "133", "1001"\n` +
+                   `• 부서로 검색: "Human Resources", "Sales"\n` +
+                   `• 위험도로 검색: "고위험", "HIGH"`;
+          }
+        } catch (error) {
+          return '검색 중 오류가 발생했습니다. 서버 연결을 확인해주세요.';
+        }
+      },
+      '직원': async (employeeId) => {
+        try {
+          const response = await fetch(`http://localhost:5006/api/employee/${employeeId}/details`);
+          const data = await response.json();
+          
+          if (data.success) {
+            const emp = data.employee_data;
+            let result = `👤 직원 ${employeeId} 상세 정보:\n\n`;
+            
+            if (emp.employee_info) {
+              const info = emp.employee_info;
+              result += `📋 기본 정보:\n`;
+              result += `• 부서: ${info.Department || 'N/A'}\n`;
+              result += `• 직무: ${info.JobRole || 'N/A'}\n`;
+              result += `• 직급: Level ${info.JobLevel || 'N/A'}\n`;
+              result += `• 나이: ${info.Age || 'N/A'}세\n`;
+              result += `• 근속년수: ${info.YearsAtCompany || 'N/A'}년\n\n`;
+            }
+            
+            if (emp.comprehensive_report) {
+              const report = emp.comprehensive_report;
+              const riskScore = report.risk_assessment?.overall_risk_score || 0;
+              const riskLevel = riskScore >= 0.7 ? '🔴 HIGH' : 
+                              riskScore >= 0.3 ? '🟡 MEDIUM' : '🟢 LOW';
+              
+              result += `⚠️ 위험도 평가:\n`;
+              result += `• 종합 위험도: ${riskLevel} (${(riskScore * 100).toFixed(1)}%)\n`;
+              result += `• 이직 확률: ${((report.prediction?.attrition_probability || 0) * 100).toFixed(1)}%\n\n`;
+            }
+            
+            if (emp.visualizations && emp.visualizations.length > 0) {
+              result += `📊 시각화 자료: ${emp.visualizations.length}개 파일\n`;
+              result += `• ${emp.visualizations.join(', ')}\n\n`;
+            }
+            
+            result += `📁 상세 분석 결과는 다음 경로에서 확인 가능:\n`;
+            result += `${emp.directory_path}`;
+            
+            return result;
+          } else {
+            return `직원 ${employeeId}를 찾을 수 없습니다.\n\n` +
+                   `💡 올바른 직원 번호를 입력했는지 확인해주세요.`;
+          }
+        } catch (error) {
+          return '직원 정보 조회 중 오류가 발생했습니다.';
+        }
+      },
       '부서': (input) => {
         if (!latestPrediction || !latestPrediction.departmentStats) {
           return '부서별 데이터가 없습니다.';
@@ -409,7 +519,9 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
           '⚠️ "위험 요인은?" - 고위험군 특징 분석\n' +
           '💡 "개선 방안은?" - 이직 위험 개선 방법\n' +
           '📊 "통계 정보는?" - 모델 성능 및 부서별 현황\n' +
-          '🏢 "IT 부서는?" - 특정 부서 상세 정보\n\n' +
+          '🏢 "IT 부서는?" - 특정 부서 상세 정보\n' +
+          '🔍 "검색 [키워드]" - 직원/부서 검색\n' +
+          '👤 "직원 [번호] 상세" - 특정 직원 정보\n\n' +
           '구체적인 질문일수록 더 정확한 답변을 드릴 수 있습니다!'
         : '안녕하세요! 현재 분석된 데이터가 없습니다.\n\n' +
           '🚀 먼저 "배치 분석" 메뉴에서 직원 데이터를 업로드하고 분석을 실행해주세요.\n\n' +
@@ -417,25 +529,48 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
           '• 최근 분석 결과\n' +
           '• 위험 요인 분석\n' +
           '• 개선 방안 제안\n' +
-          '• 부서별 통계\n\n' +
+          '• 부서별 통계\n' +
+          '• 직원 검색 및 상세 조회\n\n' +
           '지금 분석을 시작하시겠어요?'
     };
 
     // 키워드 매칭 및 응답 생성
     let responseContent = responses.default;
     
-    for (const [key, responseFunc] of Object.entries(responses)) {
-      if (key !== 'default' && userInput.includes(key)) {
-        responseContent = typeof responseFunc === 'function' ? responseFunc(userInput) : responseFunc;
-        break;
+    // 검색 명령어 처리
+    if (userInput.includes('검색')) {
+      const searchQuery = userInput.replace(/검색\s*/, '').trim();
+      if (searchQuery) {
+        responseContent = await responses['검색'](searchQuery);
+      } else {
+        responseContent = '검색할 키워드를 입력해주세요. 예: "검색 133" 또는 "검색 Human Resources"';
       }
     }
-    
-    // 부서명 체크 (특별 처리)
-    if (responseContent === responses.default && latestPrediction?.departmentStats) {
-      const deptNames = Object.keys(latestPrediction.departmentStats);
-      if (deptNames.some(dept => userInput.includes(dept))) {
-        responseContent = responses['부서'](userInput);
+    // 직원 상세 조회 처리
+    else if (userInput.includes('직원') && (userInput.includes('상세') || userInput.includes('정보'))) {
+      const employeeMatch = userInput.match(/직원\s*(\d+)/);
+      if (employeeMatch) {
+        const employeeId = employeeMatch[1];
+        responseContent = await responses['직원'](employeeId);
+      } else {
+        responseContent = '직원 번호를 입력해주세요. 예: "직원 133 상세"';
+      }
+    }
+    // 기존 키워드 매칭
+    else {
+      for (const [key, responseFunc] of Object.entries(responses)) {
+        if (key !== 'default' && key !== '검색' && key !== '직원' && userInput.includes(key)) {
+          responseContent = typeof responseFunc === 'function' ? responseFunc(userInput) : responseFunc;
+          break;
+        }
+      }
+      
+      // 부서명 체크 (특별 처리)
+      if (responseContent === responses.default && latestPrediction?.departmentStats) {
+        const deptNames = Object.keys(latestPrediction.departmentStats);
+        if (deptNames.some(dept => userInput.includes(dept))) {
+          responseContent = responses['부서'](userInput);
+        }
       }
     }
 

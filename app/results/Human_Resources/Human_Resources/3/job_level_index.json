@@ -1,0 +1,48 @@
+{
+  "department": "Human Resources",
+  "job_role": "Human Resources",
+  "job_level": "3",
+  "created_at": "2025-10-06T18:24:22.164605",
+  "employees": {
+    "590": {
+      "job_role": "Human Resources",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:12:13.619734",
+      "folder_path": "Human_Resources/3/employee_590"
+    },
+    "698": {
+      "job_role": "Human Resources",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:12:13.885305",
+      "folder_path": "Human_Resources/3/employee_698"
+    },
+    "1098": {
+      "job_role": "Human Resources",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:12:14.168174",
+      "folder_path": "Human_Resources/3/employee_1098"
+    },
+    "1419": {
+      "job_role": "Human Resources",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:12:14.456729",
+      "folder_path": "Human_Resources/3/employee_1419"
+    },
+    "1744": {
+      "job_role": "Human Resources",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:12:14.761716",
+      "folder_path": "Human_Resources/3/employee_1744"
+    },
+    "2040": {
+      "job_role": "Human Resources",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:12:15.077276",
+      "folder_path": "Human_Resources/3/employee_2040"
+    }
+  },
+  "statistics": {
+    "total_employees": 6
+  },
+  "last_updated": "2025-10-08T18:12:15.077276"
+}

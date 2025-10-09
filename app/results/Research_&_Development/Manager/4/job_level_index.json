@@ -1,0 +1,150 @@
+{
+  "department": "Research & Development",
+  "job_role": "Manager",
+  "job_level": "4",
+  "created_at": "2025-10-06T18:24:12.854158",
+  "employees": {
+    "84": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:43.650695",
+      "folder_path": "Manager/4/employee_84"
+    },
+    "199": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:44.018245",
+      "folder_path": "Manager/4/employee_199"
+    },
+    "264": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:44.376931",
+      "folder_path": "Manager/4/employee_264"
+    },
+    "429": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:44.719314",
+      "folder_path": "Manager/4/employee_429"
+    },
+    "505": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:45.079410",
+      "folder_path": "Manager/4/employee_505"
+    },
+    "546": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:45.464066",
+      "folder_path": "Manager/4/employee_546"
+    },
+    "569": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:45.846339",
+      "folder_path": "Manager/4/employee_569"
+    },
+    "664": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:46.223921",
+      "folder_path": "Manager/4/employee_664"
+    },
+    "820": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:46.560989",
+      "folder_path": "Manager/4/employee_820"
+    },
+    "905": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:46.904788",
+      "folder_path": "Manager/4/employee_905"
+    },
+    "976": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:47.283796",
+      "folder_path": "Manager/4/employee_976"
+    },
+    "1074": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:47.665464",
+      "folder_path": "Manager/4/employee_1074"
+    },
+    "1109": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:48.035348",
+      "folder_path": "Manager/4/employee_1109"
+    },
+    "1116": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:48.386395",
+      "folder_path": "Manager/4/employee_1116"
+    },
+    "1215": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:48.735047",
+      "folder_path": "Manager/4/employee_1215"
+    },
+    "1307": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:49.073153",
+      "folder_path": "Manager/4/employee_1307"
+    },
+    "1334": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:49.437755",
+      "folder_path": "Manager/4/employee_1334"
+    },
+    "1520": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:49.818039",
+      "folder_path": "Manager/4/employee_1520"
+    },
+    "1644": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:50.197739",
+      "folder_path": "Manager/4/employee_1644"
+    },
+    "1665": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:50.535345",
+      "folder_path": "Manager/4/employee_1665"
+    },
+    "1677": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:50.880419",
+      "folder_path": "Manager/4/employee_1677"
+    },
+    "1892": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:51.240618",
+      "folder_path": "Manager/4/employee_1892"
+    },
+    "1900": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:11:51.614521",
+      "folder_path": "Manager/4/employee_1900"
+    }
+  },
+  "statistics": {
+    "total_employees": 23
+  },
+  "last_updated": "2025-10-08T18:11:51.614521"
+}

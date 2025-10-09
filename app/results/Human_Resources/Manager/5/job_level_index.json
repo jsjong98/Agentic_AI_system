@@ -1,0 +1,54 @@
+{
+  "department": "Human Resources",
+  "job_role": "Manager",
+  "job_level": "5",
+  "created_at": "2025-10-06T18:24:23.130562",
+  "employees": {
+    "140": {
+      "job_role": "Manager",
+      "job_level": "5",
+      "last_updated": "2025-10-08T18:12:16.440786",
+      "folder_path": "Manager/5/employee_140"
+    },
+    "644": {
+      "job_role": "Manager",
+      "job_level": "5",
+      "last_updated": "2025-10-08T18:12:16.728327",
+      "folder_path": "Manager/5/employee_644"
+    },
+    "731": {
+      "job_role": "Manager",
+      "job_level": "5",
+      "last_updated": "2025-10-08T18:12:17.016874",
+      "folder_path": "Manager/5/employee_731"
+    },
+    "734": {
+      "job_role": "Manager",
+      "job_level": "5",
+      "last_updated": "2025-10-08T18:12:17.334019",
+      "folder_path": "Manager/5/employee_734"
+    },
+    "1338": {
+      "job_role": "Manager",
+      "job_level": "5",
+      "last_updated": "2025-10-08T18:12:17.620006",
+      "folder_path": "Manager/5/employee_1338"
+    },
+    "1625": {
+      "job_role": "Manager",
+      "job_level": "5",
+      "last_updated": "2025-10-08T18:12:17.895585",
+      "folder_path": "Manager/5/employee_1625"
+    },
+    "1973": {
+      "job_role": "Manager",
+      "job_level": "5",
+      "last_updated": "2025-10-08T18:12:18.171164",
+      "folder_path": "Manager/5/employee_1973"
+    }
+  },
+  "statistics": {
+    "total_employees": 7
+  },
+  "last_updated": "2025-10-08T18:12:18.171164"
+}

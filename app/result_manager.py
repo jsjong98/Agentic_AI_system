@@ -229,6 +229,19 @@ class AgenticResultManager:
             with open(employee_dir / "sentio_result.json", 'w', encoding='utf-8') as f:
                 json.dump(sentio_result, f, ensure_ascii=False, indent=2)
         
+        # Agora 결과
+        if 'agora' in worker_results:
+            agora_result = worker_results['agora']
+            results_summary.update({
+                'agora_score': agora_result.get('agora_score', 0),
+                'market_pressure_index': agora_result.get('market_pressure_index', 0),
+                'compensation_gap': agora_result.get('compensation_gap', 0),
+                'market_competitiveness': agora_result.get('market_competitiveness', 'MEDIUM')
+            })
+            
+            with open(employee_dir / "agora_result.json", 'w', encoding='utf-8') as f:
+                json.dump(agora_result, f, ensure_ascii=False, indent=2)
+        
         # 3. 통합 결과 요약 CSV 저장
         summary_df = pd.DataFrame([results_summary])
         summary_df.to_csv(employee_dir / "analysis_summary.csv", index=False, encoding='utf-8-sig')

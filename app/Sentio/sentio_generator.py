@@ -205,24 +205,15 @@ class SentioTextGenerator:
         prompt = self.create_keyword_based_prompt(keywords, text_type)
         
         try:
-            # 표준 OpenAI Chat Completions API 사용
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 조직 내 개인의 심리와 감정을 깊이 이해하는 HR 분석 전문가입니다."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=1000,
-                temperature=0.7
+            # GPT-5-Nano Responses API 사용
+            response = self.client.responses.create(
+                model="gpt-5-nano-2025-08-07",
+                input=prompt,
+                reasoning={"effort": "medium"},
+                text={"verbosity": "medium"}
             )
             
-            generated_text = response.choices[0].message.content.strip()
+            generated_text = response.output_text.strip()
             return generated_text
             
         except Exception as e:

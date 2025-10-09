@@ -1,0 +1,1212 @@
+{
+  "department": "Research & Development",
+  "job_role": "Laboratory Technician",
+  "job_level": "1",
+  "created_at": "2025-10-06T18:23:09.180074",
+  "employees": {
+    "4": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:53.544803",
+      "folder_path": "Laboratory_Technician/1/employee_4"
+    },
+    "7": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:53.917998",
+      "folder_path": "Laboratory_Technician/1/employee_7"
+    },
+    "8": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:54.302099",
+      "folder_path": "Laboratory_Technician/1/employee_8"
+    },
+    "10": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:54.676007",
+      "folder_path": "Laboratory_Technician/1/employee_10"
+    },
+    "11": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:55.041423",
+      "folder_path": "Laboratory_Technician/1/employee_11"
+    },
+    "14": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:55.411560",
+      "folder_path": "Laboratory_Technician/1/employee_14"
+    },
+    "18": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:55.773227",
+      "folder_path": "Laboratory_Technician/1/employee_18"
+    },
+    "19": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:56.165372",
+      "folder_path": "Laboratory_Technician/1/employee_19"
+    },
+    "22": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:56.540062",
+      "folder_path": "Laboratory_Technician/1/employee_22"
+    },
+    "39": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:56.922794",
+      "folder_path": "Laboratory_Technician/1/employee_39"
+    },
+    "41": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:57.300977",
+      "folder_path": "Laboratory_Technician/1/employee_41"
+    },
+    "53": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:57.684703",
+      "folder_path": "Laboratory_Technician/1/employee_53"
+    },
+    "54": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:58.063656",
+      "folder_path": "Laboratory_Technician/1/employee_54"
+    },
+    "55": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:58.430943",
+      "folder_path": "Laboratory_Technician/1/employee_55"
+    },
+    "63": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:58.798036",
+      "folder_path": "Laboratory_Technician/1/employee_63"
+    },
+    "65": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:59.183879",
+      "folder_path": "Laboratory_Technician/1/employee_65"
+    },
+    "75": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:59.561492",
+      "folder_path": "Laboratory_Technician/1/employee_75"
+    },
+    "97": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:07:59.936321",
+      "folder_path": "Laboratory_Technician/1/employee_97"
+    },
+    "116": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:00.292957",
+      "folder_path": "Laboratory_Technician/1/employee_116"
+    },
+    "137": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:00.674109",
+      "folder_path": "Laboratory_Technician/1/employee_137"
+    },
+    "144": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:01.043060",
+      "folder_path": "Laboratory_Technician/1/employee_144"
+    },
+    "150": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:01.416968",
+      "folder_path": "Laboratory_Technician/1/employee_150"
+    },
+    "155": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:01.784092",
+      "folder_path": "Laboratory_Technician/1/employee_155"
+    },
+    "169": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:02.165115",
+      "folder_path": "Laboratory_Technician/1/employee_169"
+    },
+    "190": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:02.543619",
+      "folder_path": "Laboratory_Technician/1/employee_190"
+    },
+    "198": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:02.921941",
+      "folder_path": "Laboratory_Technician/1/employee_198"
+    },
+    "200": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:03.315019",
+      "folder_path": "Laboratory_Technician/1/employee_200"
+    },
+    "201": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:03.690137",
+      "folder_path": "Laboratory_Technician/1/employee_201"
+    },
+    "238": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:04.055440",
+      "folder_path": "Laboratory_Technician/1/employee_238"
+    },
+    "243": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:04.408996",
+      "folder_path": "Laboratory_Technician/1/employee_243"
+    },
+    "245": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:04.794939",
+      "folder_path": "Laboratory_Technician/1/employee_245"
+    },
+    "249": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:05.181157",
+      "folder_path": "Laboratory_Technician/1/employee_249"
+    },
+    "286": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:05.562245",
+      "folder_path": "Laboratory_Technician/1/employee_286"
+    },
+    "316": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:05.935871",
+      "folder_path": "Laboratory_Technician/1/employee_316"
+    },
+    "325": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:06.281040",
+      "folder_path": "Laboratory_Technician/1/employee_325"
+    },
+    "328": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:06.651638",
+      "folder_path": "Laboratory_Technician/1/employee_328"
+    },
+    "331": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:07.046750",
+      "folder_path": "Laboratory_Technician/1/employee_331"
+    },
+    "332": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:07.429157",
+      "folder_path": "Laboratory_Technician/1/employee_332"
+    },
+    "351": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:07.811195",
+      "folder_path": "Laboratory_Technician/1/employee_351"
+    },
+    "355": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:08.172964",
+      "folder_path": "Laboratory_Technician/1/employee_355"
+    },
+    "359": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:08.531441",
+      "folder_path": "Laboratory_Technician/1/employee_359"
+    },
+    "364": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:08.897671",
+      "folder_path": "Laboratory_Technician/1/employee_364"
+    },
+    "373": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:09.289758",
+      "folder_path": "Laboratory_Technician/1/employee_373"
+    },
+    "392": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:09.669691",
+      "folder_path": "Laboratory_Technician/1/employee_392"
+    },
+    "394": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:10.029499",
+      "folder_path": "Laboratory_Technician/1/employee_394"
+    },
+    "405": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:10.415554",
+      "folder_path": "Laboratory_Technician/1/employee_405"
+    },
+    "407": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:10.790779",
+      "folder_path": "Laboratory_Technician/1/employee_407"
+    },
+    "430": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:11.153893",
+      "folder_path": "Laboratory_Technician/1/employee_430"
+    },
+    "454": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:11.536043",
+      "folder_path": "Laboratory_Technician/1/employee_454"
+    },
+    "455": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:11.909059",
+      "folder_path": "Laboratory_Technician/1/employee_455"
+    },
+    "471": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:12.286034",
+      "folder_path": "Laboratory_Technician/1/employee_471"
+    },
+    "483": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:12.672166",
+      "folder_path": "Laboratory_Technician/1/employee_483"
+    },
+    "486": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:13.046805",
+      "folder_path": "Laboratory_Technician/1/employee_486"
+    },
+    "497": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:13.438493",
+      "folder_path": "Laboratory_Technician/1/employee_497"
+    },
+    "515": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:13.808065",
+      "folder_path": "Laboratory_Technician/1/employee_515"
+    },
+    "517": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:14.188746",
+      "folder_path": "Laboratory_Technician/1/employee_517"
+    },
+    "525": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:14.567569",
+      "folder_path": "Laboratory_Technician/1/employee_525"
+    },
+    "530": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:14.943891",
+      "folder_path": "Laboratory_Technician/1/employee_530"
+    },
+    "538": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:15.314111",
+      "folder_path": "Laboratory_Technician/1/employee_538"
+    },
+    "556": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:15.680159",
+      "folder_path": "Laboratory_Technician/1/employee_556"
+    },
+    "562": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:16.057732",
+      "folder_path": "Laboratory_Technician/1/employee_562"
+    },
+    "571": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:16.442889",
+      "folder_path": "Laboratory_Technician/1/employee_571"
+    },
+    "577": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:16.825667",
+      "folder_path": "Laboratory_Technician/1/employee_577"
+    },
+    "584": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:17.209387",
+      "folder_path": "Laboratory_Technician/1/employee_584"
+    },
+    "591": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:17.581725",
+      "folder_path": "Laboratory_Technician/1/employee_591"
+    },
+    "593": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:17.949090",
+      "folder_path": "Laboratory_Technician/1/employee_593"
+    },
+    "602": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:18.341525",
+      "folder_path": "Laboratory_Technician/1/employee_602"
+    },
+    "622": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:18.718771",
+      "folder_path": "Laboratory_Technician/1/employee_622"
+    },
+    "643": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:19.075440",
+      "folder_path": "Laboratory_Technician/1/employee_643"
+    },
+    "647": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:19.435522",
+      "folder_path": "Laboratory_Technician/1/employee_647"
+    },
+    "686": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:19.810289",
+      "folder_path": "Laboratory_Technician/1/employee_686"
+    },
+    "704": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:20.195983",
+      "folder_path": "Laboratory_Technician/1/employee_704"
+    },
+    "716": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:20.572408",
+      "folder_path": "Laboratory_Technician/1/employee_716"
+    },
+    "744": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:20.965108",
+      "folder_path": "Laboratory_Technician/1/employee_744"
+    },
+    "758": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:21.338626",
+      "folder_path": "Laboratory_Technician/1/employee_758"
+    },
+    "792": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:21.709681",
+      "folder_path": "Laboratory_Technician/1/employee_792"
+    },
+    "806": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:22.090112",
+      "folder_path": "Laboratory_Technician/1/employee_806"
+    },
+    "811": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:22.512404",
+      "folder_path": "Laboratory_Technician/1/employee_811"
+    },
+    "812": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:22.874500",
+      "folder_path": "Laboratory_Technician/1/employee_812"
+    },
+    "816": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:23.208232",
+      "folder_path": "Laboratory_Technician/1/employee_816"
+    },
+    "874": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:23.560106",
+      "folder_path": "Laboratory_Technician/1/employee_874"
+    },
+    "882": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:23.935973",
+      "folder_path": "Laboratory_Technician/1/employee_882"
+    },
+    "888": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:24.313387",
+      "folder_path": "Laboratory_Technician/1/employee_888"
+    },
+    "911": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:24.696546",
+      "folder_path": "Laboratory_Technician/1/employee_911"
+    },
+    "912": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:25.035978",
+      "folder_path": "Laboratory_Technician/1/employee_912"
+    },
+    "918": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:25.382123",
+      "folder_path": "Laboratory_Technician/1/employee_918"
+    },
+    "927": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:25.749754",
+      "folder_path": "Laboratory_Technician/1/employee_927"
+    },
+    "932": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:26.138680",
+      "folder_path": "Laboratory_Technician/1/employee_932"
+    },
+    "934": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:26.524056",
+      "folder_path": "Laboratory_Technician/1/employee_934"
+    },
+    "951": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:26.864833",
+      "folder_path": "Laboratory_Technician/1/employee_951"
+    },
+    "957": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:27.236975",
+      "folder_path": "Laboratory_Technician/1/employee_957"
+    },
+    "958": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:27.599536",
+      "folder_path": "Laboratory_Technician/1/employee_958"
+    },
+    "960": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:27.954966",
+      "folder_path": "Laboratory_Technician/1/employee_960"
+    },
+    "996": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:28.339369",
+      "folder_path": "Laboratory_Technician/1/employee_996"
+    },
+    "1001": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:28.708275",
+      "folder_path": "Laboratory_Technician/1/employee_1001"
+    },
+    "1010": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:29.049001",
+      "folder_path": "Laboratory_Technician/1/employee_1010"
+    },
+    "1017": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:29.412646",
+      "folder_path": "Laboratory_Technician/1/employee_1017"
+    },
+    "1019": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:29.806834",
+      "folder_path": "Laboratory_Technician/1/employee_1019"
+    },
+    "1028": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:30.195759",
+      "folder_path": "Laboratory_Technician/1/employee_1028"
+    },
+    "1030": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:30.587903",
+      "folder_path": "Laboratory_Technician/1/employee_1030"
+    },
+    "1042": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:30.940156",
+      "folder_path": "Laboratory_Technician/1/employee_1042"
+    },
+    "1046": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:31.295758",
+      "folder_path": "Laboratory_Technician/1/employee_1046"
+    },
+    "1079": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:31.673901",
+      "folder_path": "Laboratory_Technician/1/employee_1079"
+    },
+    "1083": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:32.045704",
+      "folder_path": "Laboratory_Technician/1/employee_1083"
+    },
+    "1094": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:32.423583",
+      "folder_path": "Laboratory_Technician/1/employee_1094"
+    },
+    "1102": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:32.785877",
+      "folder_path": "Laboratory_Technician/1/employee_1102"
+    },
+    "1106": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:33.150050",
+      "folder_path": "Laboratory_Technician/1/employee_1106"
+    },
+    "1107": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:33.540590",
+      "folder_path": "Laboratory_Technician/1/employee_1107"
+    },
+    "1111": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:33.898542",
+      "folder_path": "Laboratory_Technician/1/employee_1111"
+    },
+    "1156": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:34.252257",
+      "folder_path": "Laboratory_Technician/1/employee_1156"
+    },
+    "1158": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:34.617420",
+      "folder_path": "Laboratory_Technician/1/employee_1158"
+    },
+    "1160": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:34.982190",
+      "folder_path": "Laboratory_Technician/1/employee_1160"
+    },
+    "1172": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:35.347307",
+      "folder_path": "Laboratory_Technician/1/employee_1172"
+    },
+    "1173": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:35.736210",
+      "folder_path": "Laboratory_Technician/1/employee_1173"
+    },
+    "1175": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:36.116839",
+      "folder_path": "Laboratory_Technician/1/employee_1175"
+    },
+    "1177": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:36.487740",
+      "folder_path": "Laboratory_Technician/1/employee_1177"
+    },
+    "1185": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:36.827852",
+      "folder_path": "Laboratory_Technician/1/employee_1185"
+    },
+    "1192": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:37.196865",
+      "folder_path": "Laboratory_Technician/1/employee_1192"
+    },
+    "1198": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:37.561445",
+      "folder_path": "Laboratory_Technician/1/employee_1198"
+    },
+    "1216": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:37.947051",
+      "folder_path": "Laboratory_Technician/1/employee_1216"
+    },
+    "1219": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:38.304711",
+      "folder_path": "Laboratory_Technician/1/employee_1219"
+    },
+    "1221": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:38.667178",
+      "folder_path": "Laboratory_Technician/1/employee_1221"
+    },
+    "1234": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:39.038744",
+      "folder_path": "Laboratory_Technician/1/employee_1234"
+    },
+    "1258": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:39.418934",
+      "folder_path": "Laboratory_Technician/1/employee_1258"
+    },
+    "1279": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:39.811998",
+      "folder_path": "Laboratory_Technician/1/employee_1279"
+    },
+    "1286": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:40.185178",
+      "folder_path": "Laboratory_Technician/1/employee_1286"
+    },
+    "1296": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:40.549853",
+      "folder_path": "Laboratory_Technician/1/employee_1296"
+    },
+    "1297": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:40.927121",
+      "folder_path": "Laboratory_Technician/1/employee_1297"
+    },
+    "1299": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:41.291123",
+      "folder_path": "Laboratory_Technician/1/employee_1299"
+    },
+    "1333": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:41.678573",
+      "folder_path": "Laboratory_Technician/1/employee_1333"
+    },
+    "1358": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:42.027128",
+      "folder_path": "Laboratory_Technician/1/employee_1358"
+    },
+    "1361": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:42.401400",
+      "folder_path": "Laboratory_Technician/1/employee_1361"
+    },
+    "1368": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:42.777514",
+      "folder_path": "Laboratory_Technician/1/employee_1368"
+    },
+    "1409": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:43.165217",
+      "folder_path": "Laboratory_Technician/1/employee_1409"
+    },
+    "1411": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:43.563749",
+      "folder_path": "Laboratory_Technician/1/employee_1411"
+    },
+    "1415": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:43.930352",
+      "folder_path": "Laboratory_Technician/1/employee_1415"
+    },
+    "1417": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:44.296664",
+      "folder_path": "Laboratory_Technician/1/employee_1417"
+    },
+    "1434": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:44.653724",
+      "folder_path": "Laboratory_Technician/1/employee_1434"
+    },
+    "1440": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:45.023533",
+      "folder_path": "Laboratory_Technician/1/employee_1440"
+    },
+    "1447": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:45.385778",
+      "folder_path": "Laboratory_Technician/1/employee_1447"
+    },
+    "1458": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:45.762327",
+      "folder_path": "Laboratory_Technician/1/employee_1458"
+    },
+    "1464": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:46.130911",
+      "folder_path": "Laboratory_Technician/1/employee_1464"
+    },
+    "1471": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:46.501988",
+      "folder_path": "Laboratory_Technician/1/employee_1471"
+    },
+    "1480": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:46.890786",
+      "folder_path": "Laboratory_Technician/1/employee_1480"
+    },
+    "1494": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:47.290337",
+      "folder_path": "Laboratory_Technician/1/employee_1494"
+    },
+    "1502": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:47.677518",
+      "folder_path": "Laboratory_Technician/1/employee_1502"
+    },
+    "1504": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:48.053778",
+      "folder_path": "Laboratory_Technician/1/employee_1504"
+    },
+    "1513": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:48.439930",
+      "folder_path": "Laboratory_Technician/1/employee_1513"
+    },
+    "1534": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:48.828263",
+      "folder_path": "Laboratory_Technician/1/employee_1534"
+    },
+    "1542": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:49.215725",
+      "folder_path": "Laboratory_Technician/1/employee_1542"
+    },
+    "1551": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:49.589135",
+      "folder_path": "Laboratory_Technician/1/employee_1551"
+    },
+    "1564": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:49.974436",
+      "folder_path": "Laboratory_Technician/1/employee_1564"
+    },
+    "1569": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:50.362657",
+      "folder_path": "Laboratory_Technician/1/employee_1569"
+    },
+    "1586": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:50.760846",
+      "folder_path": "Laboratory_Technician/1/employee_1586"
+    },
+    "1599": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:51.150956",
+      "folder_path": "Laboratory_Technician/1/employee_1599"
+    },
+    "1601": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:51.536089",
+      "folder_path": "Laboratory_Technician/1/employee_1601"
+    },
+    "1604": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:51.891314",
+      "folder_path": "Laboratory_Technician/1/employee_1604"
+    },
+    "1617": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:52.278421",
+      "folder_path": "Laboratory_Technician/1/employee_1617"
+    },
+    "1619": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:52.686604",
+      "folder_path": "Laboratory_Technician/1/employee_1619"
+    },
+    "1649": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:53.077659",
+      "folder_path": "Laboratory_Technician/1/employee_1649"
+    },
+    "1659": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:53.454731",
+      "folder_path": "Laboratory_Technician/1/employee_1659"
+    },
+    "1674": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:53.840868",
+      "folder_path": "Laboratory_Technician/1/employee_1674"
+    },
+    "1675": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:54.215260",
+      "folder_path": "Laboratory_Technician/1/employee_1675"
+    },
+    "1684": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:54.611418",
+      "folder_path": "Laboratory_Technician/1/employee_1684"
+    },
+    "1687": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:54.993279",
+      "folder_path": "Laboratory_Technician/1/employee_1687"
+    },
+    "1692": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:55.360481",
+      "folder_path": "Laboratory_Technician/1/employee_1692"
+    },
+    "1693": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:55.729234",
+      "folder_path": "Laboratory_Technician/1/employee_1693"
+    },
+    "1698": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:56.109360",
+      "folder_path": "Laboratory_Technician/1/employee_1698"
+    },
+    "1709": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:56.521294",
+      "folder_path": "Laboratory_Technician/1/employee_1709"
+    },
+    "1718": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:56.919531",
+      "folder_path": "Laboratory_Technician/1/employee_1718"
+    },
+    "1721": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:57.293967",
+      "folder_path": "Laboratory_Technician/1/employee_1721"
+    },
+    "1725": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:57.659487",
+      "folder_path": "Laboratory_Technician/1/employee_1725"
+    },
+    "1735": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:58.038778",
+      "folder_path": "Laboratory_Technician/1/employee_1735"
+    },
+    "1760": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:58.443903",
+      "folder_path": "Laboratory_Technician/1/employee_1760"
+    },
+    "1768": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:58.843453",
+      "folder_path": "Laboratory_Technician/1/employee_1768"
+    },
+    "1772": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:59.234528",
+      "folder_path": "Laboratory_Technician/1/employee_1772"
+    },
+    "1782": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:08:59.601878",
+      "folder_path": "Laboratory_Technician/1/employee_1782"
+    },
+    "1783": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:00.001320",
+      "folder_path": "Laboratory_Technician/1/employee_1783"
+    },
+    "1802": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:00.385959",
+      "folder_path": "Laboratory_Technician/1/employee_1802"
+    },
+    "1826": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:00.779112",
+      "folder_path": "Laboratory_Technician/1/employee_1826"
+    },
+    "1850": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:01.172148",
+      "folder_path": "Laboratory_Technician/1/employee_1850"
+    },
+    "1852": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:01.525811",
+      "folder_path": "Laboratory_Technician/1/employee_1852"
+    },
+    "1856": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:01.961294",
+      "folder_path": "Laboratory_Technician/1/employee_1856"
+    },
+    "1860": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:02.370930",
+      "folder_path": "Laboratory_Technician/1/employee_1860"
+    },
+    "1883": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:02.754240",
+      "folder_path": "Laboratory_Technician/1/employee_1883"
+    },
+    "1907": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:03.146648",
+      "folder_path": "Laboratory_Technician/1/employee_1907"
+    },
+    "1916": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:03.521917",
+      "folder_path": "Laboratory_Technician/1/employee_1916"
+    },
+    "1918": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:03.924705",
+      "folder_path": "Laboratory_Technician/1/employee_1918"
+    },
+    "1949": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:04.323721",
+      "folder_path": "Laboratory_Technician/1/employee_1949"
+    },
+    "1952": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:04.708916",
+      "folder_path": "Laboratory_Technician/1/employee_1952"
+    },
+    "1960": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:05.081885",
+      "folder_path": "Laboratory_Technician/1/employee_1960"
+    },
+    "1974": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:05.439417",
+      "folder_path": "Laboratory_Technician/1/employee_1974"
+    },
+    "1982": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:05.821090",
+      "folder_path": "Laboratory_Technician/1/employee_1982"
+    },
+    "1989": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:06.233354",
+      "folder_path": "Laboratory_Technician/1/employee_1989"
+    },
+    "1992": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:06.619178",
+      "folder_path": "Laboratory_Technician/1/employee_1992"
+    },
+    "1994": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:06.993050",
+      "folder_path": "Laboratory_Technician/1/employee_1994"
+    },
+    "2003": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:07.354605",
+      "folder_path": "Laboratory_Technician/1/employee_2003"
+    },
+    "2010": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:07.732329",
+      "folder_path": "Laboratory_Technician/1/employee_2010"
+    },
+    "2012": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:08.142030",
+      "folder_path": "Laboratory_Technician/1/employee_2012"
+    },
+    "2032": {
+      "job_role": "Laboratory Technician",
+      "job_level": "1",
+      "last_updated": "2025-10-08T18:09:08.524739",
+      "folder_path": "Laboratory_Technician/1/employee_2032"
+    }
+  },
+  "statistics": {
+    "total_employees": 200
+  },
+  "last_updated": "2025-10-08T18:09:08.524739"
+}

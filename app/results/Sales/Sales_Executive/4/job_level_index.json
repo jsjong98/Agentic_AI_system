@@ -1,0 +1,96 @@
+{
+  "department": "Sales",
+  "job_role": "Sales Executive",
+  "job_level": "4",
+  "created_at": "2025-10-06T18:22:31.560023",
+  "employees": {
+    "131": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:25.231089",
+      "folder_path": "Sales_Executive/4/employee_131"
+    },
+    "404": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:25.552277",
+      "folder_path": "Sales_Executive/4/employee_404"
+    },
+    "532": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:25.879217",
+      "folder_path": "Sales_Executive/4/employee_532"
+    },
+    "746": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:26.186892",
+      "folder_path": "Sales_Executive/4/employee_746"
+    },
+    "897": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:26.493069",
+      "folder_path": "Sales_Executive/4/employee_897"
+    },
+    "986": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:26.787714",
+      "folder_path": "Sales_Executive/4/employee_986"
+    },
+    "1039": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:27.090262",
+      "folder_path": "Sales_Executive/4/employee_1039"
+    },
+    "1138": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:27.385680",
+      "folder_path": "Sales_Executive/4/employee_1138"
+    },
+    "1167": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:27.703262",
+      "folder_path": "Sales_Executive/4/employee_1167"
+    },
+    "1372": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:28.021396",
+      "folder_path": "Sales_Executive/4/employee_1372"
+    },
+    "1716": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:28.333906",
+      "folder_path": "Sales_Executive/4/employee_1716"
+    },
+    "1863": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:28.636406",
+      "folder_path": "Sales_Executive/4/employee_1863"
+    },
+    "1975": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:28.935023",
+      "folder_path": "Sales_Executive/4/employee_1975"
+    },
+    "2056": {
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:05:29.244308",
+      "folder_path": "Sales_Executive/4/employee_2056"
+    }
+  },
+  "statistics": {
+    "total_employees": 14
+  },
+  "last_updated": "2025-10-08T18:05:29.244308"
+}
