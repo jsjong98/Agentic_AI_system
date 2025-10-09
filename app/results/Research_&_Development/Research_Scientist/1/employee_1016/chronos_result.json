@@ -1,0 +1,7 @@
+{
+  "prediction": {
+    "risk_score": 1,
+    "attrition_probability": 1
+  },
+  "confidence": 0.8
+}

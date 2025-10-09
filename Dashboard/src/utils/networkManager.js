@@ -48,19 +48,30 @@ class NetworkManager {
     let lastError;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let timeoutId; // 스코프를 넓혀서 catch 블록에서도 접근 가능하도록
+      
       try {
         console.log(`🔄 네트워크 요청 시도 ${attempt}/${maxAttempts}: ${url}`);
         
-        // 타임아웃 설정
+        // 타임아웃 제거 - 대용량 데이터 전송을 위해 무제한 대기
         const controller = new AbortController();
-        const timeout = options.timeout || this.defaultTimeout;
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        // 타임아웃을 설정하지 않음 (무제한 대기)
+        // 사용자가 명시적으로 타임아웃을 요청한 경우에만 설정
+        if (options.forceTimeout) {
+          const timeout = options.timeout || this.defaultTimeout;
+          timeoutId = setTimeout(() => {
+            console.warn(`⏰ 강제 타임아웃 (${timeout}ms): ${url}`);
+            controller.abort();
+          }, timeout);
+        }
         
         const fetchOptions = {
           ...options,
           signal: controller.signal
         };
         
+        // 타임아웃 ID를 저장해서 정리할 수 있도록 함
         const response = await fetch(url, fetchOptions);
         clearTimeout(timeoutId);
         
@@ -72,8 +83,22 @@ class NetworkManager {
         return response;
         
       } catch (error) {
+        // 타임아웃 정리
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        
         lastError = error;
         console.warn(`❌ 네트워크 요청 실패 (시도 ${attempt}):`, error.message);
+        
+        // AbortError의 경우 더 구체적인 메시지 제공
+        if (error.name === 'AbortError') {
+          if (options.forceTimeout) {
+            console.warn(`⏰ 요청이 중단됨 - 강제 타임아웃`);
+          } else {
+            console.warn(`🛑 요청이 중단됨 - 사용자 취소 또는 네트워크 문제`);
+          }
+        }
         
         // 마지막 시도가 아니면 대기 후 재시도
         if (attempt < maxAttempts) {
@@ -109,7 +134,7 @@ class NetworkManager {
           'Content-Type': 'application/json',
         },
         body: dataString,
-        timeout: 60000, // 대용량 데이터는 더 긴 타임아웃
+        // timeout 제거 - 무제한 대기
         ...options
       });
     }
@@ -158,7 +183,7 @@ class NetworkManager {
             analysis_metadata: data.analysis_metadata
           }
         }),
-        timeout: 30000
+        // timeout 제거 - 무제한 대기
       });
       
       // 각 청크 전송
@@ -174,7 +199,7 @@ class NetworkManager {
               sessionId: sessionId,
               ...chunks[i]
             }),
-            timeout: 45000 // 청크별로 더 긴 타임아웃
+            // timeout 제거 - 무제한 대기
           });
           
           const result = await chunkResponse.json();
@@ -196,7 +221,7 @@ class NetworkManager {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ sessionId: sessionId }),
-              timeout: 10000
+              // timeout 제거 - 무제한 대기
             });
           } catch (cleanupError) {
             console.warn('세션 정리 실패:', cleanupError);
@@ -214,7 +239,7 @@ class NetworkManager {
           sessionId: sessionId,
           chunkResults: chunkResults
         }),
-        timeout: 30000
+        // timeout 제거 - 무제한 대기
       });
       
       console.log(`🎉 청크 전송 완료: ${chunks.length}개 청크 성공`);
@@ -254,7 +279,7 @@ class NetworkManager {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(results),
-          timeout: 60000,
+          // timeout 제거 - 무제한 대기
           ...options
         });
       }
@@ -300,7 +325,7 @@ class NetworkManager {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(deptData),
-          timeout: 30000
+          // timeout 제거 - 무제한 대기
         }).catch(error => {
           console.warn(`부서 ${deptName} 저장 실패:`, error.message);
           return { success: false, department: deptName, error: error.message };
@@ -391,4 +416,5 @@ class NetworkManager {
   }
 }
 
-export default new NetworkManager();
+const networkManager = new NetworkManager();
+export default networkManager;

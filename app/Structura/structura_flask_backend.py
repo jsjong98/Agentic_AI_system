@@ -13,6 +13,7 @@ import logging
 import os
 import json
 import pickle
+import traceback
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -454,6 +455,7 @@ class StructuraHRPredictor:
                 logger.info("✅ SHAP 설정 완료")
             except Exception as e:
                 logger.error(f"❌ SHAP 설정 실패: {str(e)}")
+                logger.error(f"SHAP 오류 상세: {traceback.format_exc()}")
                 self.shap_explainer = None
         else:
             logger.warning("⚠️ SHAP 라이브러리가 설치되지 않았습니다")
@@ -484,6 +486,7 @@ class StructuraHRPredictor:
                 logger.info("✅ LIME 설정 완료")
             except Exception as e:
                 logger.error(f"❌ LIME 설정 실패: {str(e)}")
+                logger.error(f"LIME 오류 상세: {traceback.format_exc()}")
                 self.lime_explainer = None
         else:
             logger.warning("⚠️ LIME 라이브러리가 설치되지 않았습니다")
@@ -591,6 +594,10 @@ class StructuraHRPredictor:
                 shap_values = {}
         else:
             logger.warning("SHAP explainer가 초기화되지 않았습니다")
+            if not SHAP_AVAILABLE:
+                logger.warning("SHAP 라이브러리가 설치되지 않았습니다. 설치 명령: pip install shap>=0.42.0")
+            elif not self.shap_explainer:
+                logger.warning("SHAP explainer 초기화에 실패했습니다")
         
         # LIME 설명 - 실제 계산만 수행
         lime_explanation = {}
@@ -616,6 +623,10 @@ class StructuraHRPredictor:
                 lime_explanation = {}
         else:
             logger.warning("LIME explainer가 초기화되지 않았습니다")
+            if not LIME_AVAILABLE:
+                logger.warning("LIME 라이브러리가 설치되지 않았습니다. 설치 명령: pip install lime>=0.2.0.1")
+            elif not self.lime_explainer:
+                logger.warning("LIME explainer 초기화에 실패했습니다")
         
         # 상위 위험/보호 요인 추출
         importance_items = list(feature_importance.items()) if feature_importance else []

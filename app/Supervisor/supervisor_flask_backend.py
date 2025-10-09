@@ -112,6 +112,10 @@ def initialize_supervisor():
         
         logger.info("Supervisor workflow initialized successfully")
         
+        # 저장 경로 확인 로그
+        logger.info(f"📁 Hierarchical Result Manager 저장 경로: {hierarchical_result_manager.base_output_dir}")
+        logger.info(f"📁 절대 경로: {hierarchical_result_manager.base_output_dir.resolve()}")
+        
     except Exception as e:
         logger.error(f"Failed to initialize supervisor workflow: {e}")
         logger.error(traceback.format_exc())
@@ -568,8 +572,10 @@ def batch_analyze():
                 'error': f'Batch size exceeds maximum ({max_batch_size}). 현재 요청: {len(employee_ids)}명'
             }), 400
         
-        logger.info(f"Starting batch analysis for {len(employee_ids)} employees")
-        
+        logger.info(f"🚀 Starting batch analysis for {len(employee_ids)} employees")
+        logger.info(f"📊 Analysis configuration: {data.get('integration_config', {})}")
+        logger.info(f"🔧 Agent configuration: {data.get('agentConfig', {})}")
+        logger.info(f"📁 Agent files: {data.get('agent_files', {})}")
         
         # 배치 진행률 추적을 위한 세션 생성
         import uuid
@@ -650,10 +656,11 @@ def batch_analyze():
             logger.info(f"✅ {agent_name} analysis completed for all employees")
         
         # 결과 통합 (에이전트별 결과를 직원별로 재구성)
+        logger.info(f"🔄 결과 통합 시작: {len(employee_ids)}명의 직원 결과 처리")
         batch_results = []
         successful_count = 0
         
-        for employee_id in employee_ids:
+        for i, employee_id in enumerate(employee_ids):
             employee_result = {
                 'employee_id': employee_id,
                 'success': True,
@@ -661,23 +668,43 @@ def batch_analyze():
             }
             
             # 각 에이전트 결과 수집
+            agent_success_count = 0
             for agent_name in agents:
                 agent_result = next((r for r in agent_results[agent_name] if r['employee_id'] == employee_id), None)
                 if agent_result:
                     employee_result['agent_results'][agent_name] = agent_result
-                    if not agent_result['success']:
+                    if agent_result['success']:
+                        agent_success_count += 1
+                    else:
                         employee_result['success'] = False
+                        logger.warning(f"⚠️ 직원 {employee_id}: {agent_name} 분석 실패")
             
             batch_results.append(employee_result)
             if employee_result['success']:
                 successful_count += 1
+            
+            # 진행률 로그 (100명마다)
+            if (i + 1) % 100 == 0 or (i + 1) == len(employee_ids):
+                logger.info(f"📊 결과 통합 진행률: {i + 1}/{len(employee_ids)} ({((i + 1)/len(employee_ids)*100):.1f}%)")
+                logger.info(f"   - 성공한 직원: {successful_count}명")
+                logger.info(f"   - 평균 에이전트 성공률: {agent_success_count}/{len(agents)}")
         
         # 배치 완료 상태 업데이트
         app.batch_progress[batch_id]['status'] = 'completed'
         app.batch_progress[batch_id]['processed_employees'] = len(employee_ids)
         app.batch_progress[batch_id]['end_time'] = datetime.now().isoformat()
         
-        logger.info(f"Batch analysis completed: {successful_count}/{len(employee_ids)} successful")
+        logger.info(f"🎉 배치 분석 완료!")
+        logger.info(f"   📊 총 직원 수: {len(employee_ids)}명")
+        logger.info(f"   ✅ 성공한 분석: {successful_count}명")
+        logger.info(f"   ❌ 실패한 분석: {len(employee_ids) - successful_count}명")
+        logger.info(f"   📈 성공률: {(successful_count/len(employee_ids)*100):.1f}%")
+        logger.info(f"   🆔 배치 ID: {batch_id}")
+        
+        # 에이전트별 성공률 로그
+        for agent_name in agents:
+            agent_success = sum(1 for r in agent_results[agent_name] if r.get('success', False))
+            logger.info(f"   🤖 {agent_name}: {agent_success}/{len(employee_ids)} ({(agent_success/len(employee_ids)*100):.1f}%)")
             
         return jsonify({
             'success': True,
@@ -2900,12 +2927,30 @@ def analyze_employee_comprehensive(employee_data):
                 if isinstance(result, dict) and 'error' not in result:
                     clean_worker_results[worker] = result
             
-            # 결과 저장 (에러가 없는 워커 결과만)
+            # 결과 저장 (에러가 없는 워커 결과만) - 부서 정보 추출 및 전달
             if clean_worker_results:
+                # 부서 정보 추출 (개선된 로직)
+                department = employee_data.get('Department', 'Unknown')
+                job_role = employee_data.get('JobRole', 'Unknown')
+                job_level = employee_data.get('JobLevel', employee_data.get('Position', 'Unknown'))
+                
+                # 다른 필드명으로도 시도
+                if department == 'Unknown':
+                    department = employee_data.get('department', employee_data.get('dept', 'Unknown'))
+                if job_role == 'Unknown':
+                    job_role = employee_data.get('job_role', employee_data.get('role', 'Unknown'))
+                if job_level == 'Unknown':
+                    job_level = employee_data.get('job_level', employee_data.get('level', 'Unknown'))
+                
+                print(f"📋 Supervisor (단일) - 직원 {employee_id}: {department}/{job_role}/{job_level}")
+                
                 saved_path = hierarchical_result_manager.save_employee_result(
                     employee_id=employee_id,
                     employee_data=employee_data,
-                    worker_results=clean_worker_results
+                    worker_results=clean_worker_results,
+                    department=department,
+                    job_role=job_role,
+                    position=job_level
                 )
                 results['saved_path'] = saved_path
                 logger.info(f"직원 {employee_id} 분석 결과가 {saved_path}에 저장되었습니다.")
@@ -3018,11 +3063,11 @@ def save_hierarchical_batch_results():
         total_employees_saved = 0
         
         # 각 부서별로 처리
-        for department, job_roles in hierarchical_results.items():
-            logger.info(f"부서 '{department}' 처리 중...")
+        for dept_name, job_roles in hierarchical_results.items():
+            logger.info(f"부서 '{dept_name}' 처리 중...")
             
-            for job_role, job_levels in job_roles.items():
-                for job_level, employees in job_levels.items():
+            for role_name, job_levels in job_roles.items():
+                for level_name, employees in job_levels.items():
                     for employee_id, employee_result in employees.items():
                         try:
                             # employee_result가 None이거나 dict가 아닌 경우 처리
@@ -3041,16 +3086,27 @@ def save_hierarchical_batch_results():
                                     clean_agent_results[agent_name] = agent_result
                             
                             if clean_agent_results:
-                                # 직원 데이터에서 계층 정보 추출
-                                department = employee_data.get('Department', 'Unknown')
-                                job_role = employee_data.get('JobRole', 'Unknown')
-                                job_level = employee_data.get('JobLevel', 'Unknown')
+                                # 프론트엔드에서 이미 계층 구조를 만들어서 보냈으므로 그대로 사용
+                                # 변수 섀도잉 방지를 위해 다른 이름 사용
+                                department = dept_name
+                                job_role = role_name
+                                job_level = level_name
                                 
-                                # 계층적 구조로 저장 (Department/JobRole/JobLevel/employee_ID)
+                                # 'Unknown' 값은 건너뜀
+                                if department == 'Unknown' or department == '미분류':
+                                    logger.warning(f"직원 {employee_id}의 부서가 'Unknown' 또는 '미분류'입니다. 건너뜁니다.")
+                                    continue
+                                
+                                print(f"📋 Supervisor - 직원 {employee_id}: {department}/{job_role}/{job_level}")
+                                
+                                # 계층적 구조로 저장 (Department/JobRole/JobLevel/employee_ID) - 매개변수 전달
                                 saved_path = hierarchical_result_manager.save_employee_result(
                                     employee_id=employee_id,
                                     employee_data=employee_data,
-                                    worker_results=clean_agent_results
+                                    worker_results=clean_agent_results,
+                                    department=department,
+                                    job_role=job_role,
+                                    position=job_level
                                 )
                                 saved_paths.append(saved_path)
                                 total_employees_saved += 1
@@ -3069,6 +3125,115 @@ def save_hierarchical_batch_results():
         except Exception as e:
             logger.warning(f"부서별 통계 업데이트 실패: {e}")
         
+        # batch_analysis 폴더에 전체 결과 요약 JSON 파일 저장
+        try:
+            batch_analysis_dir = hierarchical_result_manager.base_output_dir / 'batch_analysis'
+            batch_analysis_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')
+            
+            # 1. department_summary JSON 생성
+            department_summary = {
+                'analysis_timestamp': analysis_timestamp,
+                'total_employees': total_employees_saved,
+                'total_departments': len(hierarchical_results),
+                'department_results': {}
+            }
+            
+            # 2. individual_results JSON 생성 (플랫 구조)
+            individual_results = {
+                'analysis_timestamp': analysis_timestamp,
+                'total_employees': total_employees_saved,
+                'individual_results': []
+            }
+            
+            # 모든 직원 데이터를 수집
+            for dept_name, job_roles in hierarchical_results.items():
+                dept_employees = []
+                dept_risk_distribution = {'안전군': 0, '주의군': 0, '고위험군': 0}
+                
+                for role_name, job_levels in job_roles.items():
+                    for level_name, employees in job_levels.items():
+                        for employee_id, employee_result in employees.items():
+                            if not employee_result or not isinstance(employee_result, dict):
+                                continue
+                            
+                            employee_data = employee_result.get('employee_data', {})
+                            agent_results = employee_result.get('agent_results', {})
+                            
+                            # 위험 점수 계산
+                            risk_scores = []
+                            if 'structura' in agent_results:
+                                risk_scores.append(agent_results['structura'].get('attrition_probability', 0))
+                            if 'chronos' in agent_results:
+                                risk_scores.append(agent_results['chronos'].get('risk_score', 0))
+                            if 'cognita' in agent_results:
+                                risk_scores.append(agent_results['cognita'].get('overall_risk_score', 0))
+                            if 'sentio' in agent_results:
+                                risk_scores.append(agent_results['sentio'].get('risk_score', 0))
+                            if 'agora' in agent_results:
+                                risk_scores.append(agent_results['agora'].get('agora_score', agent_results['agora'].get('market_risk_score', 0)))
+                            
+                            avg_risk_score = sum(risk_scores) / len(risk_scores) if risk_scores else 0
+                            
+                            # 위험도 레벨 결정
+                            if avg_risk_score >= 0.7:
+                                risk_level = 'high'
+                                risk_level_kr = '고위험군'
+                            elif avg_risk_score >= 0.3:
+                                risk_level = 'medium'
+                                risk_level_kr = '주의군'
+                            else:
+                                risk_level = 'low'
+                                risk_level_kr = '안전군'
+                            
+                            dept_risk_distribution[risk_level_kr] += 1
+                            
+                            # 직원 결과 생성
+                            employee_summary = {
+                                'employee_id': employee_id,
+                                'department': dept_name,
+                                'risk_score': avg_risk_score,
+                                'risk_level': risk_level,
+                                'analysis_timestamp': analysis_timestamp,
+                                'agent_results': {
+                                    'structura': agent_results.get('structura', {}),
+                                    'chronos': agent_results.get('chronos', {}),
+                                    'cognita': agent_results.get('cognita', {}),
+                                    'sentio': agent_results.get('sentio', {}),
+                                    'agora': agent_results.get('agora', {})
+                                }
+                            }
+                            
+                            dept_employees.append(employee_summary)
+                            individual_results['individual_results'].append(employee_summary)
+                
+                # 부서별 요약 추가
+                department_summary['department_results'][dept_name] = {
+                    'department': dept_name,
+                    'original_name': dept_name,
+                    'total_employees': len(dept_employees),
+                    'risk_distribution': dept_risk_distribution,
+                    'employees': dept_employees
+                }
+            
+            # 파일 저장
+            dept_summary_file = batch_analysis_dir / f'department_summary_{timestamp_str}.json'
+            with open(dept_summary_file, 'w', encoding='utf-8') as f:
+                json.dump(department_summary, f, ensure_ascii=False, indent=2)
+            
+            individual_results_file = batch_analysis_dir / f'individual_results_{timestamp_str}.json'
+            with open(individual_results_file, 'w', encoding='utf-8') as f:
+                json.dump(individual_results, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"📊 배치 분석 요약 파일 저장 완료:")
+            logger.info(f"  - {dept_summary_file}")
+            logger.info(f"  - {individual_results_file}")
+            
+        except Exception as e:
+            logger.error(f"배치 분석 요약 파일 저장 실패: {e}")
+            logger.error(traceback.format_exc())
+        
         logger.info(f"계층적 배치 분석 결과 저장 완료: {total_employees_saved}명")
         
         return jsonify({
@@ -3080,7 +3245,11 @@ def save_hierarchical_batch_results():
                 'saved_paths_count': len(saved_paths),
                 'structure': 'Department > JobRole > JobLevel > Employee'
             },
-            'analysis_timestamp': analysis_timestamp
+            'analysis_timestamp': analysis_timestamp,
+            'batch_summary_files': {
+                'department_summary': f'department_summary_{timestamp_str}.json',
+                'individual_results': f'individual_results_{timestamp_str}.json'
+            }
         })
         
     except Exception as e:
@@ -3193,6 +3362,318 @@ def not_found(error):
         'error': 'Endpoint not found',
         'timestamp': datetime.now().isoformat()
     }), 404
+
+
+@app.route('/api/results/<path:file_path>')
+def serve_results_file(file_path):
+    """결과 파일 서빙 (404 오류 방지용)"""
+    try:
+        # 실제 파일 경로 구성
+        # app/results 경로 사용 (hierarchical_result_manager와 동일)
+        # 현재 파일: app/Supervisor/supervisor_flask_backend.py
+        app_dir = Path(__file__).parent.parent  # app 폴더
+        results_dir = app_dir / 'results'
+        full_path = results_dir / file_path
+        
+        # 보안을 위해 results 디렉토리 내부인지 확인
+        if not str(full_path.resolve()).startswith(str(results_dir.resolve())):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid file path'
+            }), 403
+        
+        # 파일이 존재하는지 확인
+        if full_path.exists() and full_path.is_file():
+            return send_file(str(full_path))
+        else:
+            # 파일이 없으면 빈 JSON 반환 (404 대신)
+            return jsonify({
+                'success': False,
+                'error': 'File not found',
+                'message': f'파일을 찾을 수 없습니다: {file_path}'
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"Error serving results file {file_path}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@app.route('/api/search/employees', methods=['GET'])
+def search_employees():
+    """직원 검색 API"""
+    try:
+        # 쿼리 파라미터 추출
+        query = request.args.get('query', '').strip()
+        department = request.args.get('department', '').strip()
+        job_role = request.args.get('job_role', '').strip()
+        job_level = request.args.get('job_level', '').strip()
+        risk_level = request.args.get('risk_level', '').strip()
+        limit = int(request.args.get('limit', 50))
+        
+        # app/results 경로 사용 (hierarchical_result_manager와 동일)
+        # 현재 파일: app/Supervisor/supervisor_flask_backend.py
+        app_dir = Path(__file__).parent.parent  # app 폴더
+        results_dir = app_dir / 'results'
+        employees = []
+        
+        # 모든 부서 디렉토리 탐색
+        for dept_dir in results_dir.iterdir():
+            if not dept_dir.is_dir() or dept_dir.name in ['global_reports', 'models', 'temp']:
+                continue
+                
+            dept_name = dept_dir.name
+            
+            # 부서 필터링
+            if department and department.lower() not in dept_name.lower():
+                continue
+            
+            # 부서 인덱스 파일 읽기
+            dept_index_file = dept_dir / 'department_index.json'
+            if not dept_index_file.exists():
+                continue
+                
+            with open(dept_index_file, 'r', encoding='utf-8') as f:
+                dept_index = json.load(f)
+            
+            # 직무별 탐색
+            for role_name, role_data in dept_index.get('job_roles', {}).items():
+                # 직무 필터링
+                if job_role and job_role.lower() not in role_name.lower():
+                    continue
+                
+                # 직급별 탐색
+                for level, employee_ids in role_data.items():
+                    # 직급 필터링
+                    if job_level and job_level != level:
+                        continue
+                    
+                    # 직원별 탐색
+                    for emp_id in employee_ids:
+                        # 쿼리 필터링
+                        if query and query.lower() not in emp_id.lower():
+                            continue
+                        
+                        # 직원 정보 수집
+                        emp_dir = dept_dir / role_name / level / f'employee_{emp_id}'
+                        if emp_dir.exists():
+                            # 직원 기본 정보 로드
+                            emp_info_file = emp_dir / 'employee_info.json'
+                            comprehensive_file = emp_dir / 'comprehensive_report.json'
+                            
+                            employee_data = {
+                                'employee_id': emp_id,
+                                'department': dept_name,
+                                'job_role': role_name,
+                                'job_level': level,
+                                'file_path': str(emp_dir.relative_to(results_dir))
+                            }
+                            
+                            # 종합 보고서에서 위험도 정보 추출
+                            if comprehensive_file.exists():
+                                try:
+                                    with open(comprehensive_file, 'r', encoding='utf-8') as f:
+                                        comp_data = json.load(f)
+                                    
+                                    risk_score = comp_data.get('risk_assessment', {}).get('overall_risk_score', 0)
+                                    employee_data['risk_score'] = risk_score
+                                    
+                                    # 위험도 레벨 계산
+                                    if risk_score >= 0.7:
+                                        employee_data['risk_level'] = 'HIGH'
+                                    elif risk_score >= 0.3:
+                                        employee_data['risk_level'] = 'MEDIUM'
+                                    else:
+                                        employee_data['risk_level'] = 'LOW'
+                                        
+                                except Exception:
+                                    employee_data['risk_score'] = 0
+                                    employee_data['risk_level'] = 'UNKNOWN'
+                            
+                            # 위험도 레벨 필터링
+                            if risk_level and risk_level.upper() != employee_data.get('risk_level', 'UNKNOWN'):
+                                continue
+                            
+                            employees.append(employee_data)
+                            
+                            # 제한 확인
+                            if len(employees) >= limit:
+                                break
+                    
+                    if len(employees) >= limit:
+                        break
+                if len(employees) >= limit:
+                    break
+            if len(employees) >= limit:
+                break
+        
+        return jsonify({
+            'success': True,
+            'employees': employees,
+            'total': len(employees),
+            'query_params': {
+                'query': query,
+                'department': department,
+                'job_role': job_role,
+                'job_level': job_level,
+                'risk_level': risk_level,
+                'limit': limit
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Employee search error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/search/departments', methods=['GET'])
+def search_departments():
+    """부서 목록 조회 API"""
+    try:
+        # app/results 경로 사용 (hierarchical_result_manager와 동일)
+        # 현재 파일: app/Supervisor/supervisor_flask_backend.py
+        app_dir = Path(__file__).parent.parent  # app 폴더
+        results_dir = app_dir / 'results'
+        departments = []
+        
+        for dept_dir in results_dir.iterdir():
+            if not dept_dir.is_dir() or dept_dir.name in ['global_reports', 'models', 'temp']:
+                continue
+            
+            dept_name = dept_dir.name
+            dept_index_file = dept_dir / 'department_index.json'
+            
+            dept_info = {
+                'name': dept_name,
+                'display_name': dept_name.replace('_', ' '),
+                'total_employees': 0,
+                'job_roles': []
+            }
+            
+            if dept_index_file.exists():
+                try:
+                    with open(dept_index_file, 'r', encoding='utf-8') as f:
+                        dept_index = json.load(f)
+                    
+                    # 직무별 직원 수 계산
+                    for role_name, role_data in dept_index.get('job_roles', {}).items():
+                        role_employees = sum(len(emp_list) for emp_list in role_data.values())
+                        dept_info['total_employees'] += role_employees
+                        dept_info['job_roles'].append({
+                            'name': role_name,
+                            'employee_count': role_employees,
+                            'job_levels': list(role_data.keys())
+                        })
+                        
+                except Exception as e:
+                    logger.warning(f"Error reading department index {dept_name}: {e}")
+            
+            departments.append(dept_info)
+        
+        return jsonify({
+            'success': True,
+            'departments': departments,
+            'total': len(departments)
+        })
+        
+    except Exception as e:
+        logger.error(f"Department search error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/employee/<employee_id>/details', methods=['GET'])
+def get_employee_details(employee_id):
+    """특정 직원의 상세 분석 결과 조회"""
+    try:
+        include_xai = request.args.get('include_xai', 'false').lower() == 'true'
+        
+        # app/results 경로 사용 (hierarchical_result_manager와 동일)
+        # 현재 파일: app/Supervisor/supervisor_flask_backend.py
+        app_dir = Path(__file__).parent.parent  # app 폴더
+        results_dir = app_dir / 'results'
+        
+        # 직원 디렉토리 찾기
+        employee_dir = None
+        for dept_dir in results_dir.iterdir():
+            if not dept_dir.is_dir() or dept_dir.name in ['global_reports', 'models', 'temp']:
+                continue
+            
+            for role_dir in dept_dir.iterdir():
+                if not role_dir.is_dir():
+                    continue
+                    
+                for level_dir in role_dir.iterdir():
+                    if not level_dir.is_dir():
+                        continue
+                    
+                    emp_dir = level_dir / f'employee_{employee_id}'
+                    if emp_dir.exists():
+                        employee_dir = emp_dir
+                        break
+                if employee_dir:
+                    break
+            if employee_dir:
+                break
+        
+        if not employee_dir:
+            return jsonify({
+                'success': False,
+                'error': f'직원 {employee_id}를 찾을 수 없습니다.'
+            }), 404
+        
+        # 결과 파일들 로드
+        result_data = {
+            'employee_id': employee_id,
+            'directory_path': str(employee_dir.relative_to(results_dir))
+        }
+        
+        # 각 결과 파일 로드
+        result_files = [
+            'employee_info.json',
+            'comprehensive_report.json',
+            'structura_result.json',
+            'chronos_result.json',
+            'cognita_result.json',
+            'sentio_result.json'
+        ]
+        
+        for file_name in result_files:
+            file_path = employee_dir / file_name
+            if file_path.exists():
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        result_data[file_name.replace('.json', '')] = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Error loading {file_name}: {e}")
+                    result_data[file_name.replace('.json', '')] = None
+        
+        # 시각화 파일 목록
+        viz_dir = employee_dir / 'visualizations'
+        if viz_dir.exists():
+            viz_files = [f.name for f in viz_dir.iterdir() if f.is_file()]
+            result_data['visualizations'] = viz_files
+        else:
+            result_data['visualizations'] = []
+        
+        return jsonify({
+            'success': True,
+            'employee_data': result_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Employee details error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.errorhandler(500)

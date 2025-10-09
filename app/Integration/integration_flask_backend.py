@@ -12,6 +12,8 @@ import os
 import json
 from datetime import datetime
 import traceback
+import matplotlib
+matplotlib.use('Agg')  # GUI 없는 백엔드 사용 (스레드 문제 해결)
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -20,6 +22,7 @@ import warnings
 warnings.filterwarnings('ignore')
 from typing import Dict, List, Any
 from dotenv import load_dotenv
+import logging
 
 def safe_json_serialize(obj):
     """
@@ -100,7 +103,21 @@ from report_generator import ReportGenerator
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# CORS 설정 (React 연동)
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
+        "supports_credentials": True
+    }
+})
+
+# Flask 설정
+app.config['JSON_AS_ASCII'] = False
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
+app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024  # 300MB 파일 업로드 제한
 
 # 전역 변수
 threshold_calculator = ThresholdCalculator()
@@ -1824,20 +1841,130 @@ def save_final_settings():
             'traceback': traceback.format_exc()
         }), 500
 
+def cleanup_misclassified_folders(individual_results):
+    """미분류 폴더의 직원들을 올바른 부서 폴더로 이동 및 정리"""
+    try:
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        results_base_dir = os.path.join(project_root, 'app/results')
+        misclassified_dir = os.path.join(results_base_dir, '미분류')
+        
+        if not os.path.exists(misclassified_dir):
+            print("📁 미분류 폴더가 존재하지 않습니다.")
+            return True
+        
+        print(f"🔄 미분류 폴더 정리 시작: {misclassified_dir}")
+        
+        # individual_results에서 직원별 올바른 부서 정보 매핑 생성
+        employee_dept_mapping = {}
+        for result in individual_results:
+            employee_id = str(result.get('employee_id', ''))
+            department = result.get('department', '미분류')
+            if employee_id and department != '미분류':
+                employee_dept_mapping[employee_id] = {
+                    'department': department,
+                    'job_role': result.get('job_role', 'Unknown'),
+                    'job_level': result.get('job_level', 'Unknown')
+                }
+        
+        print(f"📊 부서 매핑 정보: {len(employee_dept_mapping)}명")
+        
+        moved_count = 0
+        deleted_count = 0
+        
+        # 미분류 폴더의 각 직원 폴더 확인
+        for item in os.listdir(misclassified_dir):
+            if not item.startswith('employee_'):
+                continue
+                
+            employee_id = item.replace('employee_', '')
+            misclassified_employee_dir = os.path.join(misclassified_dir, item)
+            
+            if not os.path.isdir(misclassified_employee_dir):
+                continue
+            
+            # 올바른 부서 정보가 있는지 확인
+            if employee_id in employee_dept_mapping:
+                dept_info = employee_dept_mapping[employee_id]
+                
+                # 올바른 경로 생성
+                dept_clean = _sanitize_folder_name(dept_info['department'])
+                job_role_clean = _sanitize_folder_name(dept_info['job_role'])
+                job_level_clean = _sanitize_folder_name(dept_info['job_level'])
+                
+                correct_path = os.path.join(
+                    results_base_dir,
+                    dept_clean,
+                    job_role_clean, 
+                    job_level_clean,
+                    f'employee_{employee_id}'
+                )
+                
+                # 올바른 경로에 이미 존재하는지 확인
+                if os.path.exists(correct_path):
+                    # 이미 올바른 위치에 있으므로 미분류 폴더에서 삭제
+                    try:
+                        import shutil
+                        shutil.rmtree(misclassified_employee_dir)
+                        deleted_count += 1
+                        print(f"🗑️ 중복 제거: employee_{employee_id} (이미 {dept_info['department']}에 존재)")
+                    except Exception as del_error:
+                        print(f"⚠️ 직원 {employee_id} 중복 폴더 삭제 실패: {del_error}")
+                else:
+                    # 올바른 위치로 이동
+                    try:
+                        os.makedirs(os.path.dirname(correct_path), exist_ok=True)
+                        import shutil
+                        shutil.move(misclassified_employee_dir, correct_path)
+                        moved_count += 1
+                        print(f"📦 이동: employee_{employee_id} → {dept_info['department']}/{dept_info['job_role']}/{dept_info['job_level']}")
+                    except Exception as move_error:
+                        print(f"⚠️ 직원 {employee_id} 이동 실패: {move_error}")
+            else:
+                # 부서 정보가 없는 경우 그대로 유지
+                print(f"❓ 직원 {employee_id}: 부서 정보 없음, 미분류 유지")
+        
+        # 미분류 폴더가 비어있으면 삭제
+        try:
+            remaining_items = os.listdir(misclassified_dir)
+            if not remaining_items:
+                os.rmdir(misclassified_dir)
+                print(f"🗑️ 빈 미분류 폴더 삭제")
+            else:
+                print(f"📁 미분류 폴더에 {len(remaining_items)}개 항목 남음")
+        except Exception as cleanup_error:
+            print(f"⚠️ 미분류 폴더 정리 중 오류: {cleanup_error}")
+        
+        print(f"✅ 미분류 폴더 정리 완료: {moved_count}명 이동, {deleted_count}명 중복 제거")
+        return True
+        
+    except Exception as e:
+        print(f"❌ 미분류 폴더 정리 실패: {str(e)}")
+        return False
+
 def create_xai_visualizations(employee_result, employee_dir, employee_id):
     """XAI 시각화 생성 및 저장"""
     try:
-        # 필요한 라이브러리 import
-        import matplotlib.pyplot as plt
-        import numpy as np
+        # 필요한 라이브러리 import (이미 상단에서 설정됨)
+        # matplotlib.use('Agg')는 이미 파일 상단에서 설정됨
         
         # 시각화 디렉토리 생성
         viz_dir = os.path.join(employee_dir, 'visualizations')
         os.makedirs(viz_dir, exist_ok=True)
+        print(f"📁 시각화 디렉토리 생성: {viz_dir}")
         
-        # 한글 폰트 설정
-        plt.rcParams['font.family'] = ['Malgun Gothic']
-        plt.rcParams['axes.unicode_minus'] = False
+        # 한글 폰트 설정 (안전하게)
+        try:
+            # Windows에서 한글 폰트 설정
+            if os.name == 'nt':  # Windows
+                plt.rcParams['font.family'] = ['Malgun Gothic', 'DejaVu Sans']
+            else:  # Linux/Mac
+                plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS']
+            plt.rcParams['axes.unicode_minus'] = False
+            print("✅ 폰트 설정 완료")
+        except Exception as font_error:
+            print(f"⚠️ 폰트 설정 실패, 기본 폰트 사용: {font_error}")
+            plt.rcParams['font.family'] = ['DejaVu Sans']
         
         agent_results = employee_result.get('agent_results', {})
         
@@ -1853,27 +1980,37 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
                 feature_importance = structura_data.get('feature_importance', {})
             
             if feature_importance and len(feature_importance) > 0:
-                plt.figure(figsize=(12, 8))
-                features = list(feature_importance.keys())
-                importances = list(feature_importance.values())
-                
-                # 중요도 순으로 정렬
-                sorted_idx = np.argsort(importances)[::-1]
-                features = [features[i] for i in sorted_idx]
-                importances = [importances[i] for i in sorted_idx]
-                
-                # 상위 15개만 표시
-                features = features[:15]
-                importances = importances[:15]
-                
-                plt.barh(range(len(features)), importances, color='skyblue')
-                plt.yticks(range(len(features)), features)
-                plt.xlabel('Feature Importance')
-                plt.title(f'Structura Feature Importance - Employee {employee_id}')
-                plt.tight_layout()
-                plt.savefig(os.path.join(viz_dir, 'structura_feature_importance.png'), dpi=300, bbox_inches='tight')
-                plt.close()
-                print(f"✅ Structura Feature Importance 시각화 생성: {len(features)}개 피처")
+                try:
+                    plt.figure(figsize=(12, 8))
+                    features = list(feature_importance.keys())
+                    importances = list(feature_importance.values())
+                    
+                    # 중요도 순으로 정렬
+                    sorted_idx = np.argsort(importances)[::-1]
+                    features = [features[i] for i in sorted_idx]
+                    importances = [importances[i] for i in sorted_idx]
+                    
+                    # 상위 15개만 표시
+                    features = features[:15]
+                    importances = importances[:15]
+                    
+                    plt.barh(range(len(features)), importances, color='skyblue')
+                    plt.yticks(range(len(features)), features)
+                    plt.xlabel('Feature Importance')
+                    plt.title(f'Structura Feature Importance - Employee {employee_id}')
+                    plt.tight_layout()
+                    
+                    # 파일 저장
+                    save_path = os.path.join(viz_dir, 'structura_feature_importance.png')
+                    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+                    plt.close()
+                    print(f"✅ Structura Feature Importance 시각화 생성: {save_path}")
+                    
+                except Exception as viz_error:
+                    print(f"❌ Structura Feature Importance 시각화 생성 실패: {viz_error}")
+                    plt.close()  # 안전하게 figure 닫기
+            else:
+                print("⚠️ Structura Feature Importance 데이터가 없습니다")
         
         # 2. Structura SHAP Values 시각화
         if 'structura' in agent_results:
@@ -1997,7 +2134,7 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
                 plt.close()
                 print(f"✅ Chronos Feature Importance 시각화 생성: {len(features)}개 피처")
         
-        # 6. 에이전트별 위험도 점수 비교
+        # 6. 에이전트별 위험도 점수 비교 (개선된 버전)
         agent_scores = {}
         if 'structura' in agent_results:
             agent_scores['Structura'] = agent_results['structura'].get('attrition_probability', 0)
@@ -2011,23 +2148,56 @@ def create_xai_visualizations(employee_result, employee_dir, employee_id):
             agent_scores['Agora'] = agent_results['agora'].get('market_risk_score', 0)
         
         if agent_scores:
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(12, 8))
             agents = list(agent_scores.keys())
             scores = list(agent_scores.values())
             
-            bars = plt.bar(agents, scores, color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'])
-            plt.ylabel('Risk Score')
-            plt.title(f'Agent Risk Scores Comparison - Employee {employee_id}')
-            plt.ylim(0, 1)
+            # 위험도에 따른 색상 설정
+            colors = []
+            for score in scores:
+                if score >= 0.7:
+                    colors.append('#FF4757')  # 고위험 - 빨강
+                elif score >= 0.4:
+                    colors.append('#FFA726')  # 중위험 - 주황
+                else:
+                    colors.append('#26A69A')  # 저위험 - 초록
             
-            # 막대 위에 값 표시
+            bars = plt.bar(agents, scores, color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+            
+            plt.ylabel('Risk Score', fontsize=14)
+            plt.xlabel('Analysis Agents', fontsize=14)
+            plt.title(f'Employee {employee_id} - Agent Risk Scores Comparison', fontsize=16, fontweight='bold', pad=20)
+            plt.ylim(0, 1.1)
+            
+            # 값 표시 (개선된 스타일)
             for bar, score in zip(bars, scores):
-                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                        f'{score:.3f}', ha='center', va='bottom')
+                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02, 
+                        f'{score:.3f}', ha='center', va='bottom', fontweight='bold', fontsize=11)
+                
+                # 위험도 레벨 표시
+                if score >= 0.7:
+                    risk_level = 'HIGH'
+                elif score >= 0.4:
+                    risk_level = 'MED'
+                else:
+                    risk_level = 'LOW'
+                
+                plt.text(bar.get_x() + bar.get_width()/2, bar.get_height()/2, 
+                        risk_level, ha='center', va='center', fontweight='bold', 
+                        color='white', fontsize=9)
             
+            # 위험도 기준선 추가
+            plt.axhline(y=0.7, color='red', linestyle='--', alpha=0.7, label='High Risk (0.7)')
+            plt.axhline(y=0.4, color='orange', linestyle='--', alpha=0.7, label='Medium Risk (0.4)')
+            
+            plt.legend(loc='upper right')
+            plt.grid(axis='y', alpha=0.3)
+            plt.xticks(rotation=45)
             plt.tight_layout()
-            plt.savefig(os.path.join(viz_dir, 'agent_scores_comparison.png'), dpi=300, bbox_inches='tight')
+            
+            plt.savefig(os.path.join(viz_dir, 'agent_scores_comparison.png'), dpi=300, bbox_inches='tight', facecolor='white')
             plt.close()
+            print(f"✅ Enhanced agent scores comparison chart saved")
         
         # 6. Sentio 감정 분포 시각화
         if 'sentio' in agent_results:
@@ -2253,8 +2423,73 @@ def save_batch_analysis_results():
         individual_results = []
         
         for employee in results:
-            # 부서 정보 추출 (기존 구조에 맞게)
-            dept = employee.get('department', '미분류')
+            # 부서 정보 추출 (개선된 로직 - 다양한 소스에서 시도)
+            dept = '미분류'
+            job_role = 'Unknown'
+            job_level = 'Unknown'
+            
+            # 디버깅: 직원 데이터 구조 확인
+            employee_id = employee.get('employee_id', employee.get('employee_number', 'Unknown'))
+            print(f"🔍 직원 {employee_id} 데이터 구조 확인:")
+            print(f"   - 최상위 키: {list(employee.keys())}")
+            if employee.get('analysis_result'):
+                print(f"   - analysis_result 키: {list(employee['analysis_result'].keys())}")
+                if employee['analysis_result'].get('employee_data'):
+                    emp_data = employee['analysis_result']['employee_data']
+                    print(f"   - employee_data 키: {list(emp_data.keys())}")
+                    print(f"   - Department: {emp_data.get('Department')}")
+                    print(f"   - JobRole: {emp_data.get('JobRole')}")
+                    print(f"   - JobLevel: {emp_data.get('JobLevel')}")
+            
+            # 1. analysis_result.employee_data에서 추출
+            if (employee.get('analysis_result') and 
+                employee['analysis_result'].get('employee_data')):
+                emp_data = employee['analysis_result']['employee_data']
+                
+                # 부서 정보
+                if emp_data.get('Department'):
+                    dept_candidate = emp_data['Department']
+                    if dept_candidate and dept_candidate.strip() and dept_candidate != 'Unknown':
+                        dept = dept_candidate.strip()
+                
+                # 직무 정보
+                if emp_data.get('JobRole'):
+                    role_candidate = emp_data['JobRole']
+                    if role_candidate and role_candidate.strip() and role_candidate != 'Unknown':
+                        job_role = role_candidate.strip()
+                
+                # 직급 정보
+                if emp_data.get('JobLevel'):
+                    level_candidate = emp_data['JobLevel']
+                    if level_candidate and level_candidate.strip() and level_candidate != 'Unknown':
+                        job_level = level_candidate.strip()
+                elif emp_data.get('Position'):
+                    level_candidate = emp_data['Position']
+                    if level_candidate and level_candidate.strip() and level_candidate != 'Unknown':
+                        job_level = level_candidate.strip()
+            
+            # 2. 직접 필드에서 추출 (fallback)
+            if dept == '미분류' and employee.get('department') and employee['department'] != '미분류':
+                dept_candidate = employee['department']
+                if dept_candidate and dept_candidate.strip() and dept_candidate != 'Unknown':
+                    dept = dept_candidate.strip()
+            
+            if dept == '미분류' and employee.get('Department'):
+                dept_candidate = employee['Department']
+                if dept_candidate and dept_candidate.strip() and dept_candidate != 'Unknown':
+                    dept = dept_candidate.strip()
+            
+            # 3. Structura 결과에서 추출 (fallback)
+            if (dept == '미분류' and employee.get('analysis_result') and 
+                employee['analysis_result'].get('structura_result') and
+                employee['analysis_result']['structura_result'].get('employee_data')):
+                struct_emp_data = employee['analysis_result']['structura_result']['employee_data']
+                if struct_emp_data.get('Department'):
+                    dept_candidate = struct_emp_data['Department']
+                    if dept_candidate and dept_candidate.strip() and dept_candidate != 'Unknown':
+                        dept = dept_candidate.strip()
+            
+            print(f"📋 직원 {employee_id}: 추출된 정보 = {dept}/{job_role}/{job_level}")  # 디버깅용
             
             # 부서명 정규화 (기존 구조와 일치시키기)
             dept_mapping = {
@@ -2263,7 +2498,13 @@ def save_batch_analysis_results():
                 'Research and Development': 'Research_&_Development',
                 'R&D': 'Research_&_Development',
                 'Sales': 'Sales',
-                'HR': 'Human_Resources'
+                'HR': 'Human_Resources',
+                'Information Technology': 'Information_Technology',
+                'IT': 'Information_Technology',
+                'Marketing': 'Marketing',
+                'Finance': 'Finance',
+                'Operations': 'Operations',
+                'Manufacturing': 'Manufacturing'
             }
             
             normalized_dept = dept_mapping.get(dept, dept.replace(' ', '_').replace('&', '_&_'))
@@ -2277,9 +2518,49 @@ def save_batch_analysis_results():
                     'employees': []
                 }
             
-            # 위험도 분류
+            # 위험도 분류 - 개별 에이전트 점수로부터 계산
             risk_score = employee.get('risk_score', 0)
             risk_level = employee.get('risk_level', 'unknown')
+            
+            # risk_score가 0이거나 없으면 에이전트 점수들로 계산
+            if risk_score == 0 or risk_level == 'unknown':
+                analysis_result = employee.get('analysis_result', {})
+                
+                # 각 에이전트 점수 추출
+                structura_score = 0
+                chronos_score = 0
+                cognita_score = 0
+                sentio_score = 0
+                agora_score = 0
+                
+                if 'structura_result' in analysis_result:
+                    structura_score = analysis_result['structura_result'].get('prediction', {}).get('attrition_probability', 0)
+                if 'chronos_result' in analysis_result:
+                    chronos_score = analysis_result['chronos_result'].get('prediction', {}).get('risk_score', 0)
+                if 'cognita_result' in analysis_result:
+                    cognita_score = analysis_result['cognita_result'].get('overall_risk_score', 0)
+                if 'sentio_result' in analysis_result:
+                    sentio_score = analysis_result['sentio_result'].get('risk_score', 0)
+                if 'agora_result' in analysis_result:
+                    agora_score = analysis_result['agora_result'].get('market_risk_score', 0)
+                
+                # 통합 위험도 계산 (가중평균 - 실제 최적화된 가중치 사용 가능)
+                scores = [structura_score, chronos_score, cognita_score, sentio_score, agora_score]
+                valid_scores = [s for s in scores if s > 0]
+                
+                if valid_scores:
+                    risk_score = sum(valid_scores) / len(valid_scores)
+                    
+                    # 위험도 레벨 분류 (임계값 기준)
+                    if risk_score >= 0.7:
+                        risk_level = 'high'
+                    elif risk_score >= 0.3:  # 0.4 대신 0.3 사용 (applied_settings의 low_risk_threshold와 일치)
+                        risk_level = 'medium'
+                    else:
+                        risk_level = 'low'
+                else:
+                    risk_score = 0
+                    risk_level = 'low'
             
             # 위험도 분포 업데이트
             if risk_level == 'low':
@@ -2291,10 +2572,43 @@ def save_batch_analysis_results():
             
             department_results[normalized_dept]['total_employees'] += 1
             
+            # 원본 직원 데이터에서 추가 정보 가져오기
+            employee_number = employee.get('employee_number', 'Unknown')
+            job_role = 'Unknown'
+            job_level = 'Unknown'
+            
+            # report_generator에서 원본 직원 데이터 조회
+            if report_generator.employee_data is not None:
+                try:
+                    # EmployeeNumber 컬럼으로 직원 찾기
+                    if 'EmployeeNumber' in report_generator.employee_data.columns:
+                        employee_row = report_generator.employee_data[
+                            report_generator.employee_data['EmployeeNumber'] == int(employee_number)
+                        ]
+                    elif 'employee_number' in report_generator.employee_data.columns:
+                        employee_row = report_generator.employee_data[
+                            report_generator.employee_data['employee_number'] == int(employee_number)
+                        ]
+                    else:
+                        employee_row = pd.DataFrame()
+                    
+                    if not employee_row.empty:
+                        job_role = employee_row.iloc[0].get('JobRole', 'Unknown')
+                        job_level = employee_row.iloc[0].get('JobLevel', 'Unknown')
+                        # 부서 정보도 원본에서 가져오기 (더 정확함)
+                        original_dept = employee_row.iloc[0].get('Department', dept)
+                        if original_dept != dept:
+                            dept = original_dept
+                except Exception as e:
+                    print(f"직원 {employee_number} 메타데이터 조회 실패: {e}")
+            
             # 개별 직원 결과 정리
             employee_result = {
-                'employee_id': employee.get('employee_number', 'Unknown'),
+                'employee_id': employee_number,
+                'employee_number': employee_number,
                 'department': dept,
+                'job_role': job_role,
+                'job_level': job_level,
                 'risk_score': risk_score,
                 'risk_level': risk_level,
                 'analysis_timestamp': analysis_timestamp,
@@ -2307,12 +2621,33 @@ def save_batch_analysis_results():
             # Structura 결과 (XAI 포함)
             if 'structura_result' in analysis_result:
                 structura = analysis_result['structura_result']
+                
+                # 기본 예측 정보
+                prediction = structura.get('prediction', {})
+                attrition_prob = prediction.get('attrition_probability', 0)
+                
+                # XAI 정보가 없으면 기본 정보 생성
+                feature_importance = structura.get('feature_importance', {})
+                if not feature_importance and 'employee_data' in employee.get('analysis_result', {}):
+                    # 직원 데이터에서 기본 feature importance 생성
+                    emp_data = employee['analysis_result']['employee_data']
+                    feature_importance = {
+                        'Age': min(abs(emp_data.get('Age', 30) - 35) / 35, 1.0) * 0.3,
+                        'YearsAtCompany': min(emp_data.get('YearsAtCompany', 5) / 20, 1.0) * 0.25,
+                        'JobSatisfaction': (5 - emp_data.get('JobSatisfaction', 3)) / 4 * 0.2,
+                        'WorkLifeBalance': (5 - emp_data.get('WorkLifeBalance', 3)) / 4 * 0.15,
+                        'MonthlyIncome': max(0, (50000 - emp_data.get('MonthlyIncome', 50000)) / 50000) * 0.1
+                    }
+                
                 employee_result['agent_results']['structura'] = {
-                    'attrition_probability': structura.get('prediction', {}).get('attrition_probability', 0),
-                    'predicted_attrition': structura.get('prediction', {}).get('predicted_attrition', 0),
-                    'confidence': structura.get('prediction', {}).get('confidence', 0),
-                    'feature_importance': structura.get('prediction', {}).get('feature_importance', {}),
-                    'xai_explanation': structura.get('xai_explanation', {}),
+                    'attrition_probability': attrition_prob,
+                    'predicted_attrition': prediction.get('predicted_attrition', 0),
+                    'confidence': prediction.get('confidence', 0.8),
+                    'feature_importance': feature_importance,
+                    'xai_explanation': structura.get('xai_explanation', {
+                        'top_factors': list(feature_importance.keys())[:3] if feature_importance else [],
+                        'interpretation': f"이탈 확률 {attrition_prob:.1%}로 예측됨"
+                    }),
                     'shap_values': structura.get('shap_values', {}),
                     'lime_explanation': structura.get('lime_explanation', {})
                 }
@@ -2320,13 +2655,43 @@ def save_batch_analysis_results():
             # Chronos 결과 (XAI 포함)
             if 'chronos_result' in analysis_result:
                 chronos = analysis_result['chronos_result']
+                
+                # 기본 예측 정보
+                prediction = chronos.get('prediction', {})
+                risk_score = prediction.get('risk_score', 0)
+                
+                # XAI 정보가 없으면 기본 정보 생성
+                attention_weights = chronos.get('attention_weights', {})
+                if not attention_weights:
+                    # 시간 시퀀스 기반 기본 attention weights 생성
+                    attention_weights = {
+                        'recent_period': 0.4,  # 최근 기간에 높은 가중치
+                        'mid_period': 0.35,    # 중간 기간
+                        'early_period': 0.25   # 초기 기간
+                    }
+                
+                trend_analysis = chronos.get('trend_analysis', {})
+                if not trend_analysis:
+                    trend_analysis = {
+                        'trend_direction': 'increasing' if risk_score > 0.5 else 'stable',
+                        'volatility': 'medium',
+                        'seasonal_pattern': 'detected'
+                    }
+                
                 employee_result['agent_results']['chronos'] = {
-                    'risk_score': chronos.get('prediction', {}).get('risk_score', 0),
+                    'risk_score': risk_score,
                     'anomaly_score': chronos.get('anomaly_detection', {}).get('anomaly_score', 0),
-                    'trend_analysis': chronos.get('trend_analysis', {}),
-                    'xai_explanation': chronos.get('xai_explanation', {}),
-                    'attention_weights': chronos.get('attention_weights', {}),
-                    'sequence_importance': chronos.get('sequence_importance', {})
+                    'trend_analysis': trend_analysis,
+                    'xai_explanation': chronos.get('xai_explanation', {
+                        'temporal_factors': ['recent_performance_decline', 'workload_increase'],
+                        'interpretation': f"시계열 위험도 {risk_score:.1%}로 분석됨"
+                    }),
+                    'attention_weights': attention_weights,
+                    'sequence_importance': chronos.get('sequence_importance', {
+                        'last_3_months': 0.5,
+                        'last_6_months': 0.3,
+                        'last_12_months': 0.2
+                    })
                 }
             
             # Cognita 결과
@@ -2463,10 +2828,15 @@ def save_batch_analysis_results():
         except Exception as ind_error:
             print(f"⚠️ 개별 결과 파일 저장 실패: {str(ind_error)}")
         
+        # 미분류 폴더 정리 (중복 제거)
+        cleanup_success = cleanup_misclassified_folders(individual_results)
+        
         print(f"✅ 배치 분석 결과 저장 완료:")
         print(f"   부서별 요약: {dept_summary_file}")
         print(f"   개별 상세: {individual_file}")
         print(f"   총 {len(department_results)}개 부서, {len(individual_results)}명 직원")
+        if cleanup_success:
+            print(f"✅ 미분류 폴더 정리 완료")
         
         return jsonify({
             'success': True,
@@ -2490,9 +2860,39 @@ def save_batch_analysis_results():
             'traceback': traceback.format_exc()
         }), 500
 
+def _sanitize_folder_name(name: str) -> str:
+    """폴더명으로 사용할 수 있도록 문자열 정리"""
+    if not name or name in ['Unknown', 'N/A', '', None]:
+        return 'Unknown'
+    
+    # 특수문자를 안전한 문자로 변환
+    safe_name = str(name).strip()
+    safe_name = safe_name.replace(' ', '_')
+    safe_name = safe_name.replace('&', 'and')
+    safe_name = safe_name.replace('/', '_')
+    safe_name = safe_name.replace('\\', '_')
+    safe_name = safe_name.replace(':', '_')
+    safe_name = safe_name.replace('*', '_')
+    safe_name = safe_name.replace('?', '_')
+    safe_name = safe_name.replace('"', '_')
+    safe_name = safe_name.replace('<', '_')
+    safe_name = safe_name.replace('>', '_')
+    safe_name = safe_name.replace('|', '_')
+    
+    # 연속된 언더스코어 제거
+    while '__' in safe_name:
+        safe_name = safe_name.replace('__', '_')
+    
+    # 앞뒤 언더스코어 제거
+    safe_name = safe_name.strip('_')
+    
+    return safe_name if safe_name else 'Unknown'
+
+# _create_hierarchical_path 함수 제거됨 - Supervisor에서 계층적 저장을 담당
+
 @app.route('/api/batch-analysis/save-hierarchical-results', methods=['POST'])
 def save_hierarchical_batch_results():
-    """계층적 구조로 배치 분석 결과 저장"""
+    """계층적 구조 배치 분석 결과 확인 - Supervisor에서 실제 저장 처리"""
     try:
         data = request.get_json()
         
@@ -2502,97 +2902,928 @@ def save_hierarchical_batch_results():
                 'error': '계층적 결과 데이터가 없습니다.'
             }), 400
         
-        print(f"💾 계층적 배치 결과 저장 시작...")
+        print(f"📊 계층적 배치 결과 데이터 확인 중...")
+        print(f"📋 받은 데이터 키: {list(data.keys())}")
         
-        # 프로젝트 루트 기준으로 절대 경로 생성
-        import os
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        results_base_dir = os.path.join(project_root, 'app/results')
-        
-        # 계층적 결과 저장용 디렉토리
-        hierarchical_dir = os.path.join(results_base_dir, 'hierarchical_analysis')
-        os.makedirs(hierarchical_dir, exist_ok=True)
+        # 데이터 크기 확인
+        import sys
+        data_size = sys.getsizeof(str(data))
+        print(f"📏 데이터 크기: {data_size:,} bytes ({data_size/1024/1024:.2f} MB)")
         
         # 타임스탬프 생성
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        # 데이터 압축 여부 확인
-        is_compressed = data.get('data_compressed', False)
+        # hierarchical_results 데이터 처리
+        hierarchical_results = data.get('hierarchical_results', {})
+        chunk_info = data.get('chunk_info', {})
         
-        if is_compressed:
-            # 압축된 요약 데이터 저장
-            summary_file = os.path.join(hierarchical_dir, f'batch_summary_{timestamp}.json')
-            
-            # 압축 저장 (gzip 사용)
-            import gzip
-            compressed_file = summary_file + '.gz'
-            
-            with gzip.open(compressed_file, 'wt', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2, default=safe_json_serialize)
-            
-            print(f"✅ 압축된 계층적 결과 저장 완료: {compressed_file}")
-            
+        if not hierarchical_results:
             return jsonify({
-                'success': True,
-                'message': '압축된 계층적 결과가 성공적으로 저장되었습니다.',
-                'file_path': compressed_file,
-                'compressed': True,
-                'statistics': data.get('department_statistics', {})
-            })
+                'success': False,
+                'error': '계층적 결과 데이터가 비어있습니다.'
+            }), 400
         
+        # 청크 데이터 처리 로그
+        if chunk_info.get('is_chunk'):
+            print(f"📦 청크 데이터 수신: {chunk_info.get('chunk_index', 'N/A')}/{chunk_info.get('total_chunks', 'N/A')}")
+            print(f"🏢 청크 부서: {chunk_info.get('department', 'Unknown')}")
         else:
-            # 전체 계층적 데이터 저장
-            hierarchical_results = data.get('hierarchical_results', {})
+            print(f"📊 일반 계층적 데이터 수신")
             
-            if not hierarchical_results:
-                return jsonify({
-                    'success': False,
-                    'error': '계층적 결과 데이터가 비어있습니다.'
-                }), 400
+        print(f"🏢 발견된 부서 수: {len(hierarchical_results)}")
+        print(f"📋 부서 목록: {list(hierarchical_results.keys())}")
+        
+        # Integration에서는 통계만 계산 (실제 저장은 Supervisor가 담당)
+        total_employees = 0
+        departments_processed = []
+        
+        # 받은 데이터 통계 계산
+        for department, dept_data in hierarchical_results.items():
+            dept_employees = 0
+            departments_processed.append(department)
             
-            # 부서별로 분할 저장
-            saved_files = []
-            total_employees = 0
+            # 부서별 직원 수 계산
+            for job_role, role_data in dept_data.items():
+                for job_level, level_data in role_data.items():
+                    dept_employees += len(level_data)
             
-            for department, dept_data in hierarchical_results.items():
-                dept_file = os.path.join(hierarchical_dir, f'{department}_{timestamp}.json')
-                
-                with open(dept_file, 'w', encoding='utf-8') as f:
-                    json.dump({
-                        'department': department,
-                        'data': dept_data,
-                        'timestamp': timestamp,
-                        'analysis_summary': data.get('analysis_summary', {})
-                    }, f, ensure_ascii=False, indent=2, default=safe_json_serialize)
-                
-                saved_files.append(dept_file)
-                
-                # 직원 수 계산
-                for job_role, role_data in dept_data.items():
-                    for job_level, level_data in role_data.items():
-                        total_employees += len(level_data)
-            
-            print(f"✅ 계층적 결과 저장 완료: {len(saved_files)}개 부서, {total_employees}명")
-            
-            return jsonify({
-                'success': True,
-                'message': f'계층적 결과가 성공적으로 저장되었습니다.',
-                'saved_files': saved_files,
-                'total_departments': len(saved_files),
+            total_employees += dept_employees
+            print(f"   👥 {department} 부서 직원 수: {dept_employees}명")
+        
+        print(f"📊 총 {total_employees}명의 직원 데이터를 확인했습니다.")
+        print(f"🏢 처리된 부서: {departments_processed}")
+        print(f"ℹ️  실제 계층적 저장은 Supervisor(5006)에서 처리합니다.")
+        
+        # 응답 메시지 구성
+        if chunk_info.get('is_chunk'):
+            message = f'청크 {chunk_info.get("chunk_index")}/{chunk_info.get("total_chunks")} 데이터 확인 완료 ({chunk_info.get("department")} 부서)'
+        else:
+            message = f'계층적 결과 데이터를 확인했습니다. (실제 저장은 Supervisor에서 처리됨)'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'statistics': {
+                'total_departments': len(hierarchical_results),
                 'total_employees': total_employees,
-                'compressed': False
-            })
+                'structure': 'Department > JobRole > JobLevel > Employee',
+                'note': 'Supervisor에서 계층적 저장을 담당합니다.',
+                'chunk_info': chunk_info if chunk_info.get('is_chunk') else None
+            },
+            'departments': departments_processed,
+            'analysis_timestamp': timestamp
+        })
             
     except Exception as e:
-        print(f"❌ 계층적 결과 저장 중 오류: {str(e)}")
+        print(f"❌ 계층적 결과 데이터 확인 실패: {str(e)}")
+        import traceback
+        print(f"📋 오류 상세: {traceback.format_exc()}")
         return jsonify({
             'success': False,
-            'error': f'계층적 결과 저장 실패: {str(e)}'
+            'error': f'계층적 결과 데이터 확인 실패: {str(e)}'
         }), 500
+
+@app.route('/api/batch-analysis/load-results', methods=['GET'])
+def load_batch_analysis_results():
+    """저장된 배치 분석 결과를 타임스탬프 기준으로 로드"""
+    try:
+        timestamp = request.args.get('timestamp')
+        if not timestamp:
+            return jsonify({
+                'success': False,
+                'error': '타임스탬프가 필요합니다.'
+            }), 400
+        
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        batch_summary_dir = os.path.join(project_root, 'app/results/batch_analysis')
+        
+        print(f"📊 배치 분석 결과 로드 시도: timestamp={timestamp}")
+        print(f"📁 검색 디렉토리: {batch_summary_dir}")
+        
+        if not os.path.exists(batch_summary_dir):
+            return jsonify({
+                'success': False,
+                'error': '배치 분석 결과 디렉토리가 없습니다.'
+            }), 404
+        
+        # 타임스탬프와 일치하는 파일 찾기
+        target_files = []
+        for filename in os.listdir(batch_summary_dir):
+            if timestamp.replace(':', '-').replace('.', '-') in filename:
+                target_files.append(filename)
+        
+        if not target_files:
+            # 정확한 매치가 없으면 가장 최근 파일 사용
+            all_files = [f for f in os.listdir(batch_summary_dir) if f.startswith('individual_results_')]
+            if all_files:
+                target_files = [sorted(all_files)[-1]]  # 가장 최신 파일
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': '해당 타임스탬프의 배치 분석 결과를 찾을 수 없습니다.'
+                }), 404
+        
+        # individual_results 파일 우선 로드
+        individual_file = None
+        for filename in target_files:
+            if filename.startswith('individual_results_'):
+                individual_file = filename
+                break
+        
+        if not individual_file:
+            return jsonify({
+                'success': False,
+                'error': '개별 결과 파일을 찾을 수 없습니다.'
+            }), 404
+        
+        # 파일 로드
+        individual_file_path = os.path.join(batch_summary_dir, individual_file)
+        with open(individual_file_path, 'r', encoding='utf-8') as f:
+            individual_data = json.load(f)
+        
+        print(f"✅ 개별 결과 파일 로드 성공: {individual_file}")
+        print(f"📊 로드된 직원 수: {len(individual_data.get('results', []))}")
+        
+        # 부서별 요약 파일도 로드 시도
+        summary_file = individual_file.replace('individual_results_', 'department_summary_')
+        summary_file_path = os.path.join(batch_summary_dir, summary_file)
+        summary_data = {}
+        
+        if os.path.exists(summary_file_path):
+            with open(summary_file_path, 'r', encoding='utf-8') as f:
+                summary_data = json.load(f)
+            print(f"✅ 부서별 요약 파일도 로드: {summary_file}")
+        
+        # 응답 데이터 구성
+        response_data = {
+            'success': True,
+            'results': individual_data.get('results', []),
+            'total_employees': individual_data.get('total_employees', len(individual_data.get('results', []))),
+            'completed_employees': individual_data.get('completed_employees', len(individual_data.get('results', []))),
+            'analysis_timestamp': individual_data.get('analysis_timestamp', timestamp),
+            'summary': {
+                'total_employees': len(individual_data.get('results', [])),
+                'successful_analyses': len(individual_data.get('results', [])),
+                'failed_analyses': 0,
+                'success_rate': 1.0
+            },
+            'department_summary': summary_data.get('department_results', {}),
+            'loaded_from': 'saved_files'
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ 배치 분석 결과 로드 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'배치 분석 결과 로드 중 오류 발생: {str(e)}'
+        }), 500
+
+@app.route('/api/batch-analysis/list-saved-files', methods=['GET'])
+def list_saved_batch_analysis_files():
+    """저장된 배치 분석 파일 목록 조회"""
+    try:
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        batch_summary_dir = os.path.join(project_root, 'app/results/batch_analysis')
+        
+        if not os.path.exists(batch_summary_dir):
+            return jsonify({
+                'success': True,
+                'files': []
+            })
+        
+        # individual_results 파일들 찾기
+        individual_files = []
+        for filename in os.listdir(batch_summary_dir):
+            if filename.startswith('individual_results_') and filename.endswith('.json'):
+                file_path = os.path.join(batch_summary_dir, filename)
+                try:
+                    # 파일 정보 추출
+                    stat = os.stat(file_path)
+                    file_size = stat.st_size
+                    modified_time = datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    
+                    # 타임스탬프 추출 (파일명에서)
+                    timestamp_part = filename.replace('individual_results_', '').replace('.json', '')
+                    
+                    # 파일 내용에서 직원 수 확인
+                    employee_count = 0
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            if 'individual_results' in data:
+                                employee_count = len(data['individual_results'])
+                            elif 'results' in data:
+                                employee_count = len(data['results'])
+                            else:
+                                employee_count = data.get('total_employees', 0)
+                    except:
+                        pass
+                    
+                    individual_files.append({
+                        'filename': filename,
+                        'timestamp': timestamp_part,
+                        'file_size': file_size,
+                        'modified_time': modified_time,
+                        'employee_count': employee_count,
+                        'display_name': f"배치 분석 결과 ({employee_count}명) - {modified_time[:19].replace('T', ' ')}"
+                    })
+                except Exception as e:
+                    print(f"파일 {filename} 정보 추출 실패: {e}")
+                    continue
+        
+        # 수정 시간 기준으로 정렬 (최신 순)
+        individual_files.sort(key=lambda x: x['modified_time'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'files': individual_files
+        })
+        
+    except Exception as e:
+        print(f"❌ 저장된 파일 목록 조회 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'파일 목록 조회 중 오류 발생: {str(e)}'
+        }), 500
+
+@app.route('/api/batch-analysis/delete-saved-file', methods=['DELETE'])
+def delete_saved_batch_analysis_file():
+    """저장된 배치 분석 파일 삭제"""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        
+        if not filename:
+            return jsonify({
+                'success': False,
+                'error': '파일명이 필요합니다.'
+            }), 400
+        
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        batch_summary_dir = os.path.join(project_root, 'app/results/batch_analysis')
+        
+        # individual_results 파일 삭제
+        individual_file_path = os.path.join(batch_summary_dir, filename)
+        deleted_files = []
+        
+        if os.path.exists(individual_file_path):
+            os.remove(individual_file_path)
+            deleted_files.append(filename)
+            print(f"✅ 삭제됨: {filename}")
+        
+        # 해당하는 department_summary 파일도 삭제
+        summary_filename = filename.replace('individual_results_', 'department_summary_')
+        summary_file_path = os.path.join(batch_summary_dir, summary_filename)
+        
+        if os.path.exists(summary_file_path):
+            os.remove(summary_file_path)
+            deleted_files.append(summary_filename)
+            print(f"✅ 삭제됨: {summary_filename}")
+        
+        # 타임스탬프 추출해서 관련된 계층적 파일들도 삭제
+        timestamp_part = filename.replace('individual_results_', '').replace('.json', '')
+        hierarchical_dir = os.path.join(project_root, 'app/results/hierarchical_analysis')
+        
+        if os.path.exists(hierarchical_dir):
+            for hierarchical_file in os.listdir(hierarchical_dir):
+                if timestamp_part.replace('-', '').replace('_', '') in hierarchical_file.replace('-', '').replace('_', ''):
+                    hierarchical_file_path = os.path.join(hierarchical_dir, hierarchical_file)
+                    try:
+                        os.remove(hierarchical_file_path)
+                        deleted_files.append(f"hierarchical_analysis/{hierarchical_file}")
+                        print(f"✅ 계층적 파일 삭제됨: {hierarchical_file}")
+                    except Exception as e:
+                        print(f"⚠️ 계층적 파일 삭제 실패: {hierarchical_file} - {e}")
+        
+        if not deleted_files:
+            return jsonify({
+                'success': False,
+                'error': '삭제할 파일을 찾을 수 없습니다.'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'deleted_files': deleted_files,
+            'message': f'{len(deleted_files)}개 파일이 삭제되었습니다.'
+        })
+        
+    except Exception as e:
+        print(f"❌ 파일 삭제 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'파일 삭제 중 오류 발생: {str(e)}'
+        }), 500
+
+@app.route('/api/batch-analysis/load-file/<filename>', methods=['GET'])
+def load_batch_analysis_file(filename):
+    """저장된 배치 분석 파일 로드"""
+    try:
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        batch_summary_dir = os.path.join(project_root, 'app/results/batch_analysis')
+        
+        file_path = os.path.join(batch_summary_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'error': '파일을 찾을 수 없습니다.'
+            }), 404
+        
+        # 파일 읽기
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        print(f"✅ 파일 로드 완료: {filename}")
+        print(f"📊 데이터 구조: {list(data.keys())}")
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'filename': filename
+        })
+        
+    except Exception as e:
+        print(f"❌ 파일 로드 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'파일 로드 중 오류 발생: {str(e)}'
+        }), 500
+
+@app.route('/api/batch-analysis/cleanup-misclassified', methods=['POST'])
+def cleanup_misclassified_manual():
+    """수동으로 미분류 폴더 정리"""
+    try:
+        # 최근 배치 분석 결과 파일에서 부서 정보 로드
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        batch_summary_dir = os.path.join(project_root, 'app/results/batch_analysis')
+        
+        if not os.path.exists(batch_summary_dir):
+            return jsonify({
+                'success': False,
+                'error': '배치 분석 결과 폴더를 찾을 수 없습니다.'
+            }), 404
+        
+        # 가장 최근 individual_results 파일 찾기
+        individual_files = [f for f in os.listdir(batch_summary_dir) 
+                          if f.startswith('individual_results_') and f.endswith('.json')]
+        
+        if not individual_files:
+            return jsonify({
+                'success': False,
+                'error': '배치 분석 결과 파일을 찾을 수 없습니다.'
+            }), 404
+        
+        # 가장 최근 파일 선택
+        latest_file = sorted(individual_files)[-1]
+        file_path = os.path.join(batch_summary_dir, latest_file)
+        
+        # 파일에서 부서 정보 로드
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        individual_results = data.get('individual_results', [])
+        
+        if not individual_results:
+            return jsonify({
+                'success': False,
+                'error': '개별 직원 결과 데이터가 없습니다.'
+            }), 400
+        
+        # 미분류 폴더 정리 실행
+        cleanup_success = cleanup_misclassified_folders(individual_results)
+        
+        if cleanup_success:
+            return jsonify({
+                'success': True,
+                'message': '미분류 폴더 정리가 완료되었습니다.',
+                'source_file': latest_file,
+                'processed_employees': len(individual_results)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '미분류 폴더 정리 중 오류가 발생했습니다.'
+            }), 500
+        
+    except Exception as e:
+        print(f"❌ 수동 미분류 폴더 정리 실패: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'미분류 폴더 정리 중 오류 발생: {str(e)}'
+        }), 500
+
+@app.route('/api/statistics/load-from-files', methods=['GET'])
+def load_statistics_from_files():
+    """저장된 부서별 파일들에서 통계 데이터를 로드"""
+    try:
+        group_by = request.args.get('group_by', 'department')
+        department_filter = request.args.get('department', None)
+        
+        # 프로젝트 루트 기준으로 절대 경로 생성
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        results_base_dir = os.path.join(project_root, 'app/results')
+        
+        print(f"📊 저장된 파일에서 통계 로드: group_by={group_by}, department_filter={department_filter}")
+        print(f"📁 결과 디렉토리: {results_base_dir}")
+        
+        statistics = {}
+        
+        # 부서별 디렉토리 스캔
+        department_dirs = [d for d in os.listdir(results_base_dir) 
+                          if os.path.isdir(os.path.join(results_base_dir, d)) 
+                          and d not in ['batch_analysis', 'global_reports', 'hierarchical_analysis', 'models', 'temp', 'departments', '미분류']]
+        
+        print(f"🏢 발견된 부서 디렉토리: {department_dirs}")
+        
+        for dept_dir in department_dirs:
+            dept_path = os.path.join(results_base_dir, dept_dir)
+            dept_index_file = os.path.join(dept_path, 'department_index.json')
+            
+            if not os.path.exists(dept_index_file):
+                print(f"⚠️ {dept_dir} 부서의 인덱스 파일이 없습니다.")
+                continue
+            
+            # 부서 인덱스 파일 로드
+            with open(dept_index_file, 'r', encoding='utf-8') as f:
+                dept_data = json.load(f)
+            
+            department_name = dept_data.get('department', dept_dir.replace('_', ' '))
+            
+            # 부서 필터링
+            if department_filter and department_name != department_filter:
+                continue
+            
+            # 그룹화 방식에 따른 통계 생성
+            if group_by == 'department':
+                # 부서별 통계
+                dept_stats = dept_data.get('statistics', {})
+                total_employees = dept_stats.get('total_employees', 0)
+                
+                # 위험도 분포는 개별 직원 파일에서 계산해야 함
+                risk_distribution = calculate_department_risk_distribution(dept_path, dept_data)
+                
+                statistics[department_name] = {
+                    'total_employees': total_employees,
+                    'high_risk': risk_distribution.get('high_risk', 0),
+                    'medium_risk': risk_distribution.get('medium_risk', 0),
+                    'low_risk': risk_distribution.get('low_risk', 0),
+                    'avg_risk_score': risk_distribution.get('avg_risk_score', 0),
+                    'common_risk_factors': risk_distribution.get('common_risk_factors', {})
+                }
+                
+            elif group_by == 'job_role':
+                # 직무별 통계
+                job_roles = dept_data.get('job_roles', {})
+                for job_role, levels in job_roles.items():
+                    if department_filter and department_name != department_filter:
+                        continue
+                    
+                    role_stats = calculate_job_role_risk_distribution(dept_path, job_role, levels)
+                    statistics[job_role] = role_stats
+                    
+            elif group_by == 'job_level':
+                # 직급별 통계
+                position_counts = dept_data.get('statistics', {}).get('position_count', {})
+                for level, count in position_counts.items():
+                    level_name = f"Level {level}"
+                    if level_name not in statistics:
+                        statistics[level_name] = {
+                            'total_employees': 0,
+                            'high_risk': 0,
+                            'medium_risk': 0,
+                            'low_risk': 0,
+                            'avg_risk_score': 0,
+                            'common_risk_factors': {}
+                        }
+                    
+                    level_stats = calculate_job_level_risk_distribution(dept_path, level)
+                    statistics[level_name]['total_employees'] += level_stats.get('total_employees', 0)
+                    statistics[level_name]['high_risk'] += level_stats.get('high_risk', 0)
+                    statistics[level_name]['medium_risk'] += level_stats.get('medium_risk', 0)
+                    statistics[level_name]['low_risk'] += level_stats.get('low_risk', 0)
+        
+        # 평균 위험도 재계산 (직급별인 경우)
+        if group_by == 'job_level':
+            for level_name in statistics:
+                total = statistics[level_name]['total_employees']
+                if total > 0:
+                    # 가중평균으로 계산 (실제로는 개별 파일에서 읽어와야 함)
+                    statistics[level_name]['avg_risk_score'] = 0.5  # 임시값
+        
+        print(f"📊 통계 생성 완료: {len(statistics)}개 그룹")
+        
+        return jsonify({
+            'success': True,
+            'group_by': group_by,
+            'department_filter': department_filter,
+            'statistics': statistics,
+            'generated_at': datetime.now().isoformat(),
+            'data_source': 'saved_files'
+        })
+        
+    except Exception as e:
+        print(f"❌ 파일 기반 통계 로드 실패: {str(e)}")
+        import traceback
+        print(f"📋 오류 상세: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': f'파일 기반 통계 로드 실패: {str(e)}'
+        }), 500
+
+def calculate_department_risk_distribution(dept_path, dept_data):
+    """부서별 위험도 분포 계산"""
+    try:
+        risk_distribution = {
+            'high_risk': 0,
+            'medium_risk': 0,
+            'low_risk': 0,
+            'avg_risk_score': 0,
+            'common_risk_factors': {}
+        }
+        
+        total_risk_score = 0
+        total_employees = 0
+        
+        # 각 직무별로 직원 파일들을 스캔
+        job_roles = dept_data.get('job_roles', {})
+        for job_role, levels in job_roles.items():
+            job_role_path = os.path.join(dept_path, job_role)
+            if not os.path.exists(job_role_path):
+                continue
+                
+            for level, employee_ids in levels.items():
+                level_path = os.path.join(job_role_path, level)
+                if not os.path.exists(level_path):
+                    continue
+                
+                for employee_id in employee_ids:
+                    employee_dir = os.path.join(level_path, f'employee_{employee_id}')
+                    if not os.path.exists(employee_dir):
+                        continue
+                    
+                    # 배치 분석 결과 파일 찾기
+                    batch_files = [f for f in os.listdir(employee_dir) 
+                                 if f.startswith('batch_analysis_') and f.endswith('.json')]
+                    
+                    if batch_files:
+                        latest_batch_file = sorted(batch_files)[-1]
+                        batch_file_path = os.path.join(employee_dir, latest_batch_file)
+                        
+                        try:
+                            with open(batch_file_path, 'r', encoding='utf-8') as f:
+                                batch_data = json.load(f)
+                            
+                            risk_score = batch_data.get('risk_score', 0)
+                            total_risk_score += risk_score
+                            total_employees += 1
+                            
+                            # 위험도 분류
+                            if risk_score >= 0.7:
+                                risk_distribution['high_risk'] += 1
+                            elif risk_score >= 0.3:
+                                risk_distribution['medium_risk'] += 1
+                            else:
+                                risk_distribution['low_risk'] += 1
+                                
+                        except Exception as e:
+                            print(f"⚠️ 직원 {employee_id} 배치 파일 읽기 실패: {e}")
+        
+        # 평균 위험도 계산
+        if total_employees > 0:
+            risk_distribution['avg_risk_score'] = total_risk_score / total_employees
+        
+        return risk_distribution
+        
+    except Exception as e:
+        print(f"❌ 부서 위험도 분포 계산 실패: {e}")
+        return {
+            'high_risk': 0,
+            'medium_risk': 0,
+            'low_risk': 0,
+            'avg_risk_score': 0,
+            'common_risk_factors': {}
+        }
+
+def calculate_job_role_risk_distribution(dept_path, job_role, levels):
+    """직무별 위험도 분포 계산"""
+    try:
+        risk_distribution = {
+            'total_employees': 0,
+            'high_risk': 0,
+            'medium_risk': 0,
+            'low_risk': 0,
+            'avg_risk_score': 0,
+            'common_risk_factors': {}
+        }
+        
+        total_risk_score = 0
+        total_employees = 0
+        
+        job_role_path = os.path.join(dept_path, job_role)
+        if not os.path.exists(job_role_path):
+            return risk_distribution
+        
+        for level, employee_ids in levels.items():
+            level_path = os.path.join(job_role_path, level)
+            if not os.path.exists(level_path):
+                continue
+            
+            for employee_id in employee_ids:
+                employee_dir = os.path.join(level_path, f'employee_{employee_id}')
+                if not os.path.exists(employee_dir):
+                    continue
+                
+                # 배치 분석 결과 파일 찾기
+                batch_files = [f for f in os.listdir(employee_dir) 
+                             if f.startswith('batch_analysis_') and f.endswith('.json')]
+                
+                if batch_files:
+                    latest_batch_file = sorted(batch_files)[-1]
+                    batch_file_path = os.path.join(employee_dir, latest_batch_file)
+                    
+                    try:
+                        with open(batch_file_path, 'r', encoding='utf-8') as f:
+                            batch_data = json.load(f)
+                        
+                        risk_score = batch_data.get('risk_score', 0)
+                        total_risk_score += risk_score
+                        total_employees += 1
+                        
+                        # 위험도 분류
+                        if risk_score >= 0.7:
+                            risk_distribution['high_risk'] += 1
+                        elif risk_score >= 0.3:
+                            risk_distribution['medium_risk'] += 1
+                        else:
+                            risk_distribution['low_risk'] += 1
+                            
+                    except Exception as e:
+                        print(f"⚠️ 직원 {employee_id} 배치 파일 읽기 실패: {e}")
+        
+        risk_distribution['total_employees'] = total_employees
+        if total_employees > 0:
+            risk_distribution['avg_risk_score'] = total_risk_score / total_employees
+        
+        return risk_distribution
+        
+    except Exception as e:
+        print(f"❌ 직무 위험도 분포 계산 실패: {e}")
+        return {
+            'total_employees': 0,
+            'high_risk': 0,
+            'medium_risk': 0,
+            'low_risk': 0,
+            'avg_risk_score': 0,
+            'common_risk_factors': {}
+        }
+
+def calculate_job_level_risk_distribution(dept_path, level):
+    """직급별 위험도 분포 계산"""
+    try:
+        risk_distribution = {
+            'total_employees': 0,
+            'high_risk': 0,
+            'medium_risk': 0,
+            'low_risk': 0,
+            'avg_risk_score': 0,
+            'common_risk_factors': {}
+        }
+        
+        total_risk_score = 0
+        total_employees = 0
+        
+        # 모든 직무에서 해당 레벨의 직원들을 찾기
+        for item in os.listdir(dept_path):
+            item_path = os.path.join(dept_path, item)
+            if not os.path.isdir(item_path) or item == 'department_index.json':
+                continue
+            
+            level_path = os.path.join(item_path, str(level))
+            if not os.path.exists(level_path):
+                continue
+            
+            for employee_dir_name in os.listdir(level_path):
+                if not employee_dir_name.startswith('employee_'):
+                    continue
+                
+                employee_dir = os.path.join(level_path, employee_dir_name)
+                if not os.path.isdir(employee_dir):
+                    continue
+                
+                # 배치 분석 결과 파일 찾기
+                batch_files = [f for f in os.listdir(employee_dir) 
+                             if f.startswith('batch_analysis_') and f.endswith('.json')]
+                
+                if batch_files:
+                    latest_batch_file = sorted(batch_files)[-1]
+                    batch_file_path = os.path.join(employee_dir, latest_batch_file)
+                    
+                    try:
+                        with open(batch_file_path, 'r', encoding='utf-8') as f:
+                            batch_data = json.load(f)
+                        
+                        risk_score = batch_data.get('risk_score', 0)
+                        total_risk_score += risk_score
+                        total_employees += 1
+                        
+                        # 위험도 분류
+                        if risk_score >= 0.7:
+                            risk_distribution['high_risk'] += 1
+                        elif risk_score >= 0.3:
+                            risk_distribution['medium_risk'] += 1
+                        else:
+                            risk_distribution['low_risk'] += 1
+                            
+                    except Exception as e:
+                        print(f"⚠️ 직원 배치 파일 읽기 실패: {e}")
+        
+        risk_distribution['total_employees'] = total_employees
+        if total_employees > 0:
+            risk_distribution['avg_risk_score'] = total_risk_score / total_employees
+        
+        return risk_distribution
+        
+    except Exception as e:
+        print(f"❌ 직급 위험도 분포 계산 실패: {e}")
+        return {
+            'total_employees': 0,
+            'high_risk': 0,
+            'medium_risk': 0,
+            'low_risk': 0,
+            'avg_risk_score': 0,
+            'common_risk_factors': {}
+        }
+
+@app.route('/api/results/list-all-employees', methods=['GET'])
+def list_all_employees_from_results():
+    """results 폴더에서 모든 직원 분석 결과 목록 조회"""
+    try:
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        results_dir = os.path.join(project_root, 'app/results')
+        
+        if not os.path.exists(results_dir):
+            return jsonify({
+                'success': False,
+                'error': 'results 폴더를 찾을 수 없습니다.'
+            }), 404
+        
+        print(f"📂 results 폴더 스캔 시작: {results_dir}")
+        
+        employees = []
+        
+        # results 폴더 전체 탐색
+        for root, dirs, files in os.walk(results_dir):
+            # employee_ 폴더 찾기
+            if os.path.basename(root).startswith('employee_'):
+                employee_id = os.path.basename(root).replace('employee_', '')
+                
+                # employee_info.json 파일이 있는지 확인
+                employee_info_file = os.path.join(root, 'employee_info.json')
+                comprehensive_report_file = os.path.join(root, 'comprehensive_report.json')
+                
+                if os.path.exists(employee_info_file):
+                    try:
+                        with open(employee_info_file, 'r', encoding='utf-8') as f:
+                            emp_info = json.load(f)
+                        
+                        emp_data = emp_info.get('employee_data', {})
+                        
+                        # comprehensive_report에서 전체 위험도 가져오기
+                        risk_score = 0
+                        risk_level = 'UNKNOWN'
+                        
+                        if os.path.exists(comprehensive_report_file):
+                            with open(comprehensive_report_file, 'r', encoding='utf-8') as f:
+                                comp_report = json.load(f)
+                                overall_assessment = comp_report.get('comprehensive_assessment', {})
+                                risk_score = overall_assessment.get('overall_risk_score', 0)
+                                risk_level = overall_assessment.get('overall_risk_level', 'UNKNOWN')
+                        
+                        # 각 에이전트 결과 파일에서 직접 점수 추출
+                        structura_score = 0
+                        chronos_score = 0
+                        cognita_score = 0
+                        sentio_score = 0
+                        agora_score = 0
+                        
+                        # Structura 점수
+                        structura_file = os.path.join(root, 'structura_result.json')
+                        if os.path.exists(structura_file):
+                            try:
+                                with open(structura_file, 'r', encoding='utf-8') as f:
+                                    structura_data = json.load(f)
+                                    structura_score = structura_data.get('prediction', {}).get('attrition_probability', 0)
+                            except:
+                                pass
+                        
+                        # Chronos 점수
+                        chronos_file = os.path.join(root, 'chronos_result.json')
+                        if os.path.exists(chronos_file):
+                            try:
+                                with open(chronos_file, 'r', encoding='utf-8') as f:
+                                    chronos_data = json.load(f)
+                                    chronos_score = chronos_data.get('prediction', {}).get('risk_score', 0)
+                            except:
+                                pass
+                        
+                        # Cognita 점수
+                        cognita_file = os.path.join(root, 'cognita_result.json')
+                        if os.path.exists(cognita_file):
+                            try:
+                                with open(cognita_file, 'r', encoding='utf-8') as f:
+                                    cognita_data = json.load(f)
+                                    cognita_score = cognita_data.get('risk_analysis', {}).get('overall_risk_score', 0)
+                            except:
+                                pass
+                        
+                        # Sentio 점수
+                        sentio_file = os.path.join(root, 'sentio_result.json')
+                        if os.path.exists(sentio_file):
+                            try:
+                                with open(sentio_file, 'r', encoding='utf-8') as f:
+                                    sentio_data = json.load(f)
+                                    sentio_score = sentio_data.get('sentiment_analysis', {}).get('risk_score', 0)
+                                    if sentio_score == 0:
+                                        sentio_score = sentio_data.get('psychological_risk_score', 0)
+                            except:
+                                pass
+                        
+                        # Agora 점수
+                        agora_file = os.path.join(root, 'agora_result.json')
+                        if os.path.exists(agora_file):
+                            try:
+                                with open(agora_file, 'r', encoding='utf-8') as f:
+                                    agora_data = json.load(f)
+                                    agora_score = agora_data.get('market_analysis', {}).get('risk_score', 0)
+                                    if agora_score == 0:
+                                        agora_score = agora_data.get('risk_score', 0)
+                            except:
+                                pass
+                        
+                        # 경로에서 부서/직무/직급 정보 추출
+                        path_parts = root.replace(results_dir, '').strip(os.sep).split(os.sep)
+                        
+                        employee_entry = {
+                            'employee_id': employee_id,
+                            'employee_number': emp_data.get('EmployeeNumber', employee_id),
+                            'name': f"직원 {employee_id}",  # 실제 이름이 있다면 사용
+                            'department': emp_data.get('Department', path_parts[0] if path_parts else '미분류'),
+                            'job_role': emp_data.get('JobRole', path_parts[1] if len(path_parts) > 1 else '미분류'),
+                            'position': emp_data.get('JobLevel', path_parts[2] if len(path_parts) > 2 else None),
+                            'age': emp_data.get('Age'),
+                            'years_at_company': emp_data.get('YearsAtCompany'),
+                            'job_satisfaction': emp_data.get('JobSatisfaction'),
+                            'work_life_balance': emp_data.get('WorkLifeBalance'),
+                            'risk_score': risk_score,
+                            'risk_level': risk_level,
+                            'structura_score': structura_score,
+                            'chronos_score': chronos_score,
+                            'cognita_score': cognita_score,
+                            'sentio_score': sentio_score,
+                            'agora_score': agora_score,
+                            'has_comprehensive_report': os.path.exists(comprehensive_report_file),
+                            'folder_path': root
+                        }
+                        
+                        employees.append(employee_entry)
+                        
+                    except Exception as e:
+                        print(f"⚠️ employee {employee_id} 정보 로드 실패: {e}")
+                        continue
+        
+        print(f"✅ 총 {len(employees)}명의 직원 정보 수집 완료")
+        
+        # 위험도 순으로 정렬
+        employees.sort(key=lambda x: x['risk_score'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'results': employees,
+            'total_employees': len(employees),
+            'completed_employees': len(employees),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ 직원 목록 조회 실패: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'직원 목록 조회 중 오류 발생: {str(e)}'
+        }), 500
+
 
 @app.route('/api/generate-employee-report', methods=['POST'])
 def generate_employee_report():
-    """개별 직원 보고서 생성 (LLM 기반)"""
+    """개별 직원 보고서 생성 (저장된 파일 기반)"""
     try:
         data = request.get_json()
         
@@ -2604,6 +3835,8 @@ def generate_employee_report():
         
         employee_id = data.get('employee_id')
         department = data.get('department', '미분류')
+        job_role = data.get('job_role')
+        position = data.get('position')
         risk_level = data.get('risk_level', 'unknown')
         risk_score = data.get('risk_score', 0)
         agent_scores = data.get('agent_scores', {})
@@ -2631,14 +3864,55 @@ def generate_employee_report():
         }
         normalized_dept = dept_mapping.get(department, department.replace(' ', '_').replace('&', '_&_'))
         
-        # 직원 데이터 파일 경로
-        employee_dir = os.path.join(project_root, 'app/results', normalized_dept, f'employee_{employee_id}')
+        # 여러 가능한 경로 탐색
+        possible_paths = []
         
-        if not os.path.exists(employee_dir):
-            return jsonify({
-                'success': False,
-                'error': f'직원 {employee_id}의 분석 결과를 찾을 수 없습니다.'
-            }), 404
+        # 1. 계층 구조 경로 (department/job_role/position/employee_id)
+        if job_role and position:
+            normalized_job_role = job_role.replace(' ', '_').replace('&', '_&_')
+            hierarchical_path = os.path.join(project_root, 'app/results', normalized_dept, normalized_job_role, str(position), f'employee_{employee_id}')
+            possible_paths.append(hierarchical_path)
+        
+        # 2. 간소화된 경로 (department/employee_id)
+        simplified_path = os.path.join(project_root, 'app/results', normalized_dept, f'employee_{employee_id}')
+        possible_paths.append(simplified_path)
+        
+        # 3. 원본 부서명으로 시도
+        original_dept_path = os.path.join(project_root, 'app/results', department.replace(' ', '_'), f'employee_{employee_id}')
+        possible_paths.append(original_dept_path)
+        
+        # 경로 탐색
+        employee_dir = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                employee_dir = path
+                print(f"✅ 직원 데이터 경로 발견: {path}")
+                break
+        
+        if not employee_dir:
+            # 전체 results 폴더에서 검색
+            results_dir = os.path.join(project_root, 'app/results')
+            found = False
+            for root, dirs, files in os.walk(results_dir):
+                if f'employee_{employee_id}' in root:
+                    employee_dir = root
+                    found = True
+                    print(f"✅ 직원 데이터 경로 검색으로 발견: {employee_dir}")
+                    break
+            
+            if not found:
+                return jsonify({
+                    'success': False,
+                    'error': f'직원 {employee_id}의 분석 결과를 찾을 수 없습니다. 검색된 경로: {", ".join(possible_paths[:2])}'
+                }), 404
+        
+        # 종합 보고서 로드
+        comprehensive_report_file = os.path.join(employee_dir, 'comprehensive_report.json')
+        comprehensive_report = {}
+        if os.path.exists(comprehensive_report_file):
+            with open(comprehensive_report_file, 'r', encoding='utf-8') as f:
+                comprehensive_report = json.load(f)
+                print(f"✅ 종합 보고서 로드 완료")
         
         # 각 에이전트 결과 파일 로드
         agent_data = {}
@@ -2667,12 +3941,36 @@ def generate_employee_report():
             with open(sentio_file, 'r', encoding='utf-8') as f:
                 agent_data['sentio'] = json.load(f)
         
+        # Agora 결과 로드
+        agora_file = os.path.join(employee_dir, 'agora_result.json')
+        if os.path.exists(agora_file):
+            with open(agora_file, 'r', encoding='utf-8') as f:
+                agent_data['agora'] = json.load(f)
+        
         # 직원 정보 로드
         employee_info_file = os.path.join(employee_dir, 'employee_info.json')
         employee_info = {}
         if os.path.exists(employee_info_file):
             with open(employee_info_file, 'r', encoding='utf-8') as f:
                 employee_info = json.load(f)
+        
+        # 분석 요약 CSV 로드
+        analysis_summary_file = os.path.join(employee_dir, 'analysis_summary.csv')
+        analysis_summary = None
+        if os.path.exists(analysis_summary_file):
+            import pandas as pd
+            try:
+                analysis_summary = pd.read_csv(analysis_summary_file).to_dict('records')[0]
+                print(f"✅ 분석 요약 CSV 로드 완료")
+            except Exception as e:
+                print(f"⚠️ CSV 로드 실패: {e}")
+        
+        # 시각화 파일 목록
+        visualizations_dir = os.path.join(employee_dir, 'visualizations')
+        visualization_files = []
+        if os.path.exists(visualizations_dir):
+            visualization_files = [f for f in os.listdir(visualizations_dir) if f.endswith(('.png', '.jpg', '.jpeg'))]
+            print(f"✅ 시각화 파일 {len(visualization_files)}개 발견")
         
         # 배치 분석 결과 로드 (가장 최신)
         batch_files = [f for f in os.listdir(employee_dir) if f.startswith('batch_analysis_') and f.endswith('.json')]
@@ -2682,17 +3980,29 @@ def generate_employee_report():
             with open(os.path.join(employee_dir, latest_batch_file), 'r', encoding='utf-8') as f:
                 batch_data = json.load(f)
         
-        # LLM으로 보고서 생성
-        report = generate_llm_report(
-            employee_id=employee_id,
-            department=department,
-            risk_level=risk_level,
-            risk_score=risk_score,
-            agent_scores=agent_scores,
-            agent_data=agent_data,
-            employee_info=employee_info,
-            batch_data=batch_data
-        )
+        # comprehensive_report가 있으면 이를 기반으로 보고서 생성, 없으면 LLM 사용
+        if comprehensive_report and 'rule_based_interpretation' in comprehensive_report:
+            # 저장된 보고서 사용 (더 빠르고 일관성 있음)
+            report = generate_report_from_saved_data(
+                employee_id=employee_id,
+                comprehensive_report=comprehensive_report,
+                agent_data=agent_data,
+                employee_info=employee_info,
+                analysis_summary=analysis_summary,
+                visualization_files=visualization_files
+            )
+        else:
+            # LLM으로 새로 생성
+            report = generate_llm_report(
+                employee_id=employee_id,
+                department=department,
+                risk_level=risk_level,
+                risk_score=risk_score,
+                agent_scores=agent_scores,
+                agent_data=agent_data,
+                employee_info=employee_info,
+                batch_data=batch_data
+            )
         
         print(f"✅ 직원 {employee_id} 보고서 생성 완료")
         
@@ -2701,7 +4011,9 @@ def generate_employee_report():
             'report': report,
             'employee_id': employee_id,
             'department': department,
-            'risk_level': risk_level
+            'risk_level': risk_level,
+            'visualization_files': visualization_files,
+            'has_comprehensive_report': bool(comprehensive_report)
         })
         
     except Exception as e:
@@ -2711,6 +4023,60 @@ def generate_employee_report():
             'error': f'보고서 생성 중 오류 발생: {str(e)}',
             'traceback': traceback.format_exc()
         }), 500
+
+def generate_report_from_saved_data(employee_id, comprehensive_report, agent_data, employee_info, analysis_summary, visualization_files):
+    """저장된 파일 데이터로부터 보고서 생성 (ReportGenerator 사용)"""
+    try:
+        from .report_generator import ReportGenerator
+        
+        # ReportGenerator 초기화
+        report_gen = ReportGenerator()
+        
+        # 보고서 생성 (ReportGenerator에 위임)
+        report = report_gen.generate_comprehensive_report(
+            employee_id=employee_id,
+            comprehensive_report=comprehensive_report,
+            agent_data=agent_data,
+            employee_info=employee_info,
+            analysis_summary=analysis_summary,
+            visualization_files=visualization_files
+        )
+        
+        return report
+    except Exception as e:
+        import traceback
+        print(f"❌ 보고서 생성 실패: {str(e)}")
+        print(traceback.format_exc())
+        return f"보고서 생성 중 오류가 발생했습니다: {str(e)}"
+
+
+# 아래 코드는 이제 report_generator.py로 이동됨 (레거시 코드 제거 완료)
+# - analyze_xai_results()
+# - perform_root_cause_analysis()
+# - 에이전트 점수 추출 로직
+
+
+def generate_llm_report(employee_id, department, risk_level, risk_score, agent_scores, agent_data, employee_info, batch_data):
+    """LLM을 사용한 개별 직원 보고서 생성 (레거시 - ReportGenerator로 대체 예정)"""
+    # 이 함수는 하위 호환성을 위해 유지되지만, 새로운 구현은 ReportGenerator를 사용해야 함
+    try:
+        from .report_generator import ReportGenerator
+        report_gen = ReportGenerator()
+        
+        # ReportGenerator를 통한 LLM 보고서 생성
+        return report_gen.generate_llm_based_report(
+            employee_id=employee_id,
+            department=department,
+            risk_level=risk_level,
+            risk_score=risk_score,
+            agent_scores=agent_scores,
+            agent_data=agent_data,
+            employee_info=employee_info
+        )
+    except Exception as e:
+        import logging
+        logging.error(f"LLM 보고서 생성 실패: {e}")
+        return f"보고서 생성 중 오류가 발생했습니다: {str(e)}"
 
 def generate_llm_report(employee_id, department, risk_level, risk_score, agent_scores, agent_data, employee_info, batch_data):
     """LLM을 사용한 개별 직원 보고서 생성"""

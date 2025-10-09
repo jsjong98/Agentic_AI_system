@@ -1,0 +1,480 @@
+{
+  "department": "Research & Development",
+  "job_role": "Healthcare Representative",
+  "job_level": "2",
+  "created_at": "2025-10-06T18:23:49.585633",
+  "employees": {
+    "13": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:23.616978",
+      "folder_path": "Healthcare_Representative/2/employee_13"
+    },
+    "40": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:23.983574",
+      "folder_path": "Healthcare_Representative/2/employee_40"
+    },
+    "117": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:24.342047",
+      "folder_path": "Healthcare_Representative/2/employee_117"
+    },
+    "139": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:24.715682",
+      "folder_path": "Healthcare_Representative/2/employee_139"
+    },
+    "282": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:25.108552",
+      "folder_path": "Healthcare_Representative/2/employee_282"
+    },
+    "287": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:25.485923",
+      "folder_path": "Healthcare_Representative/2/employee_287"
+    },
+    "367": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:25.837964",
+      "folder_path": "Healthcare_Representative/2/employee_367"
+    },
+    "369": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:26.195062",
+      "folder_path": "Healthcare_Representative/2/employee_369"
+    },
+    "390": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:26.539556",
+      "folder_path": "Healthcare_Representative/2/employee_390"
+    },
+    "393": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:26.926011",
+      "folder_path": "Healthcare_Representative/2/employee_393"
+    },
+    "412": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:27.310372",
+      "folder_path": "Healthcare_Representative/2/employee_412"
+    },
+    "422": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:27.646687",
+      "folder_path": "Healthcare_Representative/2/employee_422"
+    },
+    "477": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:27.997331",
+      "folder_path": "Healthcare_Representative/2/employee_477"
+    },
+    "482": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:28.356961",
+      "folder_path": "Healthcare_Representative/2/employee_482"
+    },
+    "496": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:28.739558",
+      "folder_path": "Healthcare_Representative/2/employee_496"
+    },
+    "526": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:29.101698",
+      "folder_path": "Healthcare_Representative/2/employee_526"
+    },
+    "551": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:29.455933",
+      "folder_path": "Healthcare_Representative/2/employee_551"
+    },
+    "616": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:29.805431",
+      "folder_path": "Healthcare_Representative/2/employee_616"
+    },
+    "634": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:30.162269",
+      "folder_path": "Healthcare_Representative/2/employee_634"
+    },
+    "659": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:30.527930",
+      "folder_path": "Healthcare_Representative/2/employee_659"
+    },
+    "692": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:30.885227",
+      "folder_path": "Healthcare_Representative/2/employee_692"
+    },
+    "721": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:31.257675",
+      "folder_path": "Healthcare_Representative/2/employee_721"
+    },
+    "724": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:31.597268",
+      "folder_path": "Healthcare_Representative/2/employee_724"
+    },
+    "757": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:31.944342",
+      "folder_path": "Healthcare_Representative/2/employee_757"
+    },
+    "764": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:32.334576",
+      "folder_path": "Healthcare_Representative/2/employee_764"
+    },
+    "771": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:32.692773",
+      "folder_path": "Healthcare_Representative/2/employee_771"
+    },
+    "793": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:33.063832",
+      "folder_path": "Healthcare_Representative/2/employee_793"
+    },
+    "807": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:33.424252",
+      "folder_path": "Healthcare_Representative/2/employee_807"
+    },
+    "837": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:33.778816",
+      "folder_path": "Healthcare_Representative/2/employee_837"
+    },
+    "852": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:34.119496",
+      "folder_path": "Healthcare_Representative/2/employee_852"
+    },
+    "902": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:34.484621",
+      "folder_path": "Healthcare_Representative/2/employee_902"
+    },
+    "924": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:34.843894",
+      "folder_path": "Healthcare_Representative/2/employee_924"
+    },
+    "942": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:35.225900",
+      "folder_path": "Healthcare_Representative/2/employee_942"
+    },
+    "961": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:35.601347",
+      "folder_path": "Healthcare_Representative/2/employee_961"
+    },
+    "969": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:35.944905",
+      "folder_path": "Healthcare_Representative/2/employee_969"
+    },
+    "998": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:36.298495",
+      "folder_path": "Healthcare_Representative/2/employee_998"
+    },
+    "1022": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:36.697123",
+      "folder_path": "Healthcare_Representative/2/employee_1022"
+    },
+    "1033": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:37.075439",
+      "folder_path": "Healthcare_Representative/2/employee_1033"
+    },
+    "1034": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:37.450758",
+      "folder_path": "Healthcare_Representative/2/employee_1034"
+    },
+    "1062": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:37.793056",
+      "folder_path": "Healthcare_Representative/2/employee_1062"
+    },
+    "1103": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:38.145620",
+      "folder_path": "Healthcare_Representative/2/employee_1103"
+    },
+    "1161": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:38.510880",
+      "folder_path": "Healthcare_Representative/2/employee_1161"
+    },
+    "1184": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:38.895452",
+      "folder_path": "Healthcare_Representative/2/employee_1184"
+    },
+    "1251": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:39.272902",
+      "folder_path": "Healthcare_Representative/2/employee_1251"
+    },
+    "1252": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:39.637518",
+      "folder_path": "Healthcare_Representative/2/employee_1252"
+    },
+    "1260": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:39.995511",
+      "folder_path": "Healthcare_Representative/2/employee_1260"
+    },
+    "1375": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:40.374917",
+      "folder_path": "Healthcare_Representative/2/employee_1375"
+    },
+    "1383": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:40.758299",
+      "folder_path": "Healthcare_Representative/2/employee_1383"
+    },
+    "1473": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:41.125546",
+      "folder_path": "Healthcare_Representative/2/employee_1473"
+    },
+    "1501": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:41.471334",
+      "folder_path": "Healthcare_Representative/2/employee_1501"
+    },
+    "1515": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:41.811454",
+      "folder_path": "Healthcare_Representative/2/employee_1515"
+    },
+    "1544": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:42.188381",
+      "folder_path": "Healthcare_Representative/2/employee_1544"
+    },
+    "1552": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:42.547456",
+      "folder_path": "Healthcare_Representative/2/employee_1552"
+    },
+    "1587": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:42.913575",
+      "folder_path": "Healthcare_Representative/2/employee_1587"
+    },
+    "1590": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:43.280804",
+      "folder_path": "Healthcare_Representative/2/employee_1590"
+    },
+    "1597": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:43.631148",
+      "folder_path": "Healthcare_Representative/2/employee_1597"
+    },
+    "1630": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:43.979711",
+      "folder_path": "Healthcare_Representative/2/employee_1630"
+    },
+    "1664": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:44.362287",
+      "folder_path": "Healthcare_Representative/2/employee_1664"
+    },
+    "1682": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:44.734487",
+      "folder_path": "Healthcare_Representative/2/employee_1682"
+    },
+    "1727": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:45.087111",
+      "folder_path": "Healthcare_Representative/2/employee_1727"
+    },
+    "1753": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:45.442210",
+      "folder_path": "Healthcare_Representative/2/employee_1753"
+    },
+    "1763": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:45.800810",
+      "folder_path": "Healthcare_Representative/2/employee_1763"
+    },
+    "1766": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:46.188503",
+      "folder_path": "Healthcare_Representative/2/employee_1766"
+    },
+    "1803": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:46.545737",
+      "folder_path": "Healthcare_Representative/2/employee_1803"
+    },
+    "1814": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:46.918402",
+      "folder_path": "Healthcare_Representative/2/employee_1814"
+    },
+    "1821": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:47.270982",
+      "folder_path": "Healthcare_Representative/2/employee_1821"
+    },
+    "1822": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:47.617617",
+      "folder_path": "Healthcare_Representative/2/employee_1822"
+    },
+    "1829": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:48.002369",
+      "folder_path": "Healthcare_Representative/2/employee_1829"
+    },
+    "1859": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:48.389446",
+      "folder_path": "Healthcare_Representative/2/employee_1859"
+    },
+    "1903": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:48.769824",
+      "folder_path": "Healthcare_Representative/2/employee_1903"
+    },
+    "1922": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:49.097049",
+      "folder_path": "Healthcare_Representative/2/employee_1922"
+    },
+    "1954": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:49.452892",
+      "folder_path": "Healthcare_Representative/2/employee_1954"
+    },
+    "1955": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:49.840573",
+      "folder_path": "Healthcare_Representative/2/employee_1955"
+    },
+    "1970": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:50.222749",
+      "folder_path": "Healthcare_Representative/2/employee_1970"
+    },
+    "1981": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:50.606020",
+      "folder_path": "Healthcare_Representative/2/employee_1981"
+    },
+    "2009": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:50.938627",
+      "folder_path": "Healthcare_Representative/2/employee_2009"
+    },
+    "2026": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:51.319873",
+      "folder_path": "Healthcare_Representative/2/employee_2026"
+    },
+    "2049": {
+      "job_role": "Healthcare Representative",
+      "job_level": "2",
+      "last_updated": "2025-10-08T18:10:51.698017",
+      "folder_path": "Healthcare_Representative/2/employee_2049"
+    }
+  },
+  "statistics": {
+    "total_employees": 78
+  },
+  "last_updated": "2025-10-08T18:10:51.698017"
+}

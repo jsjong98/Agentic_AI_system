@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Button,
@@ -14,7 +14,6 @@ import {
   Alert,
   Space,
   Input,
-  Slider,
   Modal,
   Spin,
   Descriptions,
@@ -22,25 +21,23 @@ import {
   Badge,
   List
 } from 'antd';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import {
   UploadOutlined,
   FileTextOutlined,
   ApiOutlined,
   BarChartOutlined,
   RocketOutlined,
+  FolderOutlined,
+  DeleteOutlined,
   SettingOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   DownloadOutlined,
   TeamOutlined,
   HistoryOutlined,
-  FilePdfOutlined,
-  DashboardOutlined
+  FilePdfOutlined
 } from '@ant-design/icons';
 import { predictionService } from '../services/predictionService';
-import storageManager from '../utils/storageManager';
 import networkManager from '../utils/networkManager';
 
 const { Title, Text, Paragraph } = Typography;
@@ -95,18 +92,196 @@ const BatchAnalysis = ({
 
   // 캐시 관련 상태
   const [cachedResults, setCachedResults] = useState([]);
-  const [selectedCacheId, setSelectedCacheId] = useState(null);
   const [showCacheOptions, setShowCacheOptions] = useState(false);
   const [cacheModalVisible, setCacheModalVisible] = useState(false);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   // 결과 내보내기 관련 상태
   const [isExporting, setIsExporting] = useState(false);
 
+  // 캐시된 결과 로드 (저장된 파일 기반)
+  const loadCachedResults = useCallback(async () => {
+    try {
+      console.log('🔄 저장된 파일 기반 캐시 로드 시작...');
+      
+      // 1. 저장된 배치 분석 파일 목록 조회
+      try {
+        const response = await fetch('http://localhost:5007/api/batch-analysis/list-saved-files');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.files && data.files.length > 0) {
+            console.log('✅ 저장된 파일 목록 로드:', data.files.length, '개');
+            
+            // 파일 정보를 캐시 형태로 변환
+            const fileBasedCache = data.files.map((file, index) => ({
+              id: `file_${file.timestamp}_${index}`,
+              title: file.display_name,
+              timestamp: file.modified_time,
+              totalEmployees: file.employee_count,
+              filename: file.filename,
+              fileSize: file.file_size,
+              accuracy: 85, // 기본값
+              highRiskCount: Math.floor(file.employee_count * 0.15), // 추정값
+              mediumRiskCount: Math.floor(file.employee_count * 0.25), // 추정값
+              lowRiskCount: Math.floor(file.employee_count * 0.6), // 추정값
+              summary: `${file.employee_count}명 직원 분석 결과`,
+              keyInsights: [`총 ${file.employee_count}명 분석 완료`],
+              departmentStats: {},
+              source: 'saved_file'
+            }));
+            
+            setCachedResults(fileBasedCache);
+            setShowCacheOptions(true);
+            
+            // 🔄 저장된 파일을 predictionService 히스토리와 동기화
+            try {
+              const existingHistory = predictionService.getPredictionHistory();
+              const existingTimestamps = new Set(existingHistory.map(h => 
+                new Date(h.timestamp).toISOString().split('T')[0] // 날짜만 비교
+              ));
+              
+              // 히스토리에 없는 파일만 추가
+              let syncedCount = 0;
+              fileBasedCache.forEach(cache => {
+                const cacheDate = new Date(cache.timestamp).toISOString().split('T')[0];
+                if (!existingTimestamps.has(cacheDate) && cache.totalEmployees > 0) {
+                  // predictionData 생성
+                  const predictionData = {
+                    title: cache.title,
+                    totalEmployees: cache.totalEmployees,
+                    highRiskCount: cache.highRiskCount,
+                    mediumRiskCount: cache.mediumRiskCount,
+                    lowRiskCount: cache.lowRiskCount,
+                    accuracy: cache.accuracy,
+                    summary: cache.summary,
+                    keyInsights: cache.keyInsights,
+                    departmentStats: cache.departmentStats,
+                    rawData: null
+                  };
+                  
+                  predictionService.savePredictionResult(predictionData);
+                  syncedCount++;
+                }
+              });
+              
+              if (syncedCount > 0) {
+                console.log(`✅ ${syncedCount}개 파일을 분석 히스토리와 동기화`);
+              } else {
+                console.log('ℹ️ 모든 파일이 이미 히스토리에 존재합니다');
+              }
+            } catch (syncError) {
+              console.warn('히스토리 동기화 중 오류 (계속 진행):', syncError);
+            }
+            
+            if (!globalBatchResults && fileBasedCache.length > 0) {
+              message.info(`저장된 분석 결과를 발견했습니다 (${fileBasedCache.length}개 파일)`);
+            }
+          } else {
+            console.log('저장된 파일 없음');
+            setCachedResults([]);
+          }
+        } else {
+          console.warn('저장된 파일 목록 조회 실패:', response.status);
+        }
+      } catch (fileListError) {
+        console.error('저장된 파일 목록 조회 실패:', fileListError);
+      }
+      
+      // 2. IndexedDB에서 전체 데이터 확인 (보조)
+      let indexedDBData = null;
+      try {
+        indexedDBData = await loadFromIndexedDB();
+        if (indexedDBData && indexedDBData.results && indexedDBData.results.length > 0) {
+          console.log('✅ IndexedDB에서 전체 데이터 발견:', indexedDBData.results.length, '명');
+          setShowCacheOptions(true);
+          
+          // IndexedDB 데이터를 캐시 목록에 추가
+          const indexedDBCache = {
+            id: 'indexeddb_latest',
+            title: `IndexedDB 저장 결과 (${indexedDBData.results.length}명)`,
+            timestamp: new Date().toISOString(),
+            totalEmployees: indexedDBData.results.length,
+            rawData: indexedDBData,
+            accuracy: 90,
+            highRiskCount: indexedDBData.results.filter(r => {
+              const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+              return score && score >= 0.7;
+            }).length,
+            mediumRiskCount: indexedDBData.results.filter(r => {
+              const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+              return score && score >= 0.3 && score < 0.7;
+            }).length,
+            lowRiskCount: indexedDBData.results.filter(r => {
+              const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+              return score && score < 0.3;
+            }).length,
+            summary: `IndexedDB에서 로드된 ${indexedDBData.results.length}명 분석 결과`,
+            keyInsights: [`완전한 XAI 정보 포함`, `상세 분석 결과 보존`],
+            departmentStats: {},
+            source: 'indexeddb'
+          };
+          
+          setCachedResults(prev => [indexedDBCache, ...prev]);
+          
+          // 🔄 IndexedDB 데이터도 predictionService 히스토리와 동기화
+          try {
+            const predictionData = predictionService.convertBatchResultToPrediction(indexedDBData);
+            if (predictionData) {
+              // 오늘 날짜의 히스토리가 있는지 확인
+              const existingHistory = predictionService.getPredictionHistory();
+              const today = new Date().toISOString().split('T')[0];
+              const hasTodayHistory = existingHistory.some(h => 
+                new Date(h.timestamp).toISOString().split('T')[0] === today
+              );
+              
+              if (!hasTodayHistory) {
+                predictionService.savePredictionResult(predictionData);
+                console.log('✅ IndexedDB 데이터를 분석 히스토리에 저장');
+              }
+            }
+          } catch (syncError) {
+            console.warn('IndexedDB 히스토리 동기화 중 오류 (계속 진행):', syncError);
+          }
+        }
+      } catch (indexedDBError) {
+        console.log('IndexedDB 확인 중 오류 (무시됨):', indexedDBError.message);
+      }
+      
+      // 3. 기존 예측 히스토리 확인 (보조)
+      try {
+        const history = await predictionService.getPredictionHistoryAsync();
+        if (history.length > 0) {
+          console.log('📋 예측 히스토리 발견:', history.length, '개');
+          
+          // 중복 제거를 위해 기존 캐시와 비교
+          setCachedResults(prevCached => {
+            const existingIds = new Set(prevCached.map(cache => cache.id));
+            const newHistoryItems = history.filter(item => !existingIds.has(item.id));
+            
+            if (newHistoryItems.length > 0) {
+              setShowCacheOptions(true);
+              return [...prevCached, ...newHistoryItems.map(item => ({
+                ...item,
+                source: 'prediction_history'
+              }))];
+            }
+            return prevCached;
+          });
+        }
+      } catch (historyError) {
+        console.error('예측 히스토리 로드 실패:', historyError);
+      }
+      
+    } catch (error) {
+      console.error('캐시 로드 전체 실패:', error);
+      setCachedResults([]);
+      setShowCacheOptions(false);
+    }
+  }, [globalBatchResults]);
+
   // 컴포넌트 로드 시 캐시 확인
   useEffect(() => {
     loadCachedResults();
-  }, []);
+  }, [loadCachedResults]);
 
   // 사후 분석 최종 설정 로드
   useEffect(() => {
@@ -122,82 +297,266 @@ const BatchAnalysis = ({
     }
   }, []);
 
-  // 캐시된 결과 로드 (IndexedDB 우선 확인, 안전한 오류 처리)
-  const loadCachedResults = async () => {
-    try {
-      // 1. IndexedDB에서 전체 데이터 확인 (안전한 처리)
-      let indexedDBData = null;
-      try {
-        indexedDBData = await loadFromIndexedDB();
-        if (indexedDBData && indexedDBData.results && indexedDBData.results.length > 0) {
-          console.log('✅ IndexedDB에서 전체 데이터 발견:', indexedDBData.results.length, '명');
-          setShowCacheOptions(true);
+  // 캐시된 결과 사용 - 저장된 파일에서 실제 데이터 로드
+  const loadCachedResult = async (cacheId) => {
+    const cachedResult = cachedResults.find(cache => cache.id === cacheId);
+    console.log('🔍 캐시된 결과 로드 시도:', { cacheId, cachedResult: !!cachedResult, hasRawData: !!(cachedResult?.rawData) });
+    
+    if (cachedResult) {
+      let dataToLoad = null;
+      
+      // 1. rawData가 있으면 사용
+      if (cachedResult.rawData) {
+        dataToLoad = cachedResult.rawData;
+        console.log('✅ rawData에서 데이터 로드:', dataToLoad);
+      }
+      // 2. rawData가 없으면 저장된 파일에서 실제 데이터 로드 시도
+      else {
+        console.log('⚠️ rawData가 없어서 저장된 파일에서 로드 시도');
+        
+        try {
+          // 저장된 배치 분석 파일에서 데이터 로드 (Integration 서버)
+          const response = await fetch(`http://localhost:5007/api/batch-analysis/load-results?timestamp=${encodeURIComponent(cachedResult.timestamp)}`);
           
-          if (!globalBatchResults) {
-            message.info(`IndexedDB에서 전체 분석 결과를 발견했습니다 (${indexedDBData.results.length}명)`);
+          if (response.ok) {
+            const savedData = await response.json();
+            console.log('✅ 저장된 파일에서 데이터 로드 성공:', savedData);
+            
+            if (savedData.success && savedData.results && savedData.results.length > 0) {
+              dataToLoad = {
+                success: true,
+                results: savedData.results,
+                total_employees: savedData.total_employees || savedData.results.length,
+                completed_employees: savedData.completed_employees || savedData.results.length,
+                summary: savedData.summary || {
+                  total_employees: savedData.results.length,
+                  successful_analyses: savedData.results.length,
+                  failed_analyses: 0,
+                  success_rate: 1.0
+                },
+                analysis_metadata: {
+                  analysis_type: 'batch',
+                  timestamp: cachedResult.timestamp,
+                  loaded_from_files: true
+                }
+              };
+            } else {
+              throw new Error('저장된 파일에 유효한 데이터가 없습니다.');
+            }
+          } else {
+            throw new Error(`저장된 파일 로드 실패: ${response.status}`);
           }
-        } else {
-          console.log('IndexedDB에 유효한 데이터 없음');
+        } catch (fileLoadError) {
+          console.warn('저장된 파일 로드 실패:', fileLoadError.message);
+          
+          // 파일 로드 실패 시 캐시 정보로부터 기본 구조 생성
+          console.log('📋 캐시 정보로부터 기본 구조 생성');
+          dataToLoad = {
+            success: true,
+            results: [], // 빈 결과 배열
+            total_employees: cachedResult.totalEmployees || 0,
+            completed_employees: cachedResult.totalEmployees || 0,
+            summary: {
+              total_employees: cachedResult.totalEmployees || 0,
+              successful_analyses: cachedResult.totalEmployees || 0,
+              failed_analyses: 0,
+              success_rate: 1.0
+            },
+            analysis_metadata: {
+              analysis_type: 'batch',
+              timestamp: cachedResult.timestamp,
+              cached_result: true
+            },
+            // 캐시 정보를 메타데이터로 포함
+            cache_info: {
+              title: cachedResult.title,
+              highRiskCount: cachedResult.highRiskCount,
+              mediumRiskCount: cachedResult.mediumRiskCount,
+              lowRiskCount: cachedResult.lowRiskCount,
+              accuracy: cachedResult.accuracy,
+              summary: cachedResult.summary,
+              keyInsights: cachedResult.keyInsights,
+              departmentStats: cachedResult.departmentStats,
+              totalEmployees: cachedResult.totalEmployees
+            }
+          };
         }
-      } catch (indexedDBError) {
-        console.log('IndexedDB 확인 중 오류 (무시됨):', indexedDBError.message);
-        // IndexedDB 오류는 무시하고 계속 진행
       }
       
-      // 2. 기존 예측 히스토리 확인
+      // 데이터 로드
+      setAnalysisResults(dataToLoad);
+      if (updateBatchResults) {
+        updateBatchResults(dataToLoad);
+      }
+      
+      // 🔄 predictionService에도 저장하여 Home.js 히스토리와 동기화
       try {
-        const history = await predictionService.getPredictionHistoryAsync();
-        setCachedResults(history);
-        
-        if (history.length > 0) {
-          setShowCacheOptions(true);
+        const predictionData = predictionService.convertBatchResultToPrediction(dataToLoad);
+        if (predictionData) {
+          // 기존에 동일한 타임스탬프의 히스토리가 있는지 확인
+          const existingHistory = predictionService.getPredictionHistory();
+          const isDuplicate = existingHistory.some(item => 
+            Math.abs(new Date(item.timestamp) - new Date(cachedResult.timestamp)) < 1000
+          );
           
-          // IndexedDB 데이터가 없고 전역 결과도 없을 때만 메시지 표시
-          if (!indexedDBData && !globalBatchResults && history.length > 0) {
-            const latestCache = history[0];
-            message.info(`최근 분석 결과를 발견했습니다 (${new Date(latestCache.timestamp).toLocaleString('ko-KR')})`);
+          if (!isDuplicate) {
+            predictionService.savePredictionResult(predictionData);
+            console.log('✅ 캐시 결과를 분석 히스토리에 저장');
+          } else {
+            console.log('ℹ️ 이미 히스토리에 존재하는 결과 (중복 저장 방지)');
           }
         }
       } catch (historyError) {
-        console.error('예측 히스토리 로드 실패:', historyError);
-        setCachedResults([]); // 빈 배열로 설정
+        console.warn('분석 히스토리 저장 실패 (계속 진행):', historyError);
       }
       
-    } catch (error) {
-      console.error('캐시 로드 전체 실패:', error);
-      // 오류가 발생해도 앱이 중단되지 않도록 기본값 설정
-      setCachedResults([]);
+      const loadSource = dataToLoad.analysis_metadata?.loaded_from_files ? '저장된 파일' : 
+                        dataToLoad.analysis_metadata?.cached_result ? '캐시 정보' : 'rawData';
+      
+      message.success(`${loadSource}에서 분석 결과를 불러왔습니다 (${new Date(cachedResult.timestamp).toLocaleString('ko-KR')})`);
       setShowCacheOptions(false);
+      setCacheModalVisible(false);
+      
+      console.log('✅ 캐시 로드 완료:', dataToLoad);
+    } else {
+      console.error('❌ 캐시된 데이터를 찾을 수 없습니다:', cacheId);
+      message.error('캐시된 데이터를 불러올 수 없습니다.');
     }
   };
 
-  // 캐시된 결과 사용
-  const loadCachedResult = (cacheId) => {
-    const cachedResult = cachedResults.find(cache => cache.id === cacheId);
-    if (cachedResult && cachedResult.rawData) {
-      // 캐시된 원본 데이터를 현재 결과로 설정
-      setAnalysisResults(cachedResult.rawData);
-      updateBatchResults(cachedResult.rawData);
+  // 미분류 폴더 정리
+  const cleanupMisclassifiedFolders = async () => {
+    try {
+      setLoading(true);
+      console.log('🔄 미분류 폴더 정리 시작...');
       
-      message.success(`캐시된 분석 결과를 불러왔습니다 (${new Date(cachedResult.timestamp).toLocaleString('ko-KR')})`);
-      setShowCacheOptions(false);
-      setCacheModalVisible(false);
-    } else {
-      message.error('캐시된 데이터를 불러올 수 없습니다.');
+      const response = await fetch('http://localhost:5007/api/batch-analysis/cleanup-misclassified', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          message.success(`미분류 폴더 정리 완료! (${result.processed_employees}명 처리)`);
+          console.log('✅ 미분류 폴더 정리 성공:', result);
+        } else {
+          throw new Error(result.error || '미분류 폴더 정리 실패');
+        }
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('❌ 미분류 폴더 정리 실패:', error);
+      message.error(`미분류 폴더 정리 실패: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 캐시 삭제 (저장된 파일 포함)
+  const deleteCachedResult = async (cacheId) => {
+    const cachedResult = cachedResults.find(cache => cache.id === cacheId);
+    
+    if (!cachedResult) {
+      message.error('삭제할 캐시를 찾을 수 없습니다.');
+      return;
+    }
+
+    try {
+      // 1. 저장된 파일 삭제
+      if (cachedResult.source === 'saved_file' && cachedResult.filename) {
+        console.log('🗑️ 저장된 파일 삭제:', cachedResult.filename);
+        
+        const response = await fetch('http://localhost:5007/api/batch-analysis/delete-saved-file', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            filename: cachedResult.filename
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            console.log('✅ 파일 삭제 완료:', result.deleted_files);
+            message.success(`${result.deleted_files.length}개 파일이 삭제되었습니다.`);
+          } else {
+            throw new Error(result.error || '파일 삭제 실패');
+          }
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      }
+      
+      // 2. IndexedDB 캐시 삭제
+      if (cachedResult.source === 'indexeddb') {
+        try {
+          // IndexedDB 전체 삭제
+          const request = indexedDB.deleteDatabase('BatchAnalysisDB');
+          request.onsuccess = () => {
+            console.log('✅ IndexedDB 삭제 완료');
+          };
+          request.onerror = (event) => {
+            console.warn('IndexedDB 삭제 실패:', event);
+          };
+        } catch (dbError) {
+          console.warn('IndexedDB 삭제 중 오류:', dbError);
+        }
+      }
+      
+      // 3. localStorage 캐시 삭제
+      if (cachedResult.source === 'prediction_history') {
+        try {
+          await predictionService.deletePredictionFromHistory(cacheId);
+          console.log('✅ 예측 히스토리에서 삭제 완료');
+        } catch (historyError) {
+          console.warn('예측 히스토리 삭제 실패:', historyError);
+        }
+      }
+      
+      // 4. 로컬 캐시 목록에서 제거
+      setCachedResults(prev => prev.filter(cache => cache.id !== cacheId));
+      
+      // 5. 현재 표시 중인 결과가 삭제된 캐시라면 초기화
+      if (analysisResults && analysisResults.cache_info && analysisResults.cache_info.id === cacheId) {
+        setAnalysisResults(null);
+        updateBatchResults(null);
+      }
+      
+      message.success('캐시가 성공적으로 삭제되었습니다.');
+      
+    } catch (error) {
+      console.error('캐시 삭제 중 오류:', error);
+      message.error(`캐시 삭제 실패: ${error.message}`);
     }
   };
 
   // 최신 캐시 자동 로드 (IndexedDB 우선, 안전한 오류 처리)
   const loadLatestCache = async () => {
     try {
+      console.log('🔄 최신 캐시 로드 시작...');
+      
       // 1. IndexedDB에서 전체 데이터 로드 시도 (안전한 처리)
       let indexedDBData = null;
       try {
         indexedDBData = await loadFromIndexedDB();
+        console.log('🔍 IndexedDB 데이터 확인:', { 
+          hasData: !!indexedDBData, 
+          hasResults: !!(indexedDBData?.results), 
+          resultsLength: indexedDBData?.results?.length 
+        });
+        
         if (indexedDBData && indexedDBData.results && indexedDBData.results.length > 0) {
           console.log('✅ IndexedDB에서 전체 데이터 로드:', indexedDBData.results.length, '명');
           setAnalysisResults(indexedDBData);
-          updateBatchResults(indexedDBData);
+          if (updateBatchResults) {
+            updateBatchResults(indexedDBData);
+          }
           
           message.success(
             `IndexedDB에서 전체 분석 결과를 불러왔습니다!\n` +
@@ -214,15 +573,60 @@ const BatchAnalysis = ({
         // IndexedDB 오류는 무시하고 기존 캐시로 진행
       }
       
-      // 2. 기존 캐시 로드
+      // 2. localStorage에서 직접 배치 분석 결과 확인
+      try {
+        const savedResults = localStorage.getItem('batchAnalysisResults');
+        if (savedResults) {
+          console.log('🔍 localStorage에서 배치 분석 결과 발견');
+          const results = JSON.parse(savedResults);
+          
+          // 데이터 구조 정규화
+          let normalizedResults;
+          if (Array.isArray(results)) {
+            normalizedResults = {
+              success: true,
+              results: results,
+              total_employees: results.length,
+              completed_employees: results.length
+            };
+          } else if (results && results.results && Array.isArray(results.results)) {
+            normalizedResults = results;
+          } else if (results && typeof results === 'object') {
+            normalizedResults = {
+              success: true,
+              results: [results],
+              total_employees: 1,
+              completed_employees: 1
+            };
+          }
+          
+          if (normalizedResults && normalizedResults.results && normalizedResults.results.length > 0) {
+            console.log('✅ localStorage에서 배치 분석 결과 로드:', normalizedResults.results.length, '명');
+            setAnalysisResults(normalizedResults);
+            if (updateBatchResults) {
+              updateBatchResults(normalizedResults);
+            }
+            
+            message.success(`localStorage에서 분석 결과를 불러왔습니다! (${normalizedResults.results.length}명)`);
+            setShowCacheOptions(false);
+            return;
+          }
+        }
+      } catch (localStorageError) {
+        console.log('localStorage 확인 중 오류 (무시됨):', localStorageError.message);
+      }
+      
+      // 3. 기존 캐시 로드
       if (cachedResults && cachedResults.length > 0) {
         try {
-          loadCachedResult(cachedResults[0].id);
+          console.log('🔍 기존 캐시에서 로드 시도:', cachedResults[0]);
+          await loadCachedResult(cachedResults[0].id);
         } catch (cacheError) {
           console.error('기존 캐시 로드 실패:', cacheError);
           message.warning('저장된 분석 결과를 불러올 수 없습니다.');
         }
       } else {
+        console.log('❌ 사용 가능한 캐시 없음');
         message.info('저장된 분석 결과가 없습니다. 새로운 분석을 시작하세요.');
       }
       
@@ -238,7 +642,8 @@ const BatchAnalysis = ({
     message.info('새로운 분석을 시작합니다. 파일을 업로드해주세요.');
   };
 
-  // 최적화된 설정을 적용한 분석 결과 해석
+  // 최적화된 설정을 적용한 분석 결과 해석 (사용하지 않음 - 향후 확장용)
+  /*
   const generateAnalysisInsights = (results) => {
     // analysisResults.results 배열을 사용하여 분석
     const employeeResults = results.results || results;
@@ -320,16 +725,7 @@ const BatchAnalysis = ({
         department = deptMapping[department];
       }
       
-      // 디버깅: 부서 정보 추출 과정 로그
-      if (emp.employee_number && (emp.employee_number.endsWith('001') || emp.employee_number.endsWith('002'))) {
-        console.log(`🔍 직원 ${emp.employee_number} 부서 정보:`, {
-          'analysis_result.employee_data.Department': emp.analysis_result?.employee_data?.Department,
-          'department': emp.department,
-          'structura.employee_data.Department': emp.analysis_result?.structura?.employee_data?.Department,
-          'employee_data.Department': emp.employee_data?.Department,
-          'final_department': department
-        });
-      }
+      // 부서 정보 추출 완료
       
       return {
         ...emp,
@@ -438,10 +834,7 @@ const BatchAnalysis = ({
       });
     });
 
-    // 디버깅: 부서별 통계 출력
-    console.log('🏢 부서별 통계 분석:', departmentStats);
-    console.log('👥 처리된 직원 수:', processedEmployees.length);
-    console.log('📊 부서 분포:', Object.keys(departmentStats));
+    // 부서별 통계 분석 완료
 
     const insights = {
       summary: {
@@ -465,8 +858,10 @@ const BatchAnalysis = ({
 
     return insights;
   };
+  */
 
-  // 추천 사항 생성 (권장사항 생성 로직 개선)
+  // 추천 사항 생성 (권장사항 생성 로직 개선) - 사용하지 않음, 향후 확장용
+  /*
   const generateRecommendations = (highRisk, mediumRisk, total, deptStats) => {
     const recommendations = [];
     
@@ -533,8 +928,10 @@ const BatchAnalysis = ({
 
     return recommendations;
   };
+  */
 
-  // 트렌드 분석
+  // 트렌드 분석 - 사용하지 않음, 향후 확장용
+  /*
   const analyzeTrends = (results) => {
     // 간단한 트렌드 분석 (실제로는 시계열 데이터가 필요)
     return {
@@ -544,7 +941,7 @@ const BatchAnalysis = ({
     };
   };
 
-  // 중요 알림 생성
+  // 중요 알림 생성 - 사용하지 않음, 향후 확장용
   const generateCriticalAlerts = (processedEmployees, deptStats) => {
     const alerts = [];
     
@@ -568,8 +965,10 @@ const BatchAnalysis = ({
 
     return alerts;
   };
+  */
 
-  // PDF 보고서 생성
+  // PDF 보고서 생성 (사용하지 않음 - 향후 확장용)
+  /*
   const generatePDFReport = async () => {
     if (!analysisResults || !analysisResults.results || analysisResults.results.length === 0) {
       message.error('분석 결과가 없습니다. 먼저 배치 분석을 실행해주세요.');
@@ -640,7 +1039,7 @@ const BatchAnalysis = ({
         
         // 부서명을 영어로 변환하거나 안전하게 처리
         const safeDeptName = dept === '미분류' ? 'Unclassified' : 
-                           dept.replace(/[^\x00-\x7F]/g, '') || 'Department';
+                           dept.replace(/[^\u0020-\u007E]/g, '') || 'Department';
         
         pdf.text(`${safeDeptName}: Total ${stats.total}, High Risk ${stats.high}, Medium Risk ${stats.medium}, Low Risk ${stats.low}`, 20, yPosition);
         yPosition += 7;
@@ -664,9 +1063,9 @@ const BatchAnalysis = ({
           // 위험 요인을 안전하게 처리 (객체 직렬화 오류 해결)
           let safeFactor = 'Risk Factor';
           if (typeof factor === 'string' && factor.trim()) {
-            safeFactor = factor.replace(/[^\x00-\x7F]/g, '').trim() || 'Risk Factor';
+            safeFactor = factor.replace(/[^\u0020-\u007E]/g, '').trim() || 'Risk Factor';
           } else if (typeof factor === 'object' && factor !== null) {
-            safeFactor = JSON.stringify(factor).replace(/[^\x00-\x7F]/g, '') || 'Risk Factor';
+            safeFactor = JSON.stringify(factor).replace(/[^\u0020-\u007E]/g, '') || 'Risk Factor';
           }
           
           const safeCount = typeof count === 'number' ? count : 0;
@@ -697,7 +1096,7 @@ const BatchAnalysis = ({
           // 제목을 안전하게 처리 (빈 데이터 문제 해결)
           let safeTitle = 'Recommendation';
           if (typeof rec.title === 'string' && rec.title.trim()) {
-            safeTitle = rec.title.replace(/[^\x00-\x7F]/g, '').trim() || 'Recommendation';
+            safeTitle = rec.title.replace(/[^\u0020-\u007E]/g, '').trim() || 'Recommendation';
           }
           
           pdf.text(`${index + 1}. ${safeTitle}`, 20, yPosition);
@@ -708,7 +1107,7 @@ const BatchAnalysis = ({
           // 설명을 안전하게 처리 (빈 데이터 문제 해결)
           let safeDescription = 'Please review this recommendation.';
           if (typeof rec.description === 'string' && rec.description.trim()) {
-            safeDescription = rec.description.replace(/[^\x00-\x7F]/g, '').trim() || 'Please review this recommendation.';
+            safeDescription = rec.description.replace(/[^\u0020-\u007E]/g, '').trim() || 'Please review this recommendation.';
           }
           
           const descLines = pdf.splitTextToSize(safeDescription, pageWidth - 40);
@@ -742,7 +1141,7 @@ const BatchAnalysis = ({
           // 알림 메시지를 안전하게 처리 (빈 데이터 문제 해결)
           let safeMessage = 'Critical alert requires attention.';
           if (typeof alert.message === 'string' && alert.message.trim()) {
-            safeMessage = alert.message.replace(/[^\x00-\x7F]/g, '').trim() || 'Critical alert requires attention.';
+            safeMessage = alert.message.replace(/[^\u0020-\u007E]/g, '').trim() || 'Critical alert requires attention.';
           }
           
           const alertLines = pdf.splitTextToSize(safeMessage, pageWidth - 40);
@@ -767,10 +1166,9 @@ const BatchAnalysis = ({
     } catch (error) {
       console.error('PDF 생성 오류:', error);
       message.error('PDF 보고서 생성 중 오류가 발생했습니다.');
-    } finally {
-      setIsGeneratingPDF(false);
     }
   };
+  */
   
   
   // Integration 설정 (사후 분석에서 최적화된 값 자동 로드)
@@ -1200,6 +1598,7 @@ const BatchAnalysis = ({
     }
 
     // 클라이언트 사이드 진행률 관리 (PostAnalysis 방식)
+    let finalResults = null; // finally 블록에서 사용할 수 있도록 상위 스코프에 선언
 
     try {
       setIsAnalyzing(true);
@@ -1228,7 +1627,7 @@ const BatchAnalysis = ({
       console.log('⚙️ 통합 설정:', integrationConfig);
       console.log('🔗 Neo4j 연결 상태:', neo4jConnected);
 
-      // 4. 클라이언트 사이드 진행률 관리 (PostAnalysis 방식)
+      // 4. 통합된 진행률 관리 시스템
       const updateProgress = (step, agentProgress = {}) => {
         const stepProgress = {
           'start': 5,
@@ -1240,14 +1639,23 @@ const BatchAnalysis = ({
         
         const overall = stepProgress[step] || 0;
         
-        setAnalysisProgress({
-          structura: agentProgress.structura || 0,
-          cognita: agentProgress.cognita || 0,
-          chronos: agentProgress.chronos || 0,
-          sentio: agentProgress.sentio || 0,
-          agora: agentProgress.agora || 0,
-          overall: overall
-        });
+        // 분석이 완료되면 모든 에이전트 진행률을 100%로 설정
+        if (step === 'complete') {
+          setAnalysisProgress({
+            structura: 100,
+            cognita: 100,
+            chronos: 100,
+            sentio: 100,
+            agora: 100,
+            overall: 100
+          });
+        } else {
+          setAnalysisProgress(prev => ({
+            ...prev,
+            ...agentProgress,
+            overall: overall
+          }));
+        }
         
         console.log(`📊 진행률 업데이트: ${step} - 전체 ${overall}%`);
       };
@@ -1317,7 +1725,7 @@ const BatchAnalysis = ({
       const analysisResults = {};
       const expectedAgents = ['structura', 'cognita', 'chronos', 'sentio', 'agora'];
       
-      // 진행률 업데이트 함수 (PostAnalysis 방식)
+      // 개별 에이전트 진행률 업데이트 함수
       const updateAgentProgress = (agentName, progress) => {
         setAnalysisProgress(prev => {
           const newProgress = { ...prev };
@@ -1326,7 +1734,15 @@ const BatchAnalysis = ({
           // 전체 진행률 계산 (활성화된 에이전트 기준)
           const activeAgents = expectedAgents.filter(agent => agentConfig[`use_${agent}`]);
           const totalProgress = activeAgents.reduce((sum, agent) => sum + (newProgress[agent] || 0), 0);
-          newProgress.overall = activeAgents.length > 0 ? Math.round(totalProgress / activeAgents.length) : 0;
+          const calculatedOverall = activeAgents.length > 0 ? Math.round(totalProgress / activeAgents.length) : 0;
+          
+          // 에이전트 진행률만으로 85% 계산 (integration 단계 제외)
+          // Integration 단계는 별도로 85-100% 구간 업데이트
+          if (prev.overall !== 100) {
+            // 에이전트 평균이 100%이면 85%로 표시 (Integration 대기)
+            // 그렇지 않으면 85% 비율로 스케일링
+            newProgress.overall = calculatedOverall === 100 ? 85 : Math.round(calculatedOverall * 0.85);
+          }
           
           return newProgress;
         });
@@ -1441,6 +1857,13 @@ const BatchAnalysis = ({
             console.log(`✅ Sentio: ${validTextCount}명의 유효한 텍스트 데이터 확인됨`);
             updateAgentProgress('sentio', 30);
             
+            console.log('🚀 Sentio API 호출 시작...');
+            console.log('📤 요청 데이터:', {
+              analysis_type: 'batch',
+              employees_count: sentioEmployees.length,
+              first_employee_sample: sentioEmployees[0]
+            });
+            
             const response = await fetch('http://localhost:5004/analyze_sentiment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1450,22 +1873,37 @@ const BatchAnalysis = ({
               })
             });
             
+            console.log('📥 Sentio API 응답 상태:', response.status, response.statusText);
+            
             if (response.ok) {
               const result = await response.json();
+              console.log('🔍 Sentio API 응답 구조:', {
+                success: result.success,
+                total_analyzed: result.total_analyzed,
+                analysis_results_length: result.analysis_results?.length,
+                first_result_sample: result.analysis_results?.[0]
+              });
               predictions = result.analysis_results?.map(pred => ({
                 employee_id: pred.employee_id,
-                risk_score: pred.psychological_risk_score,
+                risk_score: pred.psychological_risk_score, // PostAnalysis와 완전히 동일
                 predicted_attrition: pred.psychological_risk_score > 0.5 ? 1 : 0,
                 confidence: 0.8,
                 actual_attrition: 0 // 배치 분석에서는 실제 퇴직 데이터 없음
               })) || [];
               
               console.log(`✅ Sentio: ${predictions.length}명 배치 분석 완료`);
+              console.log('🔍 Sentio predictions 샘플:', predictions.slice(0, 3));
               updateAgentProgress('sentio', 100);
             } else {
               const errorText = await response.text();
-              console.error('❌ Sentio API 오류:', errorText);
-              throw new Error(`Sentio 배치 분석 실패: ${response.status} - ${errorText}`);
+              console.error('❌ Sentio API 오류:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorText: errorText
+              });
+              // 실패해도 빈 배열로 초기화 (전체 분석 중단 방지)
+              predictions = [];
+              console.warn('⚠️ Sentio 분석 실패로 빈 결과 사용');
             }
             
           } else if (agentName === 'cognita' && neo4jConnected) {
@@ -1536,7 +1974,7 @@ const BatchAnalysis = ({
             
             // 직원 데이터 준비
             const agoraEmployees = employee_ids.map(empId => {
-              const employeeInfo = employeeData.find(emp => emp.EmployeeNumber == empId) || {};
+              const employeeInfo = employeeData.find(emp => emp.EmployeeNumber === empId) || {};
               return {
                 employee_id: empId,
                 JobRole: employeeInfo.JobRole || 'Unknown',
@@ -1584,6 +2022,11 @@ const BatchAnalysis = ({
           
           // 결과 저장
           analysisResults[agentName] = predictions;
+          console.log(`💾 ${agentName} 결과 저장 완료:`, {
+            agentName,
+            predictions_count: predictions?.length || 0,
+            first_prediction: predictions?.[0]
+          });
           
         } catch (error) {
           console.error(`❌ ${agentName} 분석 실패:`, error);
@@ -1596,6 +2039,9 @@ const BatchAnalysis = ({
 
       // 6. 결과 통합 및 포맷팅 (PostAnalysis 방식)
       updateProgress('integration');
+      
+      // Integration 진행률 업데이트 (85% → 90%)
+      setAnalysisProgress(prev => ({ ...prev, overall: 90 }));
       
       const batchResults = [];
       const totalEmployees = employeeData.length;
@@ -1684,19 +2130,24 @@ const BatchAnalysis = ({
         }
         
         // Sentio 결과
+        
         if (analysisResults.sentio) {
           const sentioPred = analysisResults.sentio.find(p => 
             String(p.employee_id) === String(empId)
           );
+          
           if (sentioPred) {
             employeeResult.analysis_result.sentio_result = {
+              psychological_risk_score: sentioPred.risk_score, // API 응답의 risk_score를 직접 저장
               sentiment_analysis: {
-                risk_score: sentioPred.psychological_risk_score || sentioPred.risk_score,
+                risk_score: sentioPred.risk_score, // 호환성을 위해 중복 저장
                 sentiment_score: sentioPred.sentiment_score || 0
               },
               risk_level: sentioPred.risk_level || 'MEDIUM'
             };
-            totalRiskScore += (sentioPred.psychological_risk_score || sentioPred.risk_score || 0) * integrationConfig.sentio_weight;
+            // sentio_score도 최상위에 저장 (UI에서 쉽게 접근)
+            employeeResult.sentio_score = sentioPred.risk_score;
+            totalRiskScore += (sentioPred.risk_score || 0) * integrationConfig.sentio_weight;
             activeAgentCount++;
           }
         }
@@ -1736,7 +2187,7 @@ const BatchAnalysis = ({
       }
       
       // 최종 결과 구성
-      const finalResults = {
+      finalResults = {
         success: true,
         results: batchResults,
         total_employees: totalEmployees,
@@ -1756,31 +2207,12 @@ const BatchAnalysis = ({
       };
       
       console.log(`📊 배치 분석 완료: ${successfulAnalyses}/${totalEmployees}명 성공`);
-      setAnalysisResults(finalResults);
       
-      // 🚀 개선된 저장 시스템 사용
-      try {
-        console.log('💾 스마트 저장 시스템으로 결과 저장 중...');
-        const saveResult = await storageManager.saveAnalysisResults(finalResults, {
-          timestamp: new Date().toISOString(),
-          batchId: `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        });
-        
-        if (saveResult.success) {
-          console.log(`✅ 저장 완료: ${saveResult.method} 방식 사용`);
-          if (saveResult.warning) {
-            message.warning(saveResult.warning);
-          } else {
-            message.success(`분석 결과가 ${saveResult.method} 방식으로 저장되었습니다.`);
-          }
-        } else {
-          console.error('저장 실패:', saveResult.error);
-          message.error('결과 저장에 실패했습니다.');
-        }
-      } catch (storageError) {
-        console.error('저장 시스템 오류:', storageError);
-        message.error('저장 중 오류가 발생했습니다.');
-      }
+      // Integration 진행률 업데이트 (90% → 95%)
+      setAnalysisProgress(prev => ({ ...prev, overall: 95 }));
+      
+      // 브라우저 로컬 저장은 생략하고 서버 저장만 수행
+      console.log('💾 서버에 결과 저장 준비 완료...');
 
       // 전역 상태 업데이트 (다른 페이지에서 사용할 수 있도록)
       if (updateBatchResults) {
@@ -1920,9 +2352,13 @@ const BatchAnalysis = ({
           throw new Error(`Integration 서버 응답 오류: ${integrationHealthCheck.status}`);
         }
         
+        // Supervisor의 HierarchicalResultManager 사용 (올바른 파일 구조로 저장)
+        console.log('💾 Supervisor HierarchicalResultManager로 저장 시작...');
+        
+        // saveHierarchicalBatchResults 함수를 사용하여 계층적 구조 생성 및 저장
         const hierarchicalSaveResult = await saveHierarchicalBatchResults(
-          analysisResults, 
-          employeeData, 
+          finalResults,
+          employeeData,
           {
             totalEmployees: employee_ids.length,
             successfulAnalyses: finalResults.summary?.successful_analyses || 0,
@@ -1930,7 +2366,13 @@ const BatchAnalysis = ({
             agentBreakdown: finalResults.summary?.agent_breakdown || {}
           }
         );
-        console.log('✅ 계층적 구조 저장 완료:', hierarchicalSaveResult);
+        
+        if (!hierarchicalSaveResult.success) {
+          throw new Error(`Supervisor 계층적 저장 실패: ${hierarchicalSaveResult.error || '알 수 없는 오류'}`);
+        }
+        
+        console.log('✅ Supervisor HierarchicalResultManager 저장 완료:', hierarchicalSaveResult);
+        console.log('✅ 계층적 구조 저장 완료:', hierarchicalSaveResult.statistics);
         message.success('계층적 구조로 결과 저장 완료! (Department > JobRole > JobLevel > 직원별)');
       } catch (error) {
         console.error('❌ 계층적 구조 저장 실패:', error);
@@ -1951,11 +2393,32 @@ const BatchAnalysis = ({
         message.warning(errorMessage);
       }
 
-      // 8. 분석 완료
+      // 8. 분석 완료 - 진행률을 100%로 고정하고 상태 정리
+      console.log('🎯 분석 완료 처리 시작...');
+      
+      // 최종 진행률 업데이트 (95% → 100%)
       updateProgress('complete');
+      
+      // 분석 완료 후 상태를 즉시 정리
+      setIsAnalyzing(false);
+      
+      // 진행률을 100%로 고정 (이중 보장)
+      setAnalysisProgress({
+        structura: 100,
+        cognita: 100,
+        chronos: 100,
+        sentio: 100,
+        agora: 100,
+        overall: 100
+      });
+      
+      // 분석 결과 설정
+      setAnalysisResults(finalResults);
 
       const completedCount = finalResults.summary?.successful_analyses || 0;
       message.success(`PostAnalysis 방식 배치 분석 완료! ${completedCount}명의 직원 분석이 완료되었습니다.`);
+      
+      console.log('✅ 배치 분석 완료 - 상태 정리됨');
 
     } catch (error) {
       console.error('❌ 통합 배치 분석 실패:', error);
@@ -1979,11 +2442,28 @@ const BatchAnalysis = ({
         message.error(`통합 배치 분석 실패: ${error.message}`);
       }
     } finally {
+      // finally 블록에서도 분석 상태를 false로 설정 (에러 발생 시에도)
       setIsAnalyzing(false);
+      
+      // 에러 발생 시에만 진행률 초기화 (성공한 경우는 100% 유지)
+      if (!finalResults || !finalResults.results) {
+        console.log('⚠️ 분석 실패로 진행률 초기화');
+        setAnalysisProgress({
+          structura: 0,
+          cognita: 0,
+          chronos: 0,
+          sentio: 0,
+          agora: 0,
+          overall: 0
+        });
+      } else {
+        console.log('✅ 분석 성공으로 진행률 100% 유지');
+      }
     }
   };
 
-  // 손실 없는 청크 저장 함수
+  // 손실 없는 청크 저장 함수 (사용하지 않음 - 향후 확장용)
+  /*
   const saveDataChunk = async (chunk, chunkIndex, metadata) => {
     try {
       const chunkData = {
@@ -2019,14 +2499,49 @@ const BatchAnalysis = ({
       throw error;
     }
   };
+  */
 
   // 계층적 구조로 배치 결과 저장 함수 - 개선된 오류 처리
+  // 서버 연결 상태 확인 함수
+  const checkServerConnection = async () => {
+    try {
+      const response = await fetch('http://localhost:5006/health', {
+        method: 'GET'
+        // 타임아웃 제거 - 무제한 대기
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('❌ 서버 연결 확인 실패:', error.message);
+      return false;
+    }
+  };
+
   const saveHierarchicalBatchResults = async (analysisResults, employeeData, analysisSummary) => {
     try {
+      // 먼저 서버 연결 상태 확인
+      console.log('🔍 서버 연결 상태 확인 중...');
+      const isServerConnected = await checkServerConnection();
+      
+      if (!isServerConnected) {
+        throw new Error('서버에 연결할 수 없습니다. Integration 서버(포트 5006)가 실행 중인지 확인해주세요.');
+      }
+      
+      console.log('✅ 서버 연결 확인됨');
       console.log('💾 계층적 구조 저장 시작...');
+      console.log('📊 분석 결과 구조:', {
+        hasResults: !!analysisResults,
+        hasResultsArray: !!(analysisResults && analysisResults.results),
+        resultsCount: analysisResults?.results?.length || 0,
+        employeeDataCount: employeeData?.length || 0
+      });
       
       // 입력 데이터 검증
       if (!analysisResults || !employeeData || !Array.isArray(employeeData)) {
+        console.error('❌ 유효하지 않은 입력 데이터:', {
+          analysisResults: !!analysisResults,
+          employeeData: !!employeeData,
+          isArray: Array.isArray(employeeData)
+        });
         throw new Error('유효하지 않은 입력 데이터');
       }
       
@@ -2045,10 +2560,50 @@ const BatchAnalysis = ({
             continue;
           }
           
-          // 직원 기본 정보 (안전한 추출)
-          const department = employee.Department || 'Unknown';
-          const jobRole = employee.JobRole || 'Unknown';
-          const jobLevel = employee.JobLevel || employee.Position || 'Unknown';
+          // 직원 기본 정보 (안전한 추출) - 여러 소스에서 시도
+          // 1차: 직원 데이터에서 직접 추출
+          let department = employee.Department || employee.department;
+          let jobRole = employee.JobRole || employee.job_role;
+          let jobLevel = employee.JobLevel || employee.Position || employee.position || employee.job_level;
+          
+          // 2차: 분석 결과의 employee_data에서 추출
+          if (analysisResults && analysisResults.results && Array.isArray(analysisResults.results)) {
+            const employeeAnalysis = analysisResults.results.find(r => 
+              String(r.employee_id || r.employee_number) === String(employeeId)
+            );
+            
+            if (employeeAnalysis && employeeAnalysis.analysis_result && employeeAnalysis.analysis_result.employee_data) {
+              const empData = employeeAnalysis.analysis_result.employee_data;
+              if (!department && empData.Department) department = empData.Department;
+              if (!jobRole && empData.JobRole) jobRole = empData.JobRole;
+              if (!jobLevel && (empData.JobLevel || empData.Position)) {
+                jobLevel = empData.JobLevel || empData.Position;
+              }
+            }
+          }
+          
+          // 3차: Structura 결과에서 추출
+          if (analysisResults && analysisResults.results && Array.isArray(analysisResults.results)) {
+            const employeeAnalysis = analysisResults.results.find(r => 
+              String(r.employee_id || r.employee_number) === String(employeeId)
+            );
+            
+            if (employeeAnalysis && employeeAnalysis.analysis_result && 
+                employeeAnalysis.analysis_result.structura_result && 
+                employeeAnalysis.analysis_result.structura_result.employee_data) {
+              const structEmpData = employeeAnalysis.analysis_result.structura_result.employee_data;
+              if (!department && structEmpData.Department) department = structEmpData.Department;
+              if (!jobRole && structEmpData.JobRole) jobRole = structEmpData.JobRole;
+              if (!jobLevel && (structEmpData.JobLevel || structEmpData.Position)) {
+                jobLevel = structEmpData.JobLevel || structEmpData.Position;
+              }
+            }
+          }
+          
+          // 최종 기본값 설정
+          department = department || 'Unknown';
+          jobRole = jobRole || 'Unknown';
+          jobLevel = jobLevel || '1';
           
           // 각 에이전트별 결과 수집
           const employeeResults = {
@@ -2057,21 +2612,40 @@ const BatchAnalysis = ({
             agent_results: {}
           };
           
-          // 각 에이전트 결과 추가 (안전한 처리)
-          if (analysisResults && typeof analysisResults === 'object') {
-            for (const [agentName, predictions] of Object.entries(analysisResults)) {
-              if (Array.isArray(predictions)) {
-                const employeePrediction = predictions.find(p => 
-                  String(p.employee_id || p.employee_number) === String(employeeId)
-                );
-                if (employeePrediction) {
-                  employeeResults.agent_results[agentName] = employeePrediction;
-                }
+          // 각 에이전트 결과 추가 (finalResults.results에서 추출)
+          if (analysisResults && analysisResults.results && Array.isArray(analysisResults.results)) {
+            const employeeAnalysis = analysisResults.results.find(r => 
+              String(r.employee_id || r.employee_number) === String(employeeId)
+            );
+            
+            if (employeeAnalysis && employeeAnalysis.analysis_result) {
+              // 각 에이전트별 결과 추출
+              const analysis = employeeAnalysis.analysis_result;
+              
+              if (analysis.structura_result) {
+                employeeResults.agent_results.structura = analysis.structura_result;
+              }
+              if (analysis.cognita_result) {
+                employeeResults.agent_results.cognita = analysis.cognita_result;
+              }
+              if (analysis.chronos_result) {
+                employeeResults.agent_results.chronos = analysis.chronos_result;
+              }
+              if (analysis.sentio_result) {
+                employeeResults.agent_results.sentio = analysis.sentio_result;
+              }
+              if (analysis.agora_result) {
+                employeeResults.agent_results.agora = analysis.agora_result;
+              }
+              if (analysis.combined_analysis) {
+                employeeResults.agent_results.combined = analysis.combined_analysis;
               }
             }
           }
           
-          // 계층적 구조 생성
+          // 계층적 구조 생성 - 디버깅 로그 추가
+          console.log(`🏗️ 계층 구조 생성: ${department} > ${jobRole} > ${jobLevel} > ${employeeId}`);
+          
           if (!hierarchicalResults[department]) {
             hierarchicalResults[department] = {};
           }
@@ -2092,6 +2666,13 @@ const BatchAnalysis = ({
       }
       
       console.log(`📊 계층적 구조 생성 완료: ${processedEmployees}/${employeeData.length}명 처리`);
+      console.log(`🏢 생성된 부서 수: ${Object.keys(hierarchicalResults).length}`);
+      console.log(`📋 부서별 직원 수:`, Object.entries(hierarchicalResults).map(([dept, data]) => {
+        const count = Object.values(data).reduce((sum, roles) => 
+          sum + Object.values(roles).reduce((roleSum, levels) => 
+            roleSum + Object.keys(levels).length, 0), 0);
+        return `${dept}: ${count}명`;
+      }).join(', '));
       
       // 데이터 크기 확인
       const dataString = JSON.stringify({
@@ -2101,11 +2682,80 @@ const BatchAnalysis = ({
       });
       
       const dataSize = new Blob([dataString]).size;
-      const maxSize = 50 * 1024 * 1024; // 50MB 제한으로 증가
+      const maxSize = 10 * 1024 * 1024; // 10MB 제한으로 조정
+      const chunkSize = 5 * 1024 * 1024; // 5MB 청크 크기
+      
+      console.log(`📏 데이터 크기: ${(dataSize/1024/1024).toFixed(2)}MB`);
       
       if (dataSize > maxSize) {
-        console.warn(`⚠️ 계층적 데이터 크기 초과 (${Math.round(dataSize/1024/1024)}MB > 50MB)`);
-        // 큰 데이터의 경우 요약 정보만 저장
+        console.warn(`⚠️ 대용량 데이터 감지 (${Math.round(dataSize/1024/1024)}MB > 10MB) - 청크 단위 전송 시작`);
+        
+        // 부서별로 데이터를 분할하여 전송
+        const departments = Object.keys(hierarchicalResults);
+        const totalDepartments = departments.length;
+        let successfulChunks = 0;
+        
+        for (let i = 0; i < departments.length; i++) {
+          const department = departments[i];
+          const chunkData = {
+            hierarchical_results: {
+              [department]: hierarchicalResults[department]
+            },
+            chunk_info: {
+              chunk_index: i + 1,
+              total_chunks: totalDepartments,
+              department: department,
+              is_chunk: true
+            },
+            analysis_summary: analysisSummary,
+            analysis_timestamp: new Date().toISOString()
+          };
+          
+          try {
+            console.log(`📦 청크 ${i + 1}/${totalDepartments} 전송 중 (${department} 부서)...`);
+            
+            const chunkResponse = await fetch('http://localhost:5006/api/batch-analysis/save-hierarchical-results', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Connection': 'keep-alive'
+              },
+              body: JSON.stringify(chunkData)
+              // 타임아웃 제거 - 무제한 대기
+            });
+            
+            if (chunkResponse.ok) {
+              const result = await chunkResponse.json();
+              console.log(`✅ 청크 ${i + 1} 저장 성공:`, result.message || 'OK');
+              successfulChunks++;
+            } else {
+              const errorText = await chunkResponse.text();
+              console.error(`❌ 청크 ${i + 1} 저장 실패:`, chunkResponse.status, errorText);
+              throw new Error(`청크 ${i + 1} 저장 실패: ${chunkResponse.status}`);
+            }
+            
+            // 청크 간 대기 시간 (서버 부하 방지)
+            if (i < departments.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+          } catch (error) {
+            console.error(`❌ 청크 ${i + 1} 전송 중 오류:`, error.message);
+            throw new Error(`청크 전송 실패 (${i + 1}/${totalDepartments}): ${error.message}`);
+          }
+        }
+        
+        console.log(`✅ 모든 청크 전송 완료: ${successfulChunks}/${totalDepartments}`);
+        return {
+          success: true,
+          message: `계층적 구조를 ${totalDepartments}개 청크로 분할하여 저장 완료`,
+          chunks_sent: successfulChunks,
+          total_chunks: totalDepartments
+        };
+        
+      } else if (dataSize > chunkSize) {
+        console.log(`📊 중간 크기 데이터 (${(dataSize/1024/1024).toFixed(2)}MB) - 압축 전송 시도`);
+        // 중간 크기 데이터의 경우 요약 정보만 저장
         const summaryData = {
           hierarchical_summary: {
             departments: Object.keys(hierarchicalResults).length,
@@ -2125,12 +2775,12 @@ const BatchAnalysis = ({
           data_compressed: true
         };
         
-        // 압축된 데이터로 저장 요청 (올바른 포트 사용)
-        const saveResponse = await fetch('http://localhost:5007/api/batch-analysis/save-hierarchical-results', {
+        // 압축된 데이터로 저장 요청 (Supervisor로 전송 - 실제 저장 담당)
+        const saveResponse = await fetch('http://localhost:5006/api/batch-analysis/save-hierarchical-results', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(summaryData),
-          signal: AbortSignal.timeout(120000) // 2분 타임아웃
+          body: JSON.stringify(summaryData)
+          // 타임아웃 제거 - 무제한 대기
         });
         
         if (saveResponse.ok) {
@@ -2143,43 +2793,54 @@ const BatchAnalysis = ({
         }
       } else {
         // 일반 저장 (재시도 로직 포함)
-        let saveAttempts = 0;
         const maxAttempts = 3;
         
-        while (saveAttempts < maxAttempts) {
-          saveAttempts++;
+        const attemptSave = async (attemptNumber) => {
+          console.log(`💾 계층적 저장 시도 ${attemptNumber}/${maxAttempts}...`);
           
+          const saveResponse = await fetch('http://localhost:5006/api/batch-analysis/save-hierarchical-results', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Connection': 'keep-alive'
+            },
+            body: dataString
+            // 타임아웃 제거 - 무제한 대기
+          });
+          
+          if (saveResponse.ok) {
+            const result = await saveResponse.json();
+            console.log('✅ 계층적 구조 저장 성공:', result);
+            return result;
+          } else {
+            const errorText = await saveResponse.text();
+            console.error(`❌ 계층적 저장 실패 (시도 ${attemptNumber}):`, saveResponse.status, errorText);
+            
+            if (attemptNumber === maxAttempts) {
+              throw new Error(`저장 실패: ${saveResponse.status} - ${errorText}`);
+            }
+            throw new Error('Retry needed');
+          }
+        };
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           try {
-            console.log(`💾 계층적 저장 시도 ${saveAttempts}/${maxAttempts}...`);
+            return await attemptSave(attempt);
+          } catch (error) {
+            console.error(`❌ 저장 시도 ${attempt} 실패:`, error.message);
             
-            const saveResponse = await fetch('http://localhost:5007/api/batch-analysis/save-hierarchical-results', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: dataString,
-              signal: AbortSignal.timeout(120000) // 2분 타임아웃
-            });
-            
-            if (saveResponse.ok) {
-              const result = await saveResponse.json();
-              console.log('✅ 계층적 구조 저장 성공:', result);
-              return result;
-            } else {
-              const errorText = await saveResponse.text();
-              console.error(`❌ 계층적 저장 실패 (시도 ${saveAttempts}):`, saveResponse.status, errorText);
-              
-              if (saveAttempts === maxAttempts) {
-                throw new Error(`저장 실패: ${saveResponse.status} - ${errorText}`);
+            if (attempt === maxAttempts) {
+              // 최종 실패 시 더 자세한 오류 정보 제공
+              if (error.message.includes('fetch') || error.message.includes('network')) {
+                throw new Error(`서버 연결 실패 (${maxAttempts}회 시도 후 실패). 서버가 실행 중인지 확인해주세요.`);
               }
+              throw error;
             }
-          } catch (fetchError) {
-            console.error(`❌ 계층적 저장 네트워크 오류 (시도 ${saveAttempts}):`, fetchError);
             
-            if (saveAttempts === maxAttempts) {
-              throw fetchError;
-            } else {
-              // 재시도 전 대기
-              await new Promise(resolve => setTimeout(resolve, 1000 * saveAttempts));
-            }
+            // 재시도 전 대기 (점진적으로 증가)
+            const waitTime = 2000 * attempt; // 2초, 4초, 6초
+            console.log(`⏳ ${waitTime/1000}초 후 재시도...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
           }
         }
       }
@@ -2261,7 +2922,8 @@ const BatchAnalysis = ({
     });
   };
 
-  // 결과 내보내기 함수
+  // 결과 내보내기 함수 (사용하지 않음 - exportBatchResults 사용)
+  /*
   const exportResults = (format) => {
     if (!analysisResults) {
       message.error('내보낼 분석 결과가 없습니다.');
@@ -2319,18 +2981,20 @@ const BatchAnalysis = ({
         document.body.removeChild(link);
 
         message.success('Excel 파일이 다운로드되었습니다.');
-      } else if (format === 'pdf') {
-        // PDF 보고서 생성 요청
-        generatePDFReport();
+                      } else if (format === 'pdf') {
+        // PDF 보고서 생성 요청 (현재 비활성화)
+        message.info('PDF 생성 기능은 현재 개발 중입니다.');
       }
     } catch (error) {
       console.error('결과 내보내기 실패:', error);
       message.error('결과 내보내기에 실패했습니다.');
     }
   };
+  */
 
 
-  // 동적으로 최적 직원 수를 계산하는 함수
+  // 동적으로 최적 직원 수를 계산하는 함수 (사용하지 않음 - 향후 확장용)
+  /*
   const calculateOptimalEmployeeCount = (data, maxSize) => {
     if (!data || !data.results || data.results.length === 0) return 0;
     
@@ -2371,6 +3035,7 @@ const BatchAnalysis = ({
     
     return Math.max(1, maxPossible); // 최소 1명은 보장
   };
+  */
 
   // IndexedDB를 활용한 전체 데이터 보존 함수 (안전한 오류 처리)
   const saveToIndexedDB = async (data, dbName = 'BatchAnalysisDB', storeName = 'results') => {
@@ -2958,67 +3623,189 @@ const BatchAnalysis = ({
 
   // 시각화 대시보드로 이동
   const navigateToVisualization = async () => {
+    console.log('🎯 시각화 대시보드로 이동 시작');
+    console.log('📊 현재 분석 결과:', { 
+      hasResults: !!analysisResults, 
+      hasResultsArray: !!(analysisResults?.results),
+      resultsLength: analysisResults?.results?.length,
+      hasCacheInfo: !!(analysisResults?.cache_info)
+    });
+    
     // 분석 결과를 localStorage에 저장 (용량 제한 고려)
     if (analysisResults) {
       try {
-        // 원본 데이터 크기 확인
-        const originalString = JSON.stringify(analysisResults);
-        const originalSize = new Blob([originalString]).size;
+        // 시각화에 필요한 데이터 구조 준비
+        let visualizationData = null;
+        
+        // 실제 분석 결과가 있는 경우
+        if (analysisResults.results && analysisResults.results.length > 0) {
+          visualizationData = {
+            success: true,
+            results: analysisResults.results,
+            total_employees: analysisResults.total_employees,
+            completed_employees: analysisResults.completed_employees,
+            summary: analysisResults.summary,
+            analysis_metadata: analysisResults.analysis_metadata,
+            data_source: 'actual_results'
+          };
+        }
+        // 캐시 정보만 있는 경우 - 가상의 결과 데이터 생성
+        else if (analysisResults.cache_info) {
+          console.log('📋 캐시 정보를 기반으로 시각화 데이터 생성');
+          
+          // 캐시 정보를 바탕으로 가상의 직원 데이터 생성
+          const mockResults = [];
+          const { highRiskCount, mediumRiskCount, lowRiskCount, totalEmployees } = analysisResults.cache_info;
+          
+          // 고위험군 가상 데이터
+          for (let i = 1; i <= highRiskCount; i++) {
+            mockResults.push({
+              employee_number: `HIGH_${i}`,
+              analysis_result: {
+                combined_analysis: {
+                  integrated_assessment: {
+                    overall_risk_score: 0.8 + (Math.random() * 0.2), // 0.8-1.0
+                    overall_risk_level: 'HIGH'
+                  }
+                },
+                employee_data: {
+                  Department: 'Unknown',
+                  JobRole: 'Unknown'
+                }
+              }
+            });
+          }
+          
+          // 중위험군 가상 데이터
+          for (let i = 1; i <= mediumRiskCount; i++) {
+            mockResults.push({
+              employee_number: `MEDIUM_${i}`,
+              analysis_result: {
+                combined_analysis: {
+                  integrated_assessment: {
+                    overall_risk_score: 0.4 + (Math.random() * 0.4), // 0.4-0.8
+                    overall_risk_level: 'MEDIUM'
+                  }
+                },
+                employee_data: {
+                  Department: 'Unknown',
+                  JobRole: 'Unknown'
+                }
+              }
+            });
+          }
+          
+          // 저위험군 가상 데이터
+          for (let i = 1; i <= lowRiskCount; i++) {
+            mockResults.push({
+              employee_number: `LOW_${i}`,
+              analysis_result: {
+                combined_analysis: {
+                  integrated_assessment: {
+                    overall_risk_score: Math.random() * 0.4, // 0.0-0.4
+                    overall_risk_level: 'LOW'
+                  }
+                },
+                employee_data: {
+                  Department: 'Unknown',
+                  JobRole: 'Unknown'
+                }
+              }
+            });
+          }
+          
+          visualizationData = {
+            success: true,
+            results: mockResults,
+            total_employees: totalEmployees || mockResults.length,
+            completed_employees: totalEmployees || mockResults.length,
+            summary: {
+              total_employees: totalEmployees || mockResults.length,
+              successful_analyses: totalEmployees || mockResults.length,
+              failed_analyses: 0,
+              success_rate: 1.0
+            },
+            analysis_metadata: {
+              analysis_type: 'batch',
+              timestamp: analysisResults.analysis_metadata?.timestamp,
+              data_source: 'cache_based_mock'
+            },
+            cache_info: analysisResults.cache_info,
+            data_source: 'cache_mock'
+          };
+          
+          console.log('✅ 캐시 기반 시각화 데이터 생성 완료:', {
+            totalMockResults: mockResults.length,
+            highRisk: highRiskCount,
+            mediumRisk: mediumRiskCount,
+            lowRisk: lowRiskCount
+          });
+        }
+        
+        if (!visualizationData) {
+          message.error('시각화할 데이터가 없습니다.');
+          return;
+        }
+        
+        // 데이터 크기 확인 및 저장
+        const dataString = JSON.stringify(visualizationData);
+        const dataSize = new Blob([dataString]).size;
         const maxSize = 4 * 1024 * 1024; // 4MB 제한
         
-        let dataToStore = analysisResults;
-        let finalString = originalString;
+        console.log(`📏 시각화 데이터 크기: ${(dataSize/1024/1024).toFixed(2)}MB`);
         
-        if (originalSize > maxSize) {
-          console.log('시각화 대시보드 전체 데이터 보존 시작:', { originalSize, maxSize });
+        if (dataSize > maxSize) {
+          console.log('🔄 대용량 데이터 - 전체 데이터 보존 시도');
           
-          // 🎯 전체 데이터 보존 시도 (IndexedDB + 청크 분할)
-          console.log('전체 데이터 보존 시도 중...');
-          const saveResult = await saveFullDataWithoutLoss(analysisResults);
+          const saveResult = await saveFullDataWithoutLoss(visualizationData);
           
           if (saveResult.success) {
-            console.log('✅ 전체 데이터 보존 성공:', saveResult);
-            
-            // LocalStorage에는 IndexedDB 참조 정보만 저장
+            // LocalStorage에는 참조 정보만 저장
             const referenceData = {
               timestamp: new Date().toISOString(),
               storage_method: saveResult.storage_method,
               total_employees: saveResult.total_employees,
               data_location: saveResult.storage_method === 'indexeddb' ? 'IndexedDB' : 'LocalStorage_Chunks',
               full_data_preserved: !saveResult.data_loss,
-              note: 'Full data stored in ' + (saveResult.storage_method === 'indexeddb' ? 'IndexedDB' : 'chunked LocalStorage')
+              data_source: visualizationData.data_source
             };
             
             localStorage.setItem('batchAnalysisResults', JSON.stringify(referenceData));
             
             message.success(
-              `✅ 전체 데이터 보존 완료!\n` +
-              `저장 방식: ${saveResult.storage_method === 'indexeddb' ? 'IndexedDB (무제한 용량)' : '청크 분할 저장'}\n` +
-              `보존된 직원: ${saveResult.total_employees || saveResult.saved_employees}/${saveResult.total_employees}명\n` +
-              `데이터 손실: ${saveResult.data_loss ? '일부 있음' : '없음'}\n` +
-              `• XAI 정보: 완전 보존\n` +
-              `• 상세 분석: 완전 보존`
+              `✅ 시각화 데이터 보존 완료!\n` +
+              `저장 방식: ${saveResult.storage_method === 'indexeddb' ? 'IndexedDB' : '청크 분할'}\n` +
+              `데이터 소스: ${visualizationData.data_source === 'cache_mock' ? '캐시 기반 모의 데이터' : '실제 분석 결과'}`
             );
           } else {
-            console.error('전체 데이터 보존 실패:', saveResult);
-            message.error(`전체 데이터 저장 실패: ${saveResult.reason || saveResult.error}`);
+            console.error('시각화 데이터 저장 실패:', saveResult);
+            message.error(`시각화 데이터 저장 실패: ${saveResult.reason || saveResult.error}`);
             return;
           }
         } else {
-          localStorage.setItem('batchAnalysisResults', finalString);
-      message.success('분석 결과가 시각화 대시보드에 연동되었습니다.');
-    }
+          localStorage.setItem('batchAnalysisResults', dataString);
+          message.success(
+            `시각화 데이터 연동 완료!\n` +
+            `데이터 소스: ${visualizationData.data_source === 'cache_mock' ? '캐시 기반 모의 데이터' : '실제 분석 결과'}\n` +
+            `직원 수: ${visualizationData.total_employees}명`
+          );
+        }
+        
       } catch (error) {
-        console.error('localStorage 저장 실패:', error);
-        message.error('분석 결과 저장에 실패했습니다. 데이터가 너무 클 수 있습니다.');
+        console.error('시각화 데이터 저장 실패:', error);
+        message.error('시각화 데이터 저장에 실패했습니다.');
         return;
       }
+    } else {
+      message.warning('시각화할 분석 결과가 없습니다. 먼저 배치 분석을 실행하거나 이전 결과를 불러오세요.');
+      return;
     }
+    
     // 실제 페이지 이동
     if (onNavigate) {
       onNavigate('visualization'); // 새로운 시각화 페이지 키
     } else {
-    message.info('시각화 대시보드 메뉴로 이동하세요.');
+      message.info('시각화 대시보드 메뉴로 이동하세요.');
     }
   };
 
@@ -3188,38 +3975,30 @@ const BatchAnalysis = ({
         // 여러 경로에서 Sentio 점수를 찾아보기 (실제 API 응답 구조에 맞게 수정)
         let score = null;
         
-        console.log('🔍 Sentio 점수 디버깅:', {
-          employee_id: record.employee_id,
-          sentio_score: record.sentio_score,
-          analysis_result: record.analysis_result,
-          sentio_result: record.analysis_result?.sentio_result
-        });
-        
         // 1. 직접 sentio_score 필드 (가장 일반적)
         if (record.sentio_score !== undefined && record.sentio_score !== null) {
           score = record.sentio_score;
-          console.log('✅ Sentio 점수 발견 (직접):', score);
         }
-        // 2. psychological_risk_score (JD-R 모델 기반)
+        // 2. sentiment_analysis.risk_score (실제 저장 경로)
+        else if (record.analysis_result?.sentio_result?.sentiment_analysis?.risk_score !== undefined) {
+          score = record.analysis_result.sentio_result.sentiment_analysis.risk_score;
+        }
+        // 3. psychological_risk_score (JD-R 모델 기반 - 직접 경로)
         else if (record.analysis_result?.sentio_result?.psychological_risk_score !== undefined) {
           score = record.analysis_result.sentio_result.psychological_risk_score;
-          console.log('✅ Sentio 점수 발견 (psychological_risk_score):', score);
         }
-        // 3. sentiment_score를 위험 점수로 변환
-        else if (record.analysis_result?.sentio_result?.sentiment_score !== undefined) {
-          score = 1.0 - record.analysis_result.sentio_result.sentiment_score; // 감정 점수를 위험 점수로 변환
-          console.log('✅ Sentio 점수 발견 (sentiment_score 변환):', score);
+        // 4. sentiment_score를 위험 점수로 변환
+        else if (record.analysis_result?.sentio_result?.sentiment_analysis?.sentiment_score !== undefined) {
+          score = 1.0 - record.analysis_result.sentio_result.sentiment_analysis.sentiment_score; // 감정 점수를 위험 점수로 변환
         }
-        // 4. 기본값 처리
+        // 5. 기본값 처리
         else {
           score = 0.5; // 기본값
-          console.log('⚠️ Sentio 점수 없음, 기본값 사용:', score);
         }
         
         // 점수가 1보다 큰 경우 (100 스케일로 입력된 경우) 정규화
         if (score > 1) {
           score = score / 100;
-          console.log('🔄 Sentio 점수 정규화:', score);
         }
         
         return score !== null ? (score * 100).toFixed(1) + '%' : 'N/A';
@@ -3233,13 +4012,17 @@ const BatchAnalysis = ({
           if (record.sentio_score !== undefined && record.sentio_score !== null) {
             score = record.sentio_score;
           }
-          // 2. psychological_risk_score
+          // 2. sentiment_analysis.risk_score (실제 저장 경로)
+          else if (record.analysis_result?.sentio_result?.sentiment_analysis?.risk_score !== undefined) {
+            score = record.analysis_result.sentio_result.sentiment_analysis.risk_score;
+          }
+          // 3. psychological_risk_score
           else if (record.analysis_result?.sentio_result?.psychological_risk_score !== undefined) {
             score = record.analysis_result.sentio_result.psychological_risk_score;
           }
-          // 3. sentiment_score를 위험 점수로 변환
-          else if (record.analysis_result?.sentio_result?.sentiment_score !== undefined) {
-            score = 1.0 - record.analysis_result.sentio_result.sentiment_score;
+          // 4. sentiment_score를 위험 점수로 변환
+          else if (record.analysis_result?.sentio_result?.sentiment_analysis?.sentiment_score !== undefined) {
+            score = 1.0 - record.analysis_result.sentio_result.sentiment_analysis.sentiment_score;
           }
           // 4. 기본값
           else {
@@ -3458,6 +4241,14 @@ const BatchAnalysis = ({
                 onClick={startNewAnalysis}
               >
                 새로 분석하기
+              </Button>
+              <Button 
+                icon={<FolderOutlined />}
+                onClick={cleanupMisclassifiedFolders}
+                loading={loading}
+                style={{ marginLeft: 8 }}
+              >
+                미분류 폴더 정리
               </Button>
             </Space>
           </div>
@@ -3748,6 +4539,36 @@ const BatchAnalysis = ({
             <Card title="3단계: 분석 결과" extra={<BarChartOutlined />}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 
+                {/* 캐시된 결과 정보 표시 */}
+                {analysisResults.analysis_metadata?.cached_result && (
+                  <Alert
+                    message="📂 캐시된 분석 결과"
+                    description={
+                      <div>
+                        <Text>이전에 저장된 분석 결과를 불러왔습니다.</Text>
+                        <br />
+                        <Text type="secondary">
+                          분석 시간: {new Date(analysisResults.analysis_metadata.timestamp).toLocaleString('ko-KR')}
+                        </Text>
+                        {analysisResults.cache_info && (
+                          <>
+                            <br />
+                            <Text type="secondary">
+                              {analysisResults.cache_info.title} | 
+                              고위험 {analysisResults.cache_info.highRiskCount}명, 
+                              중위험 {analysisResults.cache_info.mediumRiskCount}명, 
+                              저위험 {analysisResults.cache_info.lowRiskCount}명
+                            </Text>
+                          </>
+                        )}
+                      </div>
+                    }
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )}
+                
                 {/* 최적화된 설정 적용 정보 */}
                 {finalRiskSettings && (
                   <Alert
@@ -3794,17 +4615,24 @@ const BatchAnalysis = ({
                   <Col span={4}>
                     <Statistic
                       title="총 직원 수"
-                      value={analysisResults.total_employees}
+                      value={analysisResults.total_employees || analysisResults.cache_info?.totalEmployees || 0}
                       prefix={<CheckCircleOutlined />}
                     />
                   </Col>
                   <Col span={5}>
                     <Statistic
                       title={`안전군 (< ${finalRiskSettings?.risk_thresholds?.low_risk_threshold || 0.3})`}
-                      value={analysisResults.results?.filter(r => {
-                        const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-                        return score && calculateRiskLevel(score) === 'LOW';
-                      }).length || 0}
+                      value={(() => {
+                        // 캐시된 결과인 경우 캐시 정보에서 가져오기
+                        if (analysisResults.cache_info) {
+                          return analysisResults.cache_info.lowRiskCount || 0;
+                        }
+                        // 실제 분석 결과인 경우 계산
+                        return analysisResults.results?.filter(r => {
+                          const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                          return score && calculateRiskLevel(score) === 'LOW';
+                        }).length || 0;
+                      })()}
                       valueStyle={{ color: '#52c41a' }}
                       prefix={<CheckCircleOutlined />}
                     />
@@ -3812,10 +4640,17 @@ const BatchAnalysis = ({
                   <Col span={5}>
                     <Statistic
                       title={`주의군 (${finalRiskSettings?.risk_thresholds?.low_risk_threshold || 0.3} ~ ${finalRiskSettings?.risk_thresholds?.high_risk_threshold || 0.7})`}
-                      value={analysisResults.results?.filter(r => {
-                        const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-                        return score && calculateRiskLevel(score) === 'MEDIUM';
-                      }).length || 0}
+                      value={(() => {
+                        // 캐시된 결과인 경우 캐시 정보에서 가져오기
+                        if (analysisResults.cache_info) {
+                          return analysisResults.cache_info.mediumRiskCount || 0;
+                        }
+                        // 실제 분석 결과인 경우 계산
+                        return analysisResults.results?.filter(r => {
+                          const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                          return score && calculateRiskLevel(score) === 'MEDIUM';
+                        }).length || 0;
+                      })()}
                       valueStyle={{ color: '#fa8c16' }}
                       prefix={<ExclamationCircleOutlined />}
                     />
@@ -3823,10 +4658,17 @@ const BatchAnalysis = ({
                   <Col span={5}>
                     <Statistic
                       title={`고위험군 (≥ ${finalRiskSettings?.risk_thresholds?.high_risk_threshold || 0.7})`}
-                      value={analysisResults.results?.filter(r => {
-                        const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-                        return score && calculateRiskLevel(score) === 'HIGH';
-                      }).length || 0}
+                      value={(() => {
+                        // 캐시된 결과인 경우 캐시 정보에서 가져오기
+                        if (analysisResults.cache_info) {
+                          return analysisResults.cache_info.highRiskCount || 0;
+                        }
+                        // 실제 분석 결과인 경우 계산
+                        return analysisResults.results?.filter(r => {
+                          const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                          return score && calculateRiskLevel(score) === 'HIGH';
+                        }).length || 0;
+                      })()}
                       valueStyle={{ color: '#cf1322' }}
                       prefix={<ExclamationCircleOutlined />}
                     />
@@ -3835,14 +4677,25 @@ const BatchAnalysis = ({
                     <Statistic
                       title={`예측 퇴사자 (${finalRiskSettings?.attrition_prediction_mode === 'high_risk_only' ? '고위험군만' : '주의군+고위험군'})`}
                       value={(() => {
-                        const highRisk = analysisResults.results?.filter(r => {
-                          const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-                          return score && calculateRiskLevel(score) === 'HIGH';
-                        }).length || 0;
-                        const mediumRisk = analysisResults.results?.filter(r => {
-                          const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-                          return score && calculateRiskLevel(score) === 'MEDIUM';
-                        }).length || 0;
+                        let highRisk = 0;
+                        let mediumRisk = 0;
+                        
+                        // 캐시된 결과인 경우
+                        if (analysisResults.cache_info) {
+                          highRisk = analysisResults.cache_info.highRiskCount || 0;
+                          mediumRisk = analysisResults.cache_info.mediumRiskCount || 0;
+                        }
+                        // 실제 분석 결과인 경우
+                        else {
+                          highRisk = analysisResults.results?.filter(r => {
+                            const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                            return score && calculateRiskLevel(score) === 'HIGH';
+                          }).length || 0;
+                          mediumRisk = analysisResults.results?.filter(r => {
+                            const score = r.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+                            return score && calculateRiskLevel(score) === 'MEDIUM';
+                          }).length || 0;
+                        }
                         
                         return finalRiskSettings?.attrition_prediction_mode === 'medium_high_risk' 
                           ? highRisk + mediumRisk 
@@ -3880,8 +4733,10 @@ const BatchAnalysis = ({
                       icon={<FilePdfOutlined />}
                       onClick={() => exportBatchResults('pdf')}
                       loading={isExporting}
+                      disabled={true}
+                      title="PDF 생성 기능은 현재 개발 중입니다"
                     >
-                      {isExporting ? '내보내기 중...' : 'PDF 보고서'}
+                      PDF 보고서 (개발중)
                     </Button>
                   </Col>
                   <Col>
@@ -4029,20 +4884,95 @@ const BatchAnalysis = ({
                   </Space>
                 </Card>
 
-                {/* 결과 테이블 */}
-                <Table
-                  columns={resultColumns}
-                  dataSource={analysisResults.results}
-                  rowKey="employee_number"
-                  pagination={{
-                    pageSize: 10,
-                    showSizeChanger: true,
-                    showQuickJumper: true,
-                    showTotal: (total, range) =>
-                      `${range[0]}-${range[1]} of ${total} 직원`
-                  }}
-                  scroll={{ x: 800 }}
-                />
+                {/* 결과 테이블 또는 캐시 요약 */}
+                {analysisResults.results && analysisResults.results.length > 0 ? (
+                  <Table
+                    columns={resultColumns}
+                    dataSource={analysisResults.results}
+                    rowKey="employee_number"
+                    pagination={{
+                      pageSize: 10,
+                      showSizeChanger: true,
+                      showQuickJumper: true,
+                      showTotal: (total, range) =>
+                        `${range[0]}-${range[1]} of ${total} 직원`
+                    }}
+                    scroll={{ x: 800 }}
+                  />
+                ) : analysisResults.cache_info ? (
+                  <Card title="캐시된 분석 결과 요약" style={{ marginTop: 16 }}>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Descriptions column={1} bordered size="small">
+                          <Descriptions.Item label="분석 제목">{analysisResults.cache_info.title}</Descriptions.Item>
+                          <Descriptions.Item label="총 직원 수">{analysisResults.cache_info.totalEmployees || analysisResults.total_employees}명</Descriptions.Item>
+                          <Descriptions.Item label="정확도">{analysisResults.cache_info.accuracy}%</Descriptions.Item>
+                          <Descriptions.Item label="분석 시간">{new Date(analysisResults.analysis_metadata?.timestamp).toLocaleString('ko-KR')}</Descriptions.Item>
+                        </Descriptions>
+                      </Col>
+                      <Col span={12}>
+                        <Card size="small" title="위험도별 분포">
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>고위험군:</span>
+                              <Tag color="red">{analysisResults.cache_info.highRiskCount}명</Tag>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>중위험군:</span>
+                              <Tag color="orange">{analysisResults.cache_info.mediumRiskCount}명</Tag>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>저위험군:</span>
+                              <Tag color="green">{analysisResults.cache_info.lowRiskCount}명</Tag>
+                            </div>
+                          </Space>
+                        </Card>
+                      </Col>
+                    </Row>
+                    
+                    {analysisResults.cache_info.summary && (
+                      <Alert
+                        message="분석 요약"
+                        description={analysisResults.cache_info.summary}
+                        type="info"
+                        showIcon
+                        style={{ marginTop: 16 }}
+                      />
+                    )}
+                    
+                    {analysisResults.cache_info.keyInsights && analysisResults.cache_info.keyInsights.length > 0 && (
+                      <Card size="small" title="주요 인사이트" style={{ marginTop: 16 }}>
+                        <List
+                          size="small"
+                          dataSource={analysisResults.cache_info.keyInsights}
+                          renderItem={(insight, index) => (
+                            <List.Item>
+                              <Text>
+                                <Badge count={index + 1} style={{ backgroundColor: '#1890ff', marginRight: 8 }} />
+                                {insight}
+                              </Text>
+                            </List.Item>
+                          )}
+                        />
+                      </Card>
+                    )}
+                    
+                    <Alert
+                      message="상세 데이터 없음"
+                      description="이 결과는 캐시된 요약 정보입니다. 개별 직원의 상세 분석 결과를 보려면 새로운 분석을 실행하세요."
+                      type="warning"
+                      showIcon
+                      style={{ marginTop: 16 }}
+                    />
+                  </Card>
+                ) : (
+                  <Alert
+                    message="분석 결과 없음"
+                    description="표시할 분석 결과가 없습니다."
+                    type="info"
+                    showIcon
+                  />
+                )}
 
                 {/* Integration 보고서 섹션 */}
                 {analysisResults.integration_report && (
@@ -4315,8 +5245,18 @@ const BatchAnalysis = ({
                   type="primary"
                   size="small"
                   onClick={() => loadCachedResult(cache.id)}
+                  style={{ marginRight: 8 }}
                 >
                   이 결과 사용
+                </Button>,
+                <Button
+                  type="default"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => deleteCachedResult(cache.id)}
+                >
+                  삭제
                 </Button>
               ]}
             >

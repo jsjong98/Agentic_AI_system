@@ -1,0 +1,282 @@
+{
+  "department": "Research & Development",
+  "job_role": "Manufacturing Director",
+  "job_level": "3",
+  "created_at": "2025-10-06T18:23:43.849563",
+  "employees": {
+    "12": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:03.312552",
+      "folder_path": "Manufacturing_Director/3/employee_12"
+    },
+    "20": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:03.668014",
+      "folder_path": "Manufacturing_Director/3/employee_20"
+    },
+    "112": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:04.042668",
+      "folder_path": "Manufacturing_Director/3/employee_112"
+    },
+    "179": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:04.399317",
+      "folder_path": "Manufacturing_Director/3/employee_179"
+    },
+    "292": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:04.770544",
+      "folder_path": "Manufacturing_Director/3/employee_292"
+    },
+    "342": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:05.122970",
+      "folder_path": "Manufacturing_Director/3/employee_342"
+    },
+    "442": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:05.457529",
+      "folder_path": "Manufacturing_Director/3/employee_442"
+    },
+    "462": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:05.765134",
+      "folder_path": "Manufacturing_Director/3/employee_462"
+    },
+    "464": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:06.140418",
+      "folder_path": "Manufacturing_Director/3/employee_464"
+    },
+    "543": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:06.532494",
+      "folder_path": "Manufacturing_Director/3/employee_543"
+    },
+    "581": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:06.932221",
+      "folder_path": "Manufacturing_Director/3/employee_581"
+    },
+    "605": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:07.306327",
+      "folder_path": "Manufacturing_Director/3/employee_605"
+    },
+    "623": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:07.651932",
+      "folder_path": "Manufacturing_Director/3/employee_623"
+    },
+    "689": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:08.010807",
+      "folder_path": "Manufacturing_Director/3/employee_689"
+    },
+    "725": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:08.392215",
+      "folder_path": "Manufacturing_Director/3/employee_725"
+    },
+    "733": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:08.778579",
+      "folder_path": "Manufacturing_Director/3/employee_733"
+    },
+    "743": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:09.173576",
+      "folder_path": "Manufacturing_Director/3/employee_743"
+    },
+    "845": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:09.529986",
+      "folder_path": "Manufacturing_Director/3/employee_845"
+    },
+    "880": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:09.903975",
+      "folder_path": "Manufacturing_Director/3/employee_880"
+    },
+    "899": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:10.261930",
+      "folder_path": "Manufacturing_Director/3/employee_899"
+    },
+    "1007": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:10.639199",
+      "folder_path": "Manufacturing_Director/3/employee_1007"
+    },
+    "1013": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:11.034107",
+      "folder_path": "Manufacturing_Director/3/employee_1013"
+    },
+    "1043": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:11.413557",
+      "folder_path": "Manufacturing_Director/3/employee_1043"
+    },
+    "1073": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:11.766788",
+      "folder_path": "Manufacturing_Director/3/employee_1073"
+    },
+    "1096": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:12.133158",
+      "folder_path": "Manufacturing_Director/3/employee_1096"
+    },
+    "1121": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:12.537386",
+      "folder_path": "Manufacturing_Director/3/employee_1121"
+    },
+    "1126": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:12.889470",
+      "folder_path": "Manufacturing_Director/3/employee_1126"
+    },
+    "1182": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:13.241703",
+      "folder_path": "Manufacturing_Director/3/employee_1182"
+    },
+    "1237": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:13.602272",
+      "folder_path": "Manufacturing_Director/3/employee_1237"
+    },
+    "1245": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:13.980042",
+      "folder_path": "Manufacturing_Director/3/employee_1245"
+    },
+    "1283": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:14.346081",
+      "folder_path": "Manufacturing_Director/3/employee_1283"
+    },
+    "1360": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:14.715926",
+      "folder_path": "Manufacturing_Director/3/employee_1360"
+    },
+    "1363": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:15.095032",
+      "folder_path": "Manufacturing_Director/3/employee_1363"
+    },
+    "1412": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:15.457008",
+      "folder_path": "Manufacturing_Director/3/employee_1412"
+    },
+    "1459": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:15.816140",
+      "folder_path": "Manufacturing_Director/3/employee_1459"
+    },
+    "1465": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:16.183250",
+      "folder_path": "Manufacturing_Director/3/employee_1465"
+    },
+    "1496": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:16.544905",
+      "folder_path": "Manufacturing_Director/3/employee_1496"
+    },
+    "1525": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:16.913656",
+      "folder_path": "Manufacturing_Director/3/employee_1525"
+    },
+    "1572": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:17.286230",
+      "folder_path": "Manufacturing_Director/3/employee_1572"
+    },
+    "1628": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:17.663692",
+      "folder_path": "Manufacturing_Director/3/employee_1628"
+    },
+    "1638": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:18.032818",
+      "folder_path": "Manufacturing_Director/3/employee_1638"
+    },
+    "1641": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:18.422367",
+      "folder_path": "Manufacturing_Director/3/employee_1641"
+    },
+    "1816": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:18.794391",
+      "folder_path": "Manufacturing_Director/3/employee_1816"
+    },
+    "1827": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:19.162758",
+      "folder_path": "Manufacturing_Director/3/employee_1827"
+    },
+    "1857": {
+      "job_role": "Manufacturing Director",
+      "job_level": "3",
+      "last_updated": "2025-10-08T18:10:19.540815",
+      "folder_path": "Manufacturing_Director/3/employee_1857"
+    }
+  },
+  "statistics": {
+    "total_employees": 45
+  },
+  "last_updated": "2025-10-08T18:10:19.540815"
+}

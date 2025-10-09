@@ -374,6 +374,19 @@ class HierarchicalResultManager:
             with open(employee_dir / "sentio_result.json", 'w', encoding='utf-8') as f:
                 json.dump(sentio_result, f, ensure_ascii=False, indent=2)
         
+        # Agora 결과
+        if 'agora' in worker_results:
+            agora_result = worker_results['agora']
+            results_summary.update({
+                'agora_score': agora_result.get('agora_score', 0),
+                'agora_market_pressure': agora_result.get('market_pressure_index', 0),
+                'agora_compensation_gap': agora_result.get('compensation_gap', 0),
+                'agora_market_competitiveness': agora_result.get('market_competitiveness', 'MEDIUM')
+            })
+            
+            with open(employee_dir / "agora_result.json", 'w', encoding='utf-8') as f:
+                json.dump(agora_result, f, ensure_ascii=False, indent=2)
+        
         # 3. 통합 결과 요약 CSV 저장
         summary_df = pd.DataFrame([results_summary])
         summary_df.to_csv(employee_dir / "analysis_summary.csv", index=False, encoding='utf-8-sig')
@@ -412,6 +425,12 @@ class HierarchicalResultManager:
         # Sentio: 심리적 위험 점수
         if 'sentio' in worker_results and worker_results['sentio'].get('psychological_risk_score'):
             risk_scores.append(('sentio', worker_results['sentio']['psychological_risk_score'], 0.25))
+        
+        # Agora: 시장 위험 점수
+        if 'agora' in worker_results:
+            agora_score = worker_results['agora'].get('agora_score', worker_results['agora'].get('market_risk_score', 0))
+            if agora_score:
+                risk_scores.append(('agora', agora_score, 0.2))
         
         # 가중평균 계산
         if risk_scores:
@@ -489,6 +508,12 @@ class HierarchicalResultManager:
             psych_score = sentio.get('psychological_risk_score', 0)
             level = sentio.get('risk_level', 'MEDIUM')
             interpretation += f"🧠 심리적 분석 (Sentio): 위험도 {psych_score:.3f}, 수준 '{level}'\n"
+        
+        if 'agora' in worker_results:
+            agora = worker_results['agora']
+            agora_score = agora.get('agora_score', agora.get('market_risk_score', 0))
+            market_comp = agora.get('market_competitiveness', 'MEDIUM')
+            interpretation += f"💼 시장 분석 (Agora): 위험도 {agora_score:.3f}, 경쟁력 '{market_comp}'\n"
         
         interpretation += f"\n💡 권장 조치:\n"
         
@@ -678,7 +703,7 @@ class HierarchicalResultManager:
         results = {"employee_id": employee_id, "path": str(employee_dir), "files": {}}
         
         # 각 워커 결과 파일 읽기
-        for worker in ['structura', 'cognita', 'chronos', 'sentio']:
+        for worker in ['structura', 'cognita', 'chronos', 'sentio', 'agora']:
             result_file = employee_dir / f"{worker}_result.json"
             if result_file.exists():
                 with open(result_file, 'r', encoding='utf-8') as f:
@@ -757,5 +782,11 @@ class HierarchicalResultManager:
         
         return summary
 
-# 전역 인스턴스
-hierarchical_result_manager = HierarchicalResultManager()
+# 전역 인스턴스 - app/results 경로로 설정
+import os
+# 현재 파일: app/Supervisor/hierarchical_result_manager.py
+# 프로젝트 루트: app/Supervisor/hierarchical_result_manager.py -> app -> 프로젝트 루트
+current_file = os.path.abspath(__file__)
+app_dir = os.path.dirname(os.path.dirname(current_file))  # app 폴더
+results_path = os.path.join(app_dir, 'results')
+hierarchical_result_manager = HierarchicalResultManager(base_output_dir=results_path)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Menu, Typography, notification } from 'antd';
 import {
   HomeOutlined,
@@ -16,10 +16,174 @@ import ReportGeneration from './components/ReportGeneration';
 import RelationshipAnalysis from './components/RelationshipAnalysis';
 import GroupStatistics from './components/GroupStatistics';
 import { apiService } from './services/apiService';
-import storageManager from './utils/storageManager';
+// import storageManager from './utils/storageManager'; // 현재 사용하지 않음
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
+
+// IndexedDB 헬퍼 함수들
+  const initializeIndexedDB = () => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('AgenticAnalysisDB', 2);
+      
+      request.onerror = () => {
+        console.error('IndexedDB 초기화 실패:', request.error);
+        reject(request.error);
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        const oldVersion = event.oldVersion;
+        const newVersion = event.newVersion;
+        
+        console.log(`IndexedDB 스키마 업그레이드: ${oldVersion} → ${newVersion}`);
+        
+        // 기존 object store 삭제 후 재생성 (안전한 업그레이드)
+        if (db.objectStoreNames.contains('results')) {
+          db.deleteObjectStore('results');
+          console.log('기존 IndexedDB object store "results" 삭제');
+        }
+        
+        db.createObjectStore('results', { keyPath: 'id' });
+        console.log('IndexedDB object store "results" 생성 완료');
+      };
+      
+      request.onsuccess = (event) => {
+        const db = event.target.result;
+        
+        // object store 존재 여부 확인
+        if (!db.objectStoreNames.contains('results')) {
+          console.error('IndexedDB object store "results"가 생성되지 않았습니다');
+          db.close();
+          reject(new Error('Object store creation failed'));
+          return;
+        }
+        
+        console.log('IndexedDB 초기화 완료');
+        db.close();
+        resolve();
+      };
+    });
+  };
+
+  const saveToIndexedDB = (key, data) => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('AgenticAnalysisDB', 2);
+      
+      request.onerror = () => {
+        console.error('IndexedDB 열기 실패:', request.error);
+        reject(request.error);
+      };
+      
+      request.onsuccess = (event) => {
+        const db = event.target.result;
+        
+        try {
+          // object store 존재 여부 확인
+          if (!db.objectStoreNames.contains('results')) {
+            console.error('IndexedDB object store "results"를 찾을 수 없습니다');
+            db.close();
+            reject(new Error('Object store "results" not found'));
+            return;
+          }
+          
+          const transaction = db.transaction(['results'], 'readwrite');
+          const store = transaction.objectStore('results');
+          
+          const putRequest = store.put({ 
+            id: key, 
+            data: data, 
+            timestamp: new Date().toISOString() 
+          });
+          
+          putRequest.onsuccess = () => {
+            console.log(`IndexedDB에 데이터 저장 성공: ${key}`);
+          };
+          
+          putRequest.onerror = () => {
+            console.error('IndexedDB 데이터 저장 실패:', putRequest.error);
+          };
+          
+          transaction.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          
+          transaction.onerror = () => {
+            console.error('IndexedDB 트랜잭션 오류:', transaction.error);
+            db.close();
+            reject(transaction.error);
+          };
+          
+        } catch (error) {
+          console.error('IndexedDB 트랜잭션 생성 오류:', error);
+          db.close();
+          reject(error);
+        }
+      };
+    });
+  };
+
+  const loadFromIndexedDB = (key) => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('AgenticAnalysisDB', 2);
+      
+      request.onerror = () => {
+        console.error('IndexedDB 열기 실패:', request.error);
+        resolve(null); // 오류 시 null 반환 (reject 대신)
+      };
+      
+      request.onsuccess = (event) => {
+        const db = event.target.result;
+        
+        try {
+          // object store 존재 여부 확인
+          if (!db.objectStoreNames.contains('results')) {
+            console.warn('IndexedDB object store "results"를 찾을 수 없습니다 - 데이터 없음');
+            db.close();
+            resolve(null);
+            return;
+          }
+          
+          const transaction = db.transaction(['results'], 'readonly');
+          const store = transaction.objectStore('results');
+          
+          const getRequest = store.get(key);
+          
+          getRequest.onsuccess = () => {
+            const result = getRequest.result;
+            if (result) {
+              console.log(`IndexedDB에서 데이터 로드 성공: ${key}`);
+              resolve(result.data);
+            } else {
+              console.log(`IndexedDB에 데이터 없음: ${key}`);
+              resolve(null);
+            }
+          };
+          
+          getRequest.onerror = () => {
+            console.error('IndexedDB 데이터 로드 실패:', getRequest.error);
+            resolve(null);
+          };
+          
+          transaction.oncomplete = () => {
+            db.close();
+          };
+          
+          transaction.onerror = () => {
+            console.error('IndexedDB 트랜잭션 오류:', transaction.error);
+            db.close();
+            resolve(null);
+          };
+          
+        } catch (error) {
+          console.error('IndexedDB 트랜잭션 생성 오류:', error);
+          db.close();
+          resolve(null);
+        }
+      };
+    });
+  };
 
 const App = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -31,6 +195,7 @@ const App = () => {
   const [globalBatchResults, setGlobalBatchResults] = useState(null);
   const [lastAnalysisTimestamp, setLastAnalysisTimestamp] = useState(null);
   const [dataLoaded] = useState(true); // 데이터 로딩 상태를 기본적으로 활성화
+  const isInitializedRef = useRef(false); // 초기화 중복 방지
 
   // 전역 에러 핸들러
   useEffect(() => {
@@ -128,56 +293,207 @@ const App = () => {
     },
   ];
 
-  // 서버 상태 확인 및 localStorage에서 배치 결과 복원
+  // 서버 상태 확인 및 IndexedDB/localStorage에서 배치 결과 복원
   useEffect(() => {
+    // 이미 초기화되었으면 중복 실행 방지
+    if (isInitializedRef.current) {
+      return;
+    }
+    isInitializedRef.current = true;
+    
     checkServerStatus();
     
-    // localStorage에서 배치 분석 결과 복원 (청크 지원)
-    try {
-      // 먼저 일반 저장 방식 확인
-      const storedResults = localStorage.getItem('batchAnalysisResults');
-      const storedTimestamp = localStorage.getItem('lastAnalysisTimestamp');
-      
-      if (storedResults && storedTimestamp) {
-        setGlobalBatchResults(JSON.parse(storedResults));
-        setLastAnalysisTimestamp(storedTimestamp);
-        console.log('배치 분석 결과 복원됨 (일반 저장):', JSON.parse(storedResults).length + '명');
-      } else {
-        // 청크 저장 방식 확인
-        const metadata = localStorage.getItem('batchAnalysisMetadata');
-        if (metadata) {
-          const meta = JSON.parse(metadata);
-          if (meta.storage_type === 'chunked') {
-            console.log(`청크 데이터 복원 시작: ${meta.total_chunks}개 청크`);
-            
-            const allResults = [];
-            for (let i = 0; i < meta.total_chunks; i++) {
-              const chunkData = localStorage.getItem(`batchAnalysisResults_chunk_${i}`);
-              if (chunkData) {
-                allResults.push(...JSON.parse(chunkData));
-              }
+    // IndexedDB 우선, localStorage 백업으로 배치 분석 결과 복원
+    const loadInitialData = async () => {
+      try {
+        // 0. IndexedDB 초기화 먼저 시도
+        console.log('🔧 IndexedDB 초기화 중...');
+        try {
+          await initializeIndexedDB();
+          console.log('✅ IndexedDB 초기화 완료');
+        } catch (initError) {
+          console.warn('IndexedDB 초기화 실패, localStorage만 사용:', initError.message);
+        }
+        
+        // 1. IndexedDB에서 먼저 시도
+        console.log('🔍 IndexedDB에서 데이터 로드 시도...');
+        const indexedResults = await loadFromIndexedDB('batchAnalysisResults');
+        const indexedTimestamp = await loadFromIndexedDB('lastAnalysisTimestamp');
+        
+        if (indexedResults && Array.isArray(indexedResults) && indexedResults.length > 0) {
+          // 배열을 올바른 구조로 감싸서 저장
+          const batchResultStructure = {
+            success: true,
+            results: indexedResults,
+            total_employees: indexedResults.length,
+            completed_employees: indexedResults.length
+          };
+          setGlobalBatchResults(batchResultStructure);
+          console.log('✅ IndexedDB에서 배치 분석 결과 복원:', indexedResults.length, '개');
+          
+          if (indexedTimestamp) {
+            setLastAnalysisTimestamp(indexedTimestamp);
+          }
+          return; // IndexedDB에서 성공적으로 로드했으면 localStorage는 시도하지 않음
+        }
+        
+        // 2. IndexedDB에 데이터가 없으면 localStorage에서 시도
+        console.log('🔍 IndexedDB에 데이터 없음, localStorage에서 시도...');
+        
+        // 먼저 일반 저장 방식 확인
+        const storedResults = localStorage.getItem('batchAnalysisResults');
+        const storedTimestamp = localStorage.getItem('lastAnalysisTimestamp');
+        
+        if (storedResults && storedTimestamp) {
+          let parsedResults = null;
+          try {
+            parsedResults = JSON.parse(storedResults);
+            // 배열인지 확인
+            if (Array.isArray(parsedResults)) {
+              // 배열을 올바른 구조로 감싸서 저장
+              const batchResultStructure = {
+                success: true,
+                results: parsedResults,
+                total_employees: parsedResults.length,
+                completed_employees: parsedResults.length
+              };
+              setGlobalBatchResults(batchResultStructure);
+              setLastAnalysisTimestamp(storedTimestamp);
+              console.log('✅ localStorage에서 배치 분석 결과 복원 (일반 저장):', parsedResults.length + '명');
+            } else if (parsedResults && parsedResults.results) {
+              // 이미 올바른 구조인 경우
+              setGlobalBatchResults(parsedResults);
+              setLastAnalysisTimestamp(storedTimestamp);
+              console.log('✅ localStorage에서 배치 분석 결과 복원 (구조 유지)');
+            } else {
+              console.warn('localStorage의 배치 결과가 올바르지 않습니다:', typeof parsedResults);
+              // 객체인 경우 배열로 감싸서 구조 생성
+              const batchResultStructure = {
+                success: true,
+                results: [parsedResults],
+                total_employees: 1,
+                completed_employees: 1
+              };
+              setGlobalBatchResults(batchResultStructure);
+              setLastAnalysisTimestamp(storedTimestamp);
+              console.log('✅ localStorage에서 배치 분석 결과 복원 (객체를 구조로 변환)');
             }
             
-            if (allResults.length > 0) {
-              setGlobalBatchResults(allResults);
-              setLastAnalysisTimestamp(meta.timestamp);
-              console.log(`청크 데이터 복원 완료: ${allResults.length}명`);
+            // localStorage 데이터를 IndexedDB로 마이그레이션
+            try {
+              const dataToMigrate = Array.isArray(parsedResults) ? parsedResults : [parsedResults];
+              await saveToIndexedDB('batchAnalysisResults', dataToMigrate);
+              await saveToIndexedDB('lastAnalysisTimestamp', storedTimestamp);
+              console.log('✅ localStorage 데이터를 IndexedDB로 마이그레이션 완료');
+            } catch (migrationError) {
+              console.warn('IndexedDB 마이그레이션 실패:', migrationError.message);
             }
+          } catch (parseError) {
+            console.error('localStorage 데이터 파싱 실패:', parseError);
           }
         } else {
-          // 요약 데이터만 있는 경우
-          const summaryData = localStorage.getItem('batchAnalysisResultsSummary');
-          if (summaryData) {
-            const summary = JSON.parse(summaryData);
-            console.log('요약 데이터만 복원됨:', summary);
-            setLastAnalysisTimestamp(summary.timestamp);
+          // 청크 저장 방식 확인
+          const metadata = localStorage.getItem('batchAnalysisMetadata');
+          if (metadata) {
+            const meta = JSON.parse(metadata);
+            if (meta.storage_type === 'chunked') {
+              console.log(`📦 청크 데이터 복원 시작: ${meta.total_chunks}개 청크`);
+              
+              const allResults = [];
+              for (let i = 0; i < meta.total_chunks; i++) {
+                const chunkData = localStorage.getItem(`batchAnalysisResults_chunk_${i}`);
+                if (chunkData) {
+                  try {
+                    const parsedChunk = JSON.parse(chunkData);
+                    // 배열인지 확인 후 스프레드 연산자 사용
+                    if (Array.isArray(parsedChunk)) {
+                      allResults.push(...parsedChunk);
+                    } else {
+                      console.warn(`청크 ${i}가 배열이 아닙니다:`, typeof parsedChunk);
+                      // 객체인 경우 배열로 감싸서 추가
+                      allResults.push(parsedChunk);
+                    }
+                  } catch (parseError) {
+                    console.error(`청크 ${i} 파싱 실패:`, parseError);
+                  }
+                }
+              }
+              
+              if (allResults.length > 0) {
+                // 배열을 올바른 구조로 감싸서 저장
+                const batchResultStructure = {
+                  success: true,
+                  results: allResults,
+                  total_employees: allResults.length,
+                  completed_employees: allResults.length
+                };
+                setGlobalBatchResults(batchResultStructure);
+                setLastAnalysisTimestamp(meta.timestamp);
+                console.log(`✅ 청크 데이터 복원 완료: ${allResults.length}명`);
+                
+                // 청크 데이터도 IndexedDB로 마이그레이션
+                try {
+                  await saveToIndexedDB('batchAnalysisResults', allResults);
+                  await saveToIndexedDB('lastAnalysisTimestamp', meta.timestamp);
+                  console.log('✅ 청크 데이터를 IndexedDB로 마이그레이션 완료');
+                } catch (migrationError) {
+                  console.warn('청크 데이터 마이그레이션 실패:', migrationError.message);
+                }
+              }
+            }
+          } else {
+            // 요약 데이터만 있는 경우
+            const summaryData = localStorage.getItem('batchAnalysisResultsSummary');
+            if (summaryData) {
+              const summary = JSON.parse(summaryData);
+              console.log('요약 데이터만 복원됨:', summary);
+              setLastAnalysisTimestamp(summary.timestamp);
+            }
           }
         }
+        
+      } catch (error) {
+        console.error('배치 결과 복원 실패:', error);
+        
+        // 최후의 수단으로 localStorage 직접 시도
+        try {
+          const savedResults = localStorage.getItem('batchAnalysisResults');
+          if (savedResults) {
+            const parsedResults = JSON.parse(savedResults);
+            if (Array.isArray(parsedResults) && parsedResults.length > 0) {
+              // 배열을 올바른 구조로 감싸서 저장
+              const batchResultStructure = {
+                success: true,
+                results: parsedResults,
+                total_employees: parsedResults.length,
+                completed_employees: parsedResults.length
+              };
+              setGlobalBatchResults(batchResultStructure);
+              console.log('✅ 최후 수단으로 localStorage에서 복원:', parsedResults.length, '개');
+            } else if (parsedResults && parsedResults.results) {
+              // 이미 올바른 구조인 경우
+              setGlobalBatchResults(parsedResults);
+              console.log('✅ 최후 수단으로 localStorage에서 복원 (구조 유지)');
+            } else if (parsedResults && typeof parsedResults === 'object') {
+              // 객체인 경우 배열로 감싸서 구조 생성
+              const batchResultStructure = {
+                success: true,
+                results: [parsedResults],
+                total_employees: 1,
+                completed_employees: 1
+              };
+              setGlobalBatchResults(batchResultStructure);
+              console.log('✅ 최후 수단으로 localStorage에서 복원 (객체를 구조로 변환)');
+            }
+          }
+        } catch (fallbackError) {
+          console.error('모든 데이터 복원 방법 실패:', fallbackError.message);
+        }
       }
-    } catch (error) {
-      console.error('배치 결과 복원 실패:', error);
-    }
-  }, []);
+    };
+    
+    loadInitialData();
+  }, []); // 빈 의존성 배열로 한 번만 실행
 
   const checkServerStatus = async () => {
     try {
@@ -207,23 +523,40 @@ const App = () => {
 
   // 현재 선택된 컴포넌트 렌더링
   // 배치 분석 결과 업데이트 함수
-  const updateBatchResults = (results) => {
+  const updateBatchResults = async (results) => {
     setGlobalBatchResults(results);
     const timestamp = new Date().toISOString();
     setLastAnalysisTimestamp(timestamp);
     
-    // localStorage에 원본 데이터 전체 저장 (용량 초과 시 청크 단위로 분할 저장)
+    // IndexedDB 우선 시도, 실패 시 localStorage 사용
     try {
-      // 먼저 전체 결과 저장 시도
-      localStorage.setItem('batchAnalysisResults', JSON.stringify(results));
-      localStorage.setItem('lastAnalysisTimestamp', timestamp);
-      console.log('배치 분석 결과 전역 업데이트:', results);
-    } catch (error) {
-      if (error.name === 'QuotaExceededError') {
-        console.warn('LocalStorage 용량 초과 - 청크 단위로 분할 저장합니다.');
+      // IndexedDB 우선 시도
+      await saveToIndexedDB('batchAnalysisResults', results);
+      await saveToIndexedDB('lastAnalysisTimestamp', timestamp);
+      console.log('✅ IndexedDB에 배치 분석 결과 저장 완료');
+      return; // 성공하면 LocalStorage 시도하지 않음
+    } catch (indexedDBError) {
+      console.warn('IndexedDB 저장 실패, LocalStorage로 대체:', indexedDBError.message);
+      
+      // LocalStorage 백업 시도
+      try {
+        localStorage.setItem('batchAnalysisResults', JSON.stringify(results));
+        localStorage.setItem('lastAnalysisTimestamp', timestamp);
+        console.log('배치 분석 결과 전역 업데이트:', results);
+      } catch (error) {
+        if (error.name === 'QuotaExceededError') {
+        console.warn('LocalStorage 용량 초과 - 기존 데이터를 정리하고 청크 단위로 분할 저장합니다.');
         try {
-          // 기존 데이터 정리
-          localStorage.removeItem('batchAnalysisResults');
+          // 기존 데이터 완전 정리
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('batchAnalysisResults') || key.startsWith('batch_chunk_'))) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+          console.log(`🧹 기존 배치 데이터 ${keysToRemove.length}개 항목 정리 완료`);
           
           // 데이터 구조 확인 및 안전한 청크 분할
           const resultArray = results.results || results.data || (Array.isArray(results) ? results : []);
@@ -233,12 +566,25 @@ const App = () => {
             throw new Error('Invalid results structure');
           }
           
-          // 동적 청크 크기 계산 (메모리 효율성 고려)
-          const chunkSize = Math.max(100, Math.min(500, Math.floor(4000000 / JSON.stringify(resultArray[0] || {}).length)));
+          // 데이터 압축 및 최소화
+          const compressedArray = resultArray.map(item => {
+            // 필수 정보만 추출하여 크기 최소화
+            return {
+              id: item.employee_number || item.employee_id || item.id,
+              dept: item.department || 'Unknown',
+              risk: item.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score || 0,
+              level: item.risk_level || 'unknown'
+            };
+          });
+          
+          // 매우 작은 청크 크기로 설정
+          const chunkSize = 20; // 고정된 작은 크기
           const chunks = [];
           
-          for (let i = 0; i < resultArray.length; i += chunkSize) {
-            chunks.push(resultArray.slice(i, i + chunkSize));
+          console.log(`📦 데이터 압축: ${resultArray.length}개 → 압축률 ${Math.round((JSON.stringify(compressedArray).length / JSON.stringify(resultArray).length) * 100)}%`);
+          
+          for (let i = 0; i < compressedArray.length; i += chunkSize) {
+            chunks.push(compressedArray.slice(i, i + chunkSize));
           }
           
           // 각 청크를 개별 키로 저장 (안전한 저장)
@@ -248,7 +594,7 @@ const App = () => {
               const chunkData = {
                 chunk_index: i,
                 total_chunks: chunks.length,
-                data: chunks[i],
+                data: chunks[i], // 압축된 데이터
                 timestamp: timestamp
               };
               localStorage.setItem(`batchAnalysisResults_chunk_${i}`, JSON.stringify(chunkData));
@@ -262,12 +608,13 @@ const App = () => {
           // 메타데이터 저장
           const metadata = {
             total_employees: resultArray.length,
-            saved_employees: Math.min(savedChunks * chunkSize, resultArray.length),
+            saved_employees: Math.min(savedChunks * chunkSize, compressedArray.length),
             total_chunks: chunks.length,
             saved_chunks: savedChunks,
             chunk_size: chunkSize,
             timestamp: timestamp,
-            storage_type: 'chunked',
+            storage_type: 'compressed_chunked',
+            compression_ratio: Math.round((JSON.stringify(compressedArray).length / JSON.stringify(resultArray).length) * 100),
             original_structure: {
               has_results: !!results.results,
               has_data: !!results.data,
@@ -339,8 +686,9 @@ const App = () => {
             }
           }
         }
-      } else {
-        console.error('배치 결과 저장 실패:', error);
+        } else {
+          console.error('배치 결과 저장 실패:', error);
+        }
       }
     }
   };
@@ -351,7 +699,7 @@ const App = () => {
       setLoading: setGlobalLoading,
       serverStatus,
       dataLoaded,
-      // 전역 배치 결과 전달
+      // 전역 배치 결과 전달 
       globalBatchResults,
       lastAnalysisTimestamp,
       updateBatchResults, // 배치 결과 업데이트 함수

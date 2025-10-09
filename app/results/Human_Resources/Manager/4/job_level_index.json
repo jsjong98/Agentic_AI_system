@@ -1,0 +1,36 @@
+{
+  "department": "Human Resources",
+  "job_role": "Manager",
+  "job_level": "4",
+  "created_at": "2025-10-06T18:24:22.745188",
+  "employees": {
+    "148": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:12:15.372189",
+      "folder_path": "Manager/4/employee_148"
+    },
+    "1352": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:12:15.635247",
+      "folder_path": "Manager/4/employee_1352"
+    },
+    "1408": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:12:15.898873",
+      "folder_path": "Manager/4/employee_1408"
+    },
+    "1550": {
+      "job_role": "Manager",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:12:16.164452",
+      "folder_path": "Manager/4/employee_1550"
+    }
+  },
+  "statistics": {
+    "total_employees": 4
+  },
+  "last_updated": "2025-10-08T18:12:16.164452"
+}

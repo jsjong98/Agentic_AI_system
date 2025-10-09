@@ -1,0 +1,21 @@
+{
+  "employee_id": "957",
+  "analysis_timestamp": "2025-10-08T18:08:27.249975",
+  "comprehensive_assessment": {
+    "overall_risk_score": 0.664,
+    "overall_risk_level": "MEDIUM",
+    "risk_indicator": "🟡",
+    "confidence_level": "MEDIUM"
+  },
+  "worker_contributions": {
+    "sentio": {
+      "score": 0.56,
+      "weight": 0.25
+    },
+    "agora": {
+      "score": 0.793,
+      "weight": 0.2
+    }
+  },
+  "rule_based_interpretation": "=== 직원 957 종합 분석 결과 ===\n\n전체 위험도: MEDIUM (0.664/1.0)\n\n🔍 워커별 상세 분석:\n📈 구조적 분석 (Structura): 퇴직 확률 0.0%, 예측 '{'attrition_probability': 0.002610171213746071, 'confidence_score': 0.7, 'risk_category': 'LOW'}'\n🌐 관계적 분석 (Cognita): 위험도 0.000, 카테고리 'Unknown'\n⏰ 시계열 분석 (Chronos): 확률 0.0%, 트렌드 'Stable'\n🧠 심리적 분석 (Sentio): 위험도 0.560, 수준 'MEDIUM'\n💼 시장 분석 (Agora): 위험도 0.793, 경쟁력 'MEDIUM'\n\n💡 권장 조치:\n⚠️ 예방적 관리 필요:\n- 정기적 상담 및 피드백 제공\n- 업무 환경 개선 검토\n- 스트레스 관리 프로그램 참여 권장"
+}

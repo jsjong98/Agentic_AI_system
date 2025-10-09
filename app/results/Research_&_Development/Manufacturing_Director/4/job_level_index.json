@@ -1,0 +1,72 @@
+{
+  "department": "Research & Development",
+  "job_role": "Manufacturing Director",
+  "job_level": "4",
+  "created_at": "2025-10-06T18:23:48.604240",
+  "employees": {
+    "601": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:19.878519",
+      "folder_path": "Manufacturing_Director/4/employee_601"
+    },
+    "867": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:20.251254",
+      "folder_path": "Manufacturing_Director/4/employee_867"
+    },
+    "1005": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:20.627495",
+      "folder_path": "Manufacturing_Director/4/employee_1005"
+    },
+    "1026": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:21.016513",
+      "folder_path": "Manufacturing_Director/4/employee_1026"
+    },
+    "1032": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:21.399365",
+      "folder_path": "Manufacturing_Director/4/employee_1032"
+    },
+    "1367": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:21.793960",
+      "folder_path": "Manufacturing_Director/4/employee_1367"
+    },
+    "1373": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:22.161167",
+      "folder_path": "Manufacturing_Director/4/employee_1373"
+    },
+    "1401": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:22.524295",
+      "folder_path": "Manufacturing_Director/4/employee_1401"
+    },
+    "1775": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:22.895789",
+      "folder_path": "Manufacturing_Director/4/employee_1775"
+    },
+    "2034": {
+      "job_role": "Manufacturing Director",
+      "job_level": "4",
+      "last_updated": "2025-10-08T18:10:23.256486",
+      "folder_path": "Manufacturing_Director/4/employee_2034"
+    }
+  },
+  "statistics": {
+    "total_employees": 10
+  },
+  "last_updated": "2025-10-08T18:10:23.256486"
+}

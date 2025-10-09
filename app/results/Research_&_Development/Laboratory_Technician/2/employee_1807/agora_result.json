@@ -1,0 +1,11 @@
+{
+  "market_analysis": {
+    "market_pressure_index": 0.608,
+    "risk_score": 0.763,
+    "compensation_gap": 0.998,
+    "job_postings_count": 104,
+    "market_competitiveness": "VERY_HIGH"
+  },
+  "risk_level": "HIGH",
+  "agora_score": 0.763
+}

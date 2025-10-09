@@ -1,0 +1,8 @@
+{
+  "psychological_risk_score": 0.33615384615384614,
+  "sentiment_analysis": {
+    "risk_score": 0.33615384615384614,
+    "sentiment_score": 0
+  },
+  "risk_level": "MEDIUM"
+}
