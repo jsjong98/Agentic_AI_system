@@ -21,6 +21,10 @@ RUN apt-get update \
 # Python 패키지 설치
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
+# requirements 파일 먼저 복사 (캐시 활용)
+COPY Supervisor/requirements.txt* ./
+COPY requirements-docker.txt ./
+
 # Supervisor 전용 의존성 (LangGraph 포함)
 RUN pip install --no-cache-dir \
     numpy==1.24.3 \
@@ -38,9 +42,8 @@ RUN pip install --no-cache-dir \
     pydantic>=2.0.0 \
     matplotlib>=3.5.0
 
-# Supervisor 코드 복사
+# Supervisor 코드 복사 (코드 변경 시에만 재빌드)
 COPY Supervisor/ ./
-COPY requirements-docker.txt ./
 
 # 필요한 디렉토리 생성
 RUN mkdir -p logs cache temp uploads
@@ -57,9 +60,6 @@ ENV CHRONOS_URL=http://chronos:5003
 ENV SENTIO_URL=http://sentio:5004
 ENV AGORA_URL=http://agora:5005
 ENV INTEGRATION_URL=http://integration:5007
-
-# OpenAI API 설정 (환경 변수로 주입)
-# ENV OPENAI_API_KEY=your-api-key-here
 
 # 포트 노출
 EXPOSE 5006

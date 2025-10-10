@@ -21,6 +21,10 @@ RUN apt-get update \
 # Python 패키지 설치
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
+# requirements 파일 먼저 복사 (캐시 활용)
+COPY Sentio/requirements.txt* ./
+COPY requirements-docker.txt ./
+
 # PyTorch CPU 버전 설치
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
@@ -39,9 +43,8 @@ RUN pip install --no-cache-dir \
     seaborn>=0.11.0 \
     scikit-learn>=1.0.0
 
-# Sentio 코드 복사
+# Sentio 코드 복사 (코드 변경 시에만 재빌드)
 COPY Sentio/ ./
-COPY requirements-docker.txt ./
 
 # 필요한 디렉토리 생성
 RUN mkdir -p cache logs temp models
@@ -50,9 +53,6 @@ RUN mkdir -p cache logs temp models
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV SENTIO_PORT=5004
-
-# OpenAI API 설정 (환경 변수로 주입)
-# ENV OPENAI_API_KEY=your-api-key-here
 
 # 포트 노출
 EXPOSE 5004

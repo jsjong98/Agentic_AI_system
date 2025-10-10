@@ -21,6 +21,10 @@ RUN apt-get update \
 # Python 패키지 설치
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
+# requirements 파일 먼저 복사 (캐시 활용)
+COPY Integration/requirements.txt* ./
+COPY requirements-docker.txt ./
+
 # Integration 전용 의존성
 RUN pip install --no-cache-dir \
     numpy==1.24.3 \
@@ -38,9 +42,8 @@ RUN pip install --no-cache-dir \
     plotly>=5.15.0 \
     openpyxl>=3.1.0
 
-# Integration 코드 복사
+# Integration 코드 복사 (코드 변경 시에만 재빌드)
 COPY Integration/ ./
-COPY requirements-docker.txt ./
 
 # 필요한 디렉토리 생성
 RUN mkdir -p results cache logs temp
@@ -49,9 +52,6 @@ RUN mkdir -p results cache logs temp
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV INTEGRATION_PORT=5007
-
-# OpenAI API 설정 (환경 변수로 주입)
-# ENV OPENAI_API_KEY=your-api-key-here
 
 # 포트 노출
 EXPOSE 5007

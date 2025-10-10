@@ -22,6 +22,10 @@ RUN apt-get update \
 # Python 패키지 설치
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
+# requirements 파일 먼저 복사 (캐시 활용)
+COPY Structura/requirements.txt* ./
+COPY requirements-docker.txt ./
+
 # Structura 전용 의존성
 RUN pip install --no-cache-dir \
     numpy==1.24.3 \
@@ -40,9 +44,8 @@ RUN pip install --no-cache-dir \
     seaborn>=0.11.0 \
     optuna>=3.0.0
 
-# Structura 코드 복사
+# Structura 코드 복사 (코드 변경 시에만 재빌드)
 COPY Structura/ ./
-COPY requirements-docker.txt ./
 
 # 필요한 디렉토리 생성
 RUN mkdir -p models cache logs temp

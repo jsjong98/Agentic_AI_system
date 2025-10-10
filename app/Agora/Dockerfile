@@ -28,6 +28,10 @@ ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 # Python 패키지 설치
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
+# requirements 파일 먼저 복사 (캐시 활용)
+COPY Agora/requirements.txt* ./
+COPY requirements-docker.txt ./
+
 # Agora 전용 의존성
 RUN pip install --no-cache-dir \
     numpy==1.24.3 \
@@ -46,9 +50,8 @@ RUN pip install --no-cache-dir \
     matplotlib>=3.5.0 \
     plotly>=5.15.0
 
-# Agora 코드 복사
+# Agora 코드 복사 (코드 변경 시에만 재빌드)
 COPY Agora/ ./
-COPY requirements-docker.txt ./
 
 # 필요한 디렉토리 생성
 RUN mkdir -p data cache logs temp
@@ -57,9 +60,6 @@ RUN mkdir -p data cache logs temp
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV AGORA_PORT=5005
-
-# OpenAI API 설정 (환경 변수로 주입)
-# ENV OPENAI_API_KEY=your-api-key-here
 
 # 포트 노출
 EXPOSE 5005
