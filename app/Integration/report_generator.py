@@ -948,8 +948,93 @@ class ReportGenerator:
     def generate_llm_based_report(self, employee_id, department, risk_level, risk_score, 
                                  agent_scores, agent_data, employee_info):
         """LLM 기반 보고서 생성 (하위 호환성)"""
-        # ReportGenerator의 기존 메서드 활용
-        return self.generate_text_report(employee_id, use_llm=True)
+        # agent_scores 설정
+        self.set_agent_scores(employee_id, agent_scores)
+        
+        # 간단한 보고서 생성 (comprehensive_report 없이)
+        try:
+            # XAI 분석
+            xai_analysis = self._analyze_xai(agent_data, employee_id)
+            
+            # 근본 원인 분석
+            root_cause = self._analyze_root_cause(agent_data, employee_info, department, '')
+            
+            # 기본 정보 추출
+            emp_data = employee_info.get('employee_data', {}) if isinstance(employee_info, dict) else {}
+            age = emp_data.get('Age', 'N/A')
+            years_at_company = emp_data.get('YearsAtCompany', 'N/A')
+            job_satisfaction = emp_data.get('JobSatisfaction', 'N/A')
+            work_life_balance = emp_data.get('WorkLifeBalance', 'N/A')
+            job_role = emp_data.get('JobRole', department)
+            
+            # GPT-5-Nano LLM 인사이트 생성
+            llm_insights = self._generate_gpt5_nano_insights(
+                employee_id, department, job_role, age, years_at_company,
+                job_satisfaction, work_life_balance, agent_scores, 
+                risk_level, risk_score, xai_analysis, root_cause
+            )
+            
+            # 위험도 레벨 한글 변환
+            risk_level_kr = {
+                'high': '🔴 고위험군',
+                'medium': '🟡 주의군', 
+                'low': '🟢 안전군',
+                'unknown': '❓ 미분류'
+            }.get(risk_level, '❓ 미분류')
+            
+            # 보고서 생성
+            report = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         📊 직원 퇴사 위험도 분석 보고서
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 기본 정보
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• 직원 ID        : {employee_id}
+• 소속 부서      : {department}
+• 직무           : {job_role}
+• 나이           : {age}세
+• 재직 기간      : {years_at_company}년
+• 직무 만족도    : {job_satisfaction}/4
+• 워라밸         : {work_life_balance}/4
+
+🎯 종합 위험도 평가
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+위험도 등급  : {risk_level_kr}
+📊 종합 위험 점수 : {risk_score:.3f} / 1.0 ({risk_score*100:.1f}%)
+
+📈 다중 에이전트 분석 결과
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏢 Structura: {agent_scores.get('structura', 0):.3f} ({agent_scores.get('structura', 0)*100:.1f}%)
+⏰ Chronos: {agent_scores.get('chronos', 0):.3f} ({agent_scores.get('chronos', 0)*100:.1f}%)
+🔗 Cognita: {agent_scores.get('cognita', 0):.3f} ({agent_scores.get('cognita', 0)*100:.1f}%)
+🧠 Sentio: {agent_scores.get('sentio', 0):.3f} ({agent_scores.get('sentio', 0)*100:.1f}%)
+🌍 Agora: {agent_scores.get('agora', 0):.3f} ({agent_scores.get('agora', 0)*100:.1f}%)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 XAI 설명 가능한 AI 분석
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{xai_analysis}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 근본 원인 분석
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{root_cause}
+{llm_insights}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 보고서 생성: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+            return report.strip()
+            
+        except Exception as e:
+            logger.error(f"LLM 기반 보고서 생성 실패: {e}")
+            # 실패 시 기본 보고서 반환
+            return self.generate_text_report(employee_id, use_llm=False)
     
     def generate_batch_reports(self, employee_ids: List[str], output_dir: str = "reports") -> Dict[str, Any]:
         """여러 직원의 레포트를 일괄 생성"""

@@ -833,6 +833,7 @@ def post_analysis():
 def chat_with_llm():
     """
     LLM과 채팅하는 API 엔드포인트 (GPT-5-nano-2025-08-07 사용)
+    results/ 폴더의 최신 분석 데이터를 자동으로 활용
     """
     try:
         data = request.get_json()
@@ -841,25 +842,28 @@ def chat_with_llm():
             return jsonify({"error": "메시지가 필요합니다."}), 400
         
         user_message = data['message']
-        context = data.get('context', {})  # 분석 결과 컨텍스트
+        context = data.get('context', {})  # 프론트엔드에서 전달된 컨텍스트
         
         if not openai_client:
             return jsonify({"error": "OpenAI API가 초기화되지 않았습니다."}), 500
         
+        # results/ 폴더에서 최신 분석 데이터 로드 (자동)
+        enriched_context = load_latest_results_data(context)
+        
         # 사용자 메시지 유형 판단
         is_simple_greeting = is_greeting_or_simple_question(user_message)
         
-        # 시스템 프롬프트 생성
-        system_prompt = create_system_prompt(context, is_simple_greeting)
+        # 시스템 프롬프트 생성 (분석 데이터 포함)
+        system_prompt = create_system_prompt(enriched_context, is_simple_greeting)
         
         # OpenAI API 호출 (GPT-5-nano-2025-08-07 사용)
         try:
-            # GPT-5-nano 모델 사용 시도
+            # GPT-5-nano 모델 사용 시도 (짧은 답변 요청)
             response = openai_client.responses.create(
                 model="gpt-5-nano-2025-08-07",
                 input=f"{system_prompt}\n\nUser: {user_message}",
-                reasoning={"effort": "medium"},
-                text={"verbosity": "medium"}
+                reasoning={"effort": "low"},  # low로 변경하여 간결한 답변 유도
+                text={"verbosity": "low"}  # low로 변경하여 간결한 답변 유도
             )
             ai_response = response.output_text
             model_used = "gpt-5-nano-2025-08-07"
@@ -874,7 +878,7 @@ def chat_with_llm():
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ],
-                max_tokens=1000,
+                max_tokens=500,  # 짧은 답변을 위해 500으로 제한
                 temperature=0.7
             )
             ai_response = response.choices[0].message.content
@@ -885,12 +889,176 @@ def chat_with_llm():
             "response": ai_response,
             "timestamp": datetime.now().isoformat(),
             "model": model_used,
-            "tokens_used": tokens_used
+            "tokens_used": tokens_used,
+            "context_used": bool(enriched_context.get('results_loaded'))
         })
         
     except Exception as e:
         logger.error(f"채팅 API 오류: {str(e)}")
         return jsonify({"error": f"채팅 처리 중 오류가 발생했습니다: {str(e)}"}), 500
+
+
+def normalize_risk_level(risk_level: str = None, risk_score: float = None) -> str:
+    """
+    위험도 레벨을 표준화 (배치 분석 결과의 실제 값 기반)
+    - 다양한 형태의 risk_level을 'high', 'medium', 'low'로 통일
+    - risk_level이 없으면 risk_score로 계산
+    """
+    if risk_level:
+        risk_level_lower = str(risk_level).lower().strip()
+        
+        # 영어 레벨
+        if risk_level_lower in ['high', '고위험군', '고위험', 'high_risk', 'critical']:
+            return 'high'
+        elif risk_level_lower in ['medium', '주의군', '중위험', 'mid', 'moderate', 'warning']:
+            return 'medium'
+        elif risk_level_lower in ['low', '안전군', '저위험', 'safe', 'normal']:
+            return 'low'
+    
+    # risk_level이 없거나 인식 불가능한 경우 risk_score로 계산
+    if risk_score is not None:
+        try:
+            score = float(risk_score)
+            if score >= 0.7:
+                return 'high'
+            elif score >= 0.3:  # 배치 분석에서 사용하는 임계값
+                return 'medium'
+            else:
+                return 'low'
+        except:
+            pass
+    
+    # 기본값
+    return 'unknown'
+
+
+def load_latest_results_data(base_context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    results/ 폴더에서 최신 배치 분석 결과를 로드하여 컨텍스트를 풍부하게 만듦
+    배치 분석 결과의 실제 risk_level과 risk_score를 기반으로 통계 생성
+    """
+    enriched_context = base_context.copy()
+    
+    try:
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        results_dir = os.path.join(project_root, 'results')
+        batch_analysis_dir = os.path.join(results_dir, 'batch_analysis')
+        
+        # batch_analysis 폴더에서 최신 individual_results 파일 찾기
+        if os.path.exists(batch_analysis_dir):
+            individual_files = [f for f in os.listdir(batch_analysis_dir) 
+                              if f.startswith('individual_results_') and f.endswith('.json')]
+            
+            if individual_files:
+                # 가장 최신 파일 선택
+                latest_file = sorted(individual_files)[-1]
+                file_path = os.path.join(batch_analysis_dir, latest_file)
+                
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    batch_data = json.load(f)
+                
+                individual_results = batch_data.get('individual_results', [])
+                
+                if individual_results:
+                    # 위험도별 통계 계산 (실제 배치 분석 결과 기반)
+                    high_risk = 0
+                    medium_risk = 0
+                    low_risk = 0
+                    unknown_risk = 0
+                    
+                    for result in individual_results:
+                        risk_level = result.get('risk_level')
+                        risk_score = result.get('risk_score', 0)
+                        
+                        # 실제 위험도 레벨 정규화
+                        normalized_level = normalize_risk_level(risk_level, risk_score)
+                        
+                        if normalized_level == 'high':
+                            high_risk += 1
+                        elif normalized_level == 'medium':
+                            medium_risk += 1
+                        elif normalized_level == 'low':
+                            low_risk += 1
+                        else:
+                            unknown_risk += 1
+                    
+                    total = len(individual_results)
+                    
+                    # 부서별 통계 (실제 위험도 레벨 기반)
+                    department_stats = {}
+                    for result in individual_results:
+                        dept = result.get('department', '미분류')
+                        if dept not in department_stats:
+                            department_stats[dept] = {'high': 0, 'medium': 0, 'low': 0, 'unknown': 0, 'total': 0}
+                        
+                        risk_level = result.get('risk_level')
+                        risk_score = result.get('risk_score', 0)
+                        normalized_level = normalize_risk_level(risk_level, risk_score)
+                        
+                        department_stats[dept][normalized_level] += 1
+                        department_stats[dept]['total'] += 1
+                    
+                    # 평균 에이전트 점수 계산
+                    agent_scores = {'structura': [], 'chronos': [], 'cognita': [], 'sentio': [], 'agora': []}
+                    for result in individual_results:
+                        agent_results = result.get('agent_results', {})
+                        for agent_name in agent_scores.keys():
+                            if agent_name in agent_results:
+                                score = 0
+                                if agent_name == 'structura':
+                                    score = agent_results[agent_name].get('attrition_probability', 0)
+                                elif agent_name == 'chronos':
+                                    score = agent_results[agent_name].get('risk_score', 0)
+                                elif agent_name == 'cognita':
+                                    score = agent_results[agent_name].get('overall_risk_score', 0)
+                                elif agent_name == 'sentio':
+                                    score = agent_results[agent_name].get('risk_score', 0)
+                                elif agent_name == 'agora':
+                                    score = agent_results[agent_name].get('market_risk_score', 0)
+                                
+                                if score > 0:
+                                    agent_scores[agent_name].append(score)
+                    
+                    # 평균 계산
+                    avg_agent_scores = {}
+                    for agent_name, scores in agent_scores.items():
+                        if scores:
+                            avg_agent_scores[agent_name] = sum(scores) / len(scores)
+                    
+                    # 컨텍스트 업데이트 (실제 배치 분석 결과 기반)
+                    enriched_context['totalEmployees'] = total
+                    enriched_context['highRiskCount'] = high_risk
+                    enriched_context['mediumRiskCount'] = medium_risk
+                    enriched_context['lowRiskCount'] = low_risk
+                    enriched_context['unknownRiskCount'] = unknown_risk  # 인식 불가능한 레벨
+                    enriched_context['departmentStats'] = department_stats
+                    enriched_context['avgAgentScores'] = avg_agent_scores
+                    enriched_context['analysis_timestamp'] = batch_data.get('analysis_timestamp', 'N/A')
+                    enriched_context['results_loaded'] = True
+                    enriched_context['data_source'] = 'batch_analysis'
+                    enriched_context['risk_thresholds'] = {'high': 0.7, 'medium': 0.3}  # 사용된 임계값
+                    
+                    # 로그에 실제 위험도 분포 출력
+                    high_rate = (high_risk / total * 100) if total > 0 else 0
+                    logger.info(f"✅ 최신 분석 데이터 로드 완료: {total}명, {len(department_stats)}개 부서")
+                    logger.info(f"   위험도 분포: 고위험 {high_risk}명 ({high_rate:.1f}%), 중위험 {medium_risk}명, 저위험 {low_risk}명" + 
+                               (f", 미분류 {unknown_risk}명" if unknown_risk > 0 else ""))
+                else:
+                    enriched_context['results_loaded'] = False
+                    logger.warning("⚠️ batch_analysis 파일에 데이터가 없습니다")
+            else:
+                enriched_context['results_loaded'] = False
+                logger.warning("⚠️ batch_analysis 폴더에 파일이 없습니다")
+        else:
+            enriched_context['results_loaded'] = False
+            logger.warning(f"⚠️ batch_analysis 폴더를 찾을 수 없습니다: {batch_analysis_dir}")
+    
+    except Exception as e:
+        enriched_context['results_loaded'] = False
+        logger.error(f"❌ 최신 분석 데이터 로드 실패: {str(e)}")
+    
+    return enriched_context
 
 
 def is_greeting_or_simple_question(message: str) -> bool:
@@ -923,7 +1091,7 @@ def is_greeting_or_simple_question(message: str) -> bool:
 
 
 def create_system_prompt(context: Dict[str, Any], is_simple_greeting: bool = False) -> str:
-    """분석 결과를 바탕으로 시스템 프롬프트 생성"""
+    """분석 결과를 바탕으로 시스템 프롬프트 생성 (짧고 간결한 답변 강조)"""
     
     if is_simple_greeting:
         # 간단한 인사말이나 일반적인 질문에 대한 프롬프트
@@ -932,30 +1100,71 @@ HR 데이터 분석과 이직 예측 분석을 도와드리는 친근한 AI 어�
 
 사용자가 간단한 인사말이나 일반적인 질문을 했습니다. 
 다음과 같이 응답해주세요:
-- 간단하고 친근하게 인사를 나누세요 (2-3문장 정도)
-- 어떤 도움을 드릴 수 있는지 간략하게 안내해주세요
-- 너무 길거나 전문적인 설명은 피해주세요
-- 따뜻하고 자연스러운 톤으로 대화해주세요"""
+- **2-3문장**으로 간단하고 친근하게 인사하세요
+- 어떤 도움을 드릴 수 있는지 **한 줄**로 안내하세요
+- 절대 길게 설명하지 마세요
+- 따뜻하고 자연스러운 톤으로 대화하세요"""
     else:
         # 전문적인 질문이나 분석 관련 질문에 대한 프롬프트
         base_prompt = """당신은 Retain Sentinel 360 AI 어시스턴트입니다. 
 HR 데이터 분석과 이직 예측 분석을 도와드리는 전문 AI 어시스턴트입니다.
 
+**중요: 답변은 반드시 5-7문장 이내로 간결하게 작성하세요. 핵심만 전달하세요.**
+
 응답 가이드라인:
-- 사용자의 질문에 맞게 전문적이고 실용적인 조언을 제공하세요
-- 구체적인 데이터와 수치를 활용하여 설명하세요
-- 실행 가능한 조치 방안을 제시해주세요
-- 이해하기 쉽게 설명하되, 전문성을 유지해주세요
+- 사용자의 질문에 대한 **핵심 답변만** 제공하세요
+- 구체적인 데이터와 수치를 **2-3개만** 언급하세요
+- 실행 가능한 조치는 **3가지 이내**로 제시하세요
+- 불필요한 설명은 생략하고 요점만 전달하세요
 
 주요 기능:
-1. 이직 위험도 분석 결과 해석 및 조언
-2. HR 관리 관련 실용적인 가이드 제공
-3. 데이터 기반 인사이트 및 권장사항 제시
-4. 구체적이고 실행 가능한 개선 방안 제안"""
+1. 이직 위험도 분석 결과 해석
+2. HR 관리 관련 실용적 조언
+3. 데이터 기반 핵심 인사이트"""
 
-    # 분석 결과 컨텍스트 추가
-    if context:
-        context_info = "\n\n현재 분석 결과 컨텍스트:\n"
+    # 분석 결과 컨텍스트 추가 (간결하게)
+    if context and context.get('results_loaded'):
+        context_info = "\n\n📊 **최신 분석 데이터** (이 정보를 활용하여 답변하세요):\n"
+        
+        if 'totalEmployees' in context:
+            total = context['totalEmployees']
+            high = context.get('highRiskCount', 0)
+            medium = context.get('mediumRiskCount', 0)
+            low = context.get('lowRiskCount', 0)
+            high_rate = (high / total * 100) if total > 0 else 0
+            
+            context_info += f"- 전체: {total}명 | 고위험: {high}명 ({high_rate:.1f}%) | 중위험: {medium}명 | 저위험: {low}명\n"
+        
+        if 'departmentStats' in context:
+            dept_stats = context['departmentStats']
+            top_dept = max(dept_stats.items(), key=lambda x: x[1].get('high', 0) + x[1].get('medium', 0), default=(None, None))
+            if top_dept[0]:
+                dept_name = top_dept[0].replace('_', ' ')
+                dept_high = top_dept[1].get('high', 0)
+                dept_total = top_dept[1].get('total', 1)
+                context_info += f"- 가장 위험도가 높은 부서: {dept_name} ({dept_high}/{dept_total}명)\n"
+        
+        if 'avgAgentScores' in context:
+            avg_scores = context['avgAgentScores']
+            highest_agent = max(avg_scores.items(), key=lambda x: x[1], default=(None, 0))
+            if highest_agent[0]:
+                agent_names = {
+                    'structura': 'HR 구조 분석',
+                    'chronos': '시계열 분석',
+                    'cognita': '관계 분석',
+                    'sentio': '감정 분석',
+                    'agora': '시장 분석'
+                }
+                context_info += f"- 가장 높은 위험 요인: {agent_names.get(highest_agent[0], highest_agent[0])} ({highest_agent[1]:.1%})\n"
+        
+        if 'analysis_timestamp' in context:
+            timestamp = context['analysis_timestamp']
+            context_info += f"- 분석 일시: {timestamp}\n"
+        
+        base_prompt += context_info
+    elif context:
+        # 프론트엔드에서 전달된 컨텍스트 (레거시)
+        context_info = "\n\n📊 **현재 분석 컨텍스트**:\n"
         
         if 'totalEmployees' in context:
             context_info += f"- 전체 직원 수: {context['totalEmployees']}명\n"
@@ -963,22 +1172,9 @@ HR 데이터 분석과 이직 예측 분석을 도와드리는 전문 AI 어시�
         if 'highRiskCount' in context:
             context_info += f"- 고위험군: {context['highRiskCount']}명\n"
         
-        if 'mediumRiskCount' in context:
-            context_info += f"- 중위험군: {context['mediumRiskCount']}명\n"
-        
-        if 'lowRiskCount' in context:
-            context_info += f"- 저위험군: {context['lowRiskCount']}명\n"
-        
-        if 'accuracy' in context:
-            context_info += f"- 모델 정확도: {context['accuracy']}%\n"
-        
-        if 'departmentStats' in context:
-            context_info += "- 부서별 현황 데이터 보유\n"
-        
-        if 'keyInsights' in context:
-            context_info += f"- 주요 인사이트: {len(context['keyInsights'])}개\n"
-        
         base_prompt += context_info
+    
+    base_prompt += "\n\n**다시 강조: 답변은 5-7문장 이내, 핵심만 간결하게!**"
     
     return base_prompt
 

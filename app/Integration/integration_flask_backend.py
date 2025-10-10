@@ -4027,7 +4027,7 @@ def generate_employee_report():
 def generate_report_from_saved_data(employee_id, comprehensive_report, agent_data, employee_info, analysis_summary, visualization_files):
     """저장된 파일 데이터로부터 보고서 생성 (ReportGenerator 사용)"""
     try:
-        from .report_generator import ReportGenerator
+        from report_generator import ReportGenerator
         
         # ReportGenerator 초기화
         report_gen = ReportGenerator()
@@ -4060,7 +4060,7 @@ def generate_llm_report(employee_id, department, risk_level, risk_score, agent_s
     """LLM을 사용한 개별 직원 보고서 생성 (레거시 - ReportGenerator로 대체 예정)"""
     # 이 함수는 하위 호환성을 위해 유지되지만, 새로운 구현은 ReportGenerator를 사용해야 함
     try:
-        from .report_generator import ReportGenerator
+        from report_generator import ReportGenerator
         report_gen = ReportGenerator()
         
         # ReportGenerator를 통한 LLM 보고서 생성
