@@ -1,0 +1,362 @@
+version: '3.8'
+
+# =============================================================================
+# Agentic AI System - Docker Compose 설정
+# 모든 에이전트와 프론트엔드를 한 번에 실행
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Neo4j 그래프 데이터베이스 (Cognita Agent용)
+  # ===========================================================================
+  neo4j:
+    image: neo4j:5.13-community
+    container_name: agentic-neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/agentic-password-2024
+      - NEO4J_dbms_memory_pagecache_size=512M
+      - NEO4J_dbms_memory_heap_max__size=1G
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - neo4j-import:/var/lib/neo4j/import
+    networks:
+      - agentic-network
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "agentic-password-2024", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # ===========================================================================
+  # Structura Agent - 정형 데이터 ML 분석 (Port 5001)
+  # ===========================================================================
+  structura:
+    build:
+      context: ./app
+      dockerfile: Structura/Dockerfile
+    container_name: agentic-structura
+    ports:
+      - "5001:5001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STRUCTURA_PORT=5001
+    volumes:
+      - structura-models:/app/models
+      - structura-cache:/app/cache
+      - shared-uploads:/app/uploads
+      - shared-results:/app/results
+    networks:
+      - agentic-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Cognita Agent - 네트워크 관계 분석 (Port 5002)
+  # ===========================================================================
+  cognita:
+    build:
+      context: ./app
+      dockerfile: Cognita/Dockerfile
+    container_name: agentic-cognita
+    ports:
+      - "5002:5002"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - COGNITA_PORT=5002
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=agentic-password-2024
+    volumes:
+      - cognita-cache:/app/cache
+      - shared-uploads:/app/uploads
+      - shared-results:/app/results
+    networks:
+      - agentic-network
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Chronos Agent - 시계열 딥러닝 분석 (Port 5003)
+  # ===========================================================================
+  chronos:
+    build:
+      context: ./app
+      dockerfile: Chronos/Dockerfile
+    container_name: agentic-chronos
+    ports:
+      - "5003:5003"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CHRONOS_PORT=5003
+      - NVIDIA_VISIBLE_DEVICES=all  # GPU 사용 시
+    volumes:
+      - chronos-models:/app/models
+      - chronos-cache:/app/cache
+      - shared-uploads:/app/uploads
+      - shared-results:/app/results
+    networks:
+      - agentic-network
+    # GPU 지원 (선택적)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Sentio Agent - 텍스트 감정 분석 (Port 5004)
+  # ===========================================================================
+  sentio:
+    build:
+      context: ./app
+      dockerfile: Sentio/Dockerfile
+    container_name: agentic-sentio
+    ports:
+      - "5004:5004"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SENTIO_PORT=5004
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - sentio-cache:/app/cache
+      - sentio-models:/app/models
+      - shared-uploads:/app/uploads
+      - shared-results:/app/results
+    networks:
+      - agentic-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Agora Agent - 시장 분석 + LLM (Port 5005)
+  # ===========================================================================
+  agora:
+    build:
+      context: ./app
+      dockerfile: Agora/Dockerfile
+    container_name: agentic-agora
+    ports:
+      - "5005:5005"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - AGORA_PORT=5005
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - CHROME_BIN=/usr/bin/chromium-browser
+      - CHROMEDRIVER_PATH=/usr/bin/chromedriver
+    volumes:
+      - agora-data:/app/data
+      - agora-cache:/app/cache
+      - shared-uploads:/app/uploads
+      - shared-results:/app/results
+    networks:
+      - agentic-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Supervisor Agent - LangGraph 워크플로우 관리 (Port 5006)
+  # ===========================================================================
+  supervisor:
+    build:
+      context: ./app
+      dockerfile: Supervisor/Dockerfile
+    container_name: agentic-supervisor
+    ports:
+      - "5006:5006"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SUPERVISOR_PORT=5006
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # 워커 에이전트 URL (Docker 네트워크 내부 통신)
+      - STRUCTURA_URL=http://structura:5001
+      - COGNITA_URL=http://cognita:5002
+      - CHRONOS_URL=http://chronos:5003
+      - SENTIO_URL=http://sentio:5004
+      - AGORA_URL=http://agora:5005
+      - INTEGRATION_URL=http://integration:5007
+    volumes:
+      - supervisor-logs:/app/logs
+      - supervisor-cache:/app/cache
+      - shared-uploads:/app/uploads
+      - shared-results:/app/results
+    networks:
+      - agentic-network
+    depends_on:
+      - structura
+      - cognita
+      - chronos
+      - sentio
+      - agora
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Integration Agent - 결과 통합 및 최적화 (Port 5007)
+  # ===========================================================================
+  integration:
+    build:
+      context: ./app
+      dockerfile: Integration/Dockerfile
+    container_name: agentic-integration
+    ports:
+      - "5007:5007"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - INTEGRATION_PORT=5007
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - integration-results:/app/results
+      - integration-cache:/app/cache
+      - shared-uploads:/app/uploads
+      - shared-results:/app/results
+    networks:
+      - agentic-network
+    depends_on:
+      - structura
+      - cognita
+      - chronos
+      - sentio
+      - agora
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Dashboard - React 프론트엔드 (Port 3000)
+  # ===========================================================================
+  dashboard:
+    build:
+      context: ./Dashboard
+      dockerfile: Dockerfile
+    container_name: agentic-dashboard
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:5006
+      - REACT_APP_SUPERVISOR_URL=http://localhost:5006
+      - REACT_APP_INTEGRATION_URL=http://localhost:5007
+    networks:
+      - agentic-network
+    depends_on:
+      - supervisor
+      - integration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+# =============================================================================
+# 볼륨 정의 (데이터 영속성)
+# =============================================================================
+volumes:
+  # Neo4j
+  neo4j-data:
+    driver: local
+  neo4j-logs:
+    driver: local
+  neo4j-import:
+    driver: local
+  
+  # Structura
+  structura-models:
+    driver: local
+  structura-cache:
+    driver: local
+  
+  # Cognita
+  cognita-cache:
+    driver: local
+  
+  # Chronos
+  chronos-models:
+    driver: local
+  chronos-cache:
+    driver: local
+  
+  # Sentio
+  sentio-cache:
+    driver: local
+  sentio-models:
+    driver: local
+  
+  # Agora
+  agora-data:
+    driver: local
+  agora-cache:
+    driver: local
+  
+  # Supervisor
+  supervisor-logs:
+    driver: local
+  supervisor-cache:
+    driver: local
+  
+  # Integration
+  integration-results:
+    driver: local
+  integration-cache:
+    driver: local
+  
+  # 공유 볼륨
+  shared-uploads:
+    driver: local
+  shared-results:
+    driver: local
+
+# =============================================================================
+# 네트워크 정의
+# =============================================================================
+networks:
+  agentic-network:
+    driver: bridge
+    name: agentic-network
+
