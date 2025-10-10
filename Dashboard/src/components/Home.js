@@ -346,9 +346,55 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
 
   // AI 응답 생성 (실제 데이터 기반)
   const generateBotResponse = async (userInput) => {
+    try {
+      // LLM 기반 채팅 사용 (Supervisor의 /api/chat 엔드포인트)
+      const latestPrediction = predictionHistory.length > 0 ? predictionHistory[0] : null;
+      
+      // 컨텍스트 구성 (선택적)
+      const context = latestPrediction ? {
+        totalEmployees: latestPrediction.totalEmployees,
+        highRiskCount: latestPrediction.highRiskCount,
+        mediumRiskCount: latestPrediction.mediumRiskCount,
+        lowRiskCount: latestPrediction.lowRiskCount,
+        accuracy: latestPrediction.accuracy,
+        departmentStats: latestPrediction.departmentStats,
+        keyInsights: latestPrediction.keyInsights
+      } : {};
+      
+      // Supervisor의 LLM 채팅 API 호출
+      const response = await fetch('http://localhost:5006/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: userInput,
+          context: context
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('LLM API 호출 실패');
+      }
+      
+      const data = await response.json();
+      return data.response;
+      
+    } catch (error) {
+      console.error('LLM 채팅 오류:', error);
+      
+      // LLM 실패 시 폴백: 간단한 안내 메시지
+      return '죄송합니다. AI 서버 연결에 문제가 발생했습니다.\n\n' +
+             '다음 기능을 이용하실 수 있습니다:\n' +
+             '• "직원 검색", "부서 분석", "위험도 현황"\n' +
+             '• "개선 방안", "통계 보기"\n\n' +
+             'Supervisor 서버(5006 포트)가 실행 중인지 확인해주세요.';
+    }
+    
+    // 아래 코드는 LLM이 실패했을 때 폴백용으로 보관 (도달하지 않음)
     const latestPrediction = predictionHistory.length > 0 ? predictionHistory[0] : null;
     
-    // 기본 응답 템플릿
+    // 기본 응답 템플릿 (폴백용)
     const responses = {
       '최근': () => {
         if (!latestPrediction) {
