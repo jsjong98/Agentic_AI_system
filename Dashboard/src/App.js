@@ -16,6 +16,7 @@ import ReportGeneration from './components/ReportGeneration';
 import RelationshipAnalysis from './components/RelationshipAnalysis';
 import GroupStatistics from './components/GroupStatistics';
 import { apiService } from './services/apiService';
+import './styles/typography.css'; // 통일된 폰트 크기 체계
 // import storageManager from './utils/storageManager'; // 현재 사용하지 않음
 
 const { Header, Sider, Content } = Layout;
@@ -782,7 +783,7 @@ const App = () => {
           <Title level={4} style={{ margin: 0, color: 'white' }}>
             Retain Sentinel 360
           </Title>
-          <div style={{ fontSize: '12px', opacity: 0.9 }}>
+          <div style={{ fontSize: 'var(--font-small)', opacity: 0.9 }}>
             AI 기반 이직 예측 시스템
           </div>
         </div>
@@ -794,7 +795,7 @@ const App = () => {
           items={menuItems}
           style={{ 
             border: 'none',
-            fontSize: '14px',
+            fontSize: 'var(--font-base)',
             paddingTop: '8px'
           }}
         />
@@ -830,7 +831,7 @@ const App = () => {
                 borderRadius: '50%',
                 backgroundColor: serverStatus ? '#52c41a' : '#ff4d4f'
               }} />
-              <span style={{ fontSize: '14px', color: '#666' }}>
+              <span style={{ fontSize: 'var(--font-base)', color: '#666' }}>
                 {serverStatus ? '서버 연결됨' : '서버 연결 실패'}
               </span>
             </div>
@@ -842,7 +843,7 @@ const App = () => {
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
-                fontSize: '16px',
+                fontSize: 'var(--font-medium)',
                 color: '#1890ff'
               }}
               title="서버 상태 새로고침"

@@ -1009,7 +1009,7 @@ const ReportGeneration = () => {
               value={generatedReport}
               readOnly
               rows={15}
-              style={{ fontSize: '14px', lineHeight: '1.6' }}
+              style={{ fontSize: 'var(--font-base)', lineHeight: '1.6' }}
               placeholder="보고서가 생성되면 여기에 표시됩니다..."
             />
           </div>

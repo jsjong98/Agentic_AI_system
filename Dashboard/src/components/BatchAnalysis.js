@@ -5202,7 +5202,7 @@ const BatchAnalysis = ({
             </Card>
 
             <Divider />
-            <Text type="secondary" style={{ fontSize: '12px' }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
               레포트 생성 시간: {new Date(employeeReport.generated_at).toLocaleString()}
             </Text>
           </div>
@@ -5299,7 +5299,7 @@ const BatchAnalysis = ({
                         <Tag color="orange">중위험 {cache.mediumRiskCount}명</Tag>
                         <Tag color="green">저위험 {cache.lowRiskCount}명</Tag>
                       </Space>
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                      <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                         {cache.summary}
                       </Text>
                     </Space>

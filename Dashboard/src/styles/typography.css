@@ -1,0 +1,44 @@
+/* 
+ * Typography System - 통일된 폰트 크기 체계
+ * Retain Sentinel 360 - Agentic AI System
+ */
+
+:root {
+  /* ========== 텍스트 크기 ========== */
+  --font-tiny: 10px;       /* 아주 작은 라벨, 노드 텍스트 */
+  --font-small: 12px;      /* 보조 텍스트, 설명, 라벨 */
+  --font-base: 14px;       /* 일반 텍스트 (기본) */
+  --font-medium: 16px;     /* 중요 텍스트, 강조 */
+  --font-large: 18px;      /* 큰 텍스트 */
+  --font-xlarge: 20px;     /* 통계 값, 큰 제목 */
+  --font-xxlarge: 24px;    /* 주요 지표 */
+  --font-huge: 32px;       /* 특별히 큰 숫자/값 */
+  
+  /* ========== 아이콘 크기 ========== */
+  --icon-small: 16px;      /* 작은 아이콘 (인라인) */
+  --icon-medium: 24px;     /* 중간 아이콘 */
+  --icon-large: 32px;      /* 큰 아이콘 */
+  --icon-xlarge: 48px;     /* 매우 큰 아이콘 (상태 표시) */
+  
+  /* ========== Title level 크기 (Ant Design 기본값) ========== */
+  /* Title level={2} → 24px (메인 페이지 제목) */
+  /* Title level={3} → 20px (헤더) */
+  /* Title level={4} → 16px (섹션 제목) */
+  /* Title level={5} → 14px (서브 섹션) */
+}
+
+/* ========== 유틸리티 클래스 ========== */
+.text-tiny { font-size: var(--font-tiny) !important; }
+.text-small { font-size: var(--font-small) !important; }
+.text-base { font-size: var(--font-base) !important; }
+.text-medium { font-size: var(--font-medium) !important; }
+.text-large { font-size: var(--font-large) !important; }
+.text-xlarge { font-size: var(--font-xlarge) !important; }
+.text-xxlarge { font-size: var(--font-xxlarge) !important; }
+.text-huge { font-size: var(--font-huge) !important; }
+
+.icon-small { font-size: var(--icon-small) !important; }
+.icon-medium { font-size: var(--icon-medium) !important; }
+.icon-large { font-size: var(--icon-large) !important; }
+.icon-xlarge { font-size: var(--icon-xlarge) !important; }
+

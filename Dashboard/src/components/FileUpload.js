@@ -270,7 +270,7 @@ const FileUpload = ({ onDataLoaded, setLoading, moduleType = 'default' }) => {
       ellipsis: true,
       width: 120,
       render: (text) => (
-        <Text style={{ fontSize: '12px' }}>
+        <Text style={{ fontSize: 'var(--font-small)' }}>
           {text?.toString().substring(0, 20)}
           {text?.toString().length > 20 ? '...' : ''}
         </Text>
@@ -339,7 +339,7 @@ const FileUpload = ({ onDataLoaded, setLoading, moduleType = 'default' }) => {
               <div {...getRootProps()} className={`upload-area ${isDragActive ? 'dragover' : ''}`}>
                 <input {...getInputProps()} />
                 <p className="ant-upload-drag-icon">
-                  <InboxOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
+                  <InboxOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#1890ff' }} />
                 </p>
                 <p className="ant-upload-text">
                   {isDragActive ? '파일을 여기에 놓으세요' : '파일을 드래그하거나 클릭하여 업로드'}
@@ -381,7 +381,7 @@ const FileUpload = ({ onDataLoaded, setLoading, moduleType = 'default' }) => {
                 기본 데이터 사용
               </Button>
               
-              <div style={{ padding: '16px', background: '#f9f9f9', borderRadius: '6px', fontSize: '12px' }}>
+              <div style={{ padding: '16px', background: '#f9f9f9', borderRadius: '6px', fontSize: 'var(--font-small)' }}>
                 <Text strong>지원 형식:</Text>
                 <br />• CSV 파일 (.csv)
                 <br />• 최대 크기: 50MB
@@ -541,7 +541,7 @@ const FileUpload = ({ onDataLoaded, setLoading, moduleType = 'default' }) => {
                       borderRadius: '6px',
                       textAlign: 'center'
                     }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                      <div style={{ fontSize: 'var(--font-large)', fontWeight: 'bold' }}>
                         {value.toLocaleString()}
                       </div>
                       <div style={{ color: '#666' }}>
@@ -563,7 +563,7 @@ const FileUpload = ({ onDataLoaded, setLoading, moduleType = 'default' }) => {
                   background: '#f0f8ff',
                   border: '1px solid #d9d9d9',
                   borderRadius: '4px',
-                  fontSize: '12px'
+                  fontSize: 'var(--font-small)'
                 }}>
                   {col}
                 </span>

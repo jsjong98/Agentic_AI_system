@@ -198,7 +198,7 @@ const Dashboard = ({
               value={serverStatus ? '연결됨' : '연결 안됨'}
               valueStyle={{ 
                 color: serverStatus ? '#3f8600' : '#cf1322',
-                fontSize: '1.2rem'
+                fontSize: 'var(--font-xlarge)'
               }}
               prefix={serverStatus ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
             />
@@ -212,7 +212,7 @@ const Dashboard = ({
               value={weightResults ? apiUtils.formatNumber(weightResults.best_f1_score) : '미계산'}
               valueStyle={{ 
                 color: weightResults ? apiUtils.getPerformanceColor(weightResults.best_f1_score, 'f1_score') : '#666',
-                fontSize: '1.2rem'
+                fontSize: 'var(--font-xlarge)'
               }}
               prefix={<TrophyOutlined />}
             />
@@ -226,7 +226,7 @@ const Dashboard = ({
               value={thresholdResults ? `${thresholdResults.summary?.length || 0}개` : '0개'}
               valueStyle={{ 
                 color: thresholdResults ? '#3f8600' : '#666',
-                fontSize: '1.2rem'
+                fontSize: 'var(--font-xlarge)'
               }}
               prefix={<BarChartOutlined />}
             />
@@ -240,7 +240,7 @@ const Dashboard = ({
               value={systemStats ? `${systemStats.active_workers}/${systemStats.total_workers}` : '0/5'}
               valueStyle={{ 
                 color: systemStats && systemStats.active_workers === systemStats.total_workers ? '#3f8600' : '#fa8c16',
-                fontSize: '1.2rem'
+                fontSize: 'var(--font-xlarge)'
               }}
               prefix={<UserOutlined />}
             />
@@ -297,9 +297,9 @@ const Dashboard = ({
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                <ClockCircleOutlined style={{ fontSize: '24px', marginBottom: '8px' }} />
+                <ClockCircleOutlined style={{ fontSize: 'var(--icon-medium)', marginBottom: '8px' }} />
                 <div>임계값이 아직 계산되지 않았습니다.</div>
-                <div style={{ fontSize: '12px' }}>데이터를 로드한 후 임계값 계산을 실행하세요.</div>
+                <div style={{ fontSize: 'var(--font-small)' }}>데이터를 로드한 후 임계값 계산을 실행하세요.</div>
               </div>
             )}
           </Card>
@@ -328,7 +328,7 @@ const Dashboard = ({
                         value={apiUtils.formatNumber(weightResults.best_f1_score)}
                         valueStyle={{ 
                           color: apiUtils.getPerformanceColor(weightResults.best_f1_score, 'f1_score'),
-                          fontSize: '1.1rem'
+                          fontSize: 'var(--font-large)'
                         }}
                       />
                     </Col>
@@ -338,7 +338,7 @@ const Dashboard = ({
                         value={apiUtils.formatPercentage(weightResults.performance_metrics?.accuracy)}
                         valueStyle={{ 
                           color: apiUtils.getPerformanceColor(weightResults.performance_metrics?.accuracy, 'accuracy'),
-                          fontSize: '1.1rem'
+                          fontSize: 'var(--font-large)'
                         }}
                       />
                     </Col>
@@ -367,9 +367,9 @@ const Dashboard = ({
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                <ClockCircleOutlined style={{ fontSize: '24px', marginBottom: '8px' }} />
+                <ClockCircleOutlined style={{ fontSize: 'var(--icon-medium)', marginBottom: '8px' }} />
                 <div>가중치가 아직 최적화되지 않았습니다.</div>
-                <div style={{ fontSize: '12px' }}>임계값 계산 후 가중치 최적화를 실행하세요.</div>
+                <div style={{ fontSize: 'var(--font-small)' }}>임계값 계산 후 가중치 최적화를 실행하세요.</div>
               </div>
             )}
           </Card>
@@ -420,7 +420,7 @@ const Dashboard = ({
                 <div>
                   <div>
                     <Text strong>{activity.title}</Text>
-                    <Text type="secondary" style={{ marginLeft: 8, fontSize: '12px' }}>
+                    <Text type="secondary" style={{ marginLeft: 8, fontSize: 'var(--font-small)' }}>
                       {activity.time}
                     </Text>
                   </div>

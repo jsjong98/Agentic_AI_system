@@ -21,7 +21,6 @@ import {
   TeamOutlined,
   NodeIndexOutlined,
   ShareAltOutlined,
-  SearchOutlined,
   ReloadOutlined,
   DownloadOutlined,
   BarChartOutlined,
@@ -406,7 +405,8 @@ const RelationshipAnalysis = ({
     }
   };
 
-  // 분석 유형별 라벨 반환
+  // 분석 유형별 라벨 반환 (향후 UI 개선 시 사용 예정)
+  // eslint-disable-next-line no-unused-vars
   const getAnalysisTypeLabel = (type) => {
     const labels = {
       department: '부서별 위험도',
@@ -1013,7 +1013,7 @@ const RelationshipAnalysis = ({
           />
           <span style={{ 
             marginLeft: 6, 
-            fontSize: '10px', 
+            fontSize: 'var(--font-tiny)', 
             minWidth: '38px', 
             textAlign: 'right', 
             fontWeight: '500',
@@ -1055,7 +1055,7 @@ const RelationshipAnalysis = ({
           />
           <span style={{ 
             marginLeft: 6, 
-            fontSize: '10px', 
+            fontSize: 'var(--font-tiny)', 
             minWidth: '38px', 
             textAlign: 'right', 
             fontWeight: '500',
@@ -1083,7 +1083,7 @@ const RelationshipAnalysis = ({
           />
           <span style={{ 
             marginLeft: 6, 
-            fontSize: '10px', 
+            fontSize: 'var(--font-tiny)', 
             minWidth: '38px', 
             textAlign: 'right', 
             fontWeight: '500',
@@ -1271,7 +1271,7 @@ const RelationshipAnalysis = ({
             
             {/* 도움말 텍스트 */}
             <div style={{ marginTop: 16, padding: 12, backgroundColor: '#f6f8fa', borderRadius: 6 }}>
-              <Text type="secondary" style={{ fontSize: '12px' }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                 {analysisType === 'department' ? (
                   <>
                     💡 <strong>부서별 위험도 분석:</strong> 선택한 부서에서 이직 위험도가 높은 상위 15명의 직원들을 시각화합니다.
@@ -1504,7 +1504,7 @@ const RelationshipAnalysis = ({
                   {networkData?.metadata && (
                     <>
                       <br />
-                      <Text type="secondary" style={{ fontSize: '11px', color: '#52c41a' }}>
+                      <Text type="secondary" style={{ fontSize: 'var(--font-small)', color: '#52c41a' }}>
                         ✅ <strong>실제 분석 데이터:</strong> {networkData.metadata.department} 부서 
                         (총 {networkData.metadata.total_employees}명 중 {networkData.metadata.analyzed_employees}명 분석됨)
                       </Text>
@@ -1514,7 +1514,7 @@ const RelationshipAnalysis = ({
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '100px 0' }}>
-                <NodeIndexOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />
+                <NodeIndexOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#d9d9d9' }} />
                 <div style={{ marginTop: 16 }}>
                   <Text type="secondary">관계 분석을 시작하여 네트워크 그래프를 확인하세요</Text>
                 </div>
@@ -1544,7 +1544,7 @@ const RelationshipAnalysis = ({
                       showInfo={false}
                       style={{ flex: 1, minWidth: 0 }}
                     />
-                    <span style={{ marginLeft: 8, fontSize: '11px', minWidth: '45px', textAlign: 'right', fontWeight: '500' }}>
+                    <span style={{ marginLeft: 8, fontSize: 'var(--font-small)', minWidth: '45px', textAlign: 'right', fontWeight: '500' }}>
                       {(selectedEmployee.centrality * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -1559,7 +1559,7 @@ const RelationshipAnalysis = ({
                       showInfo={false}
                       style={{ flex: 1, minWidth: 0 }}
                     />
-                    <span style={{ marginLeft: 8, fontSize: '11px', minWidth: '45px', textAlign: 'right', fontWeight: '500' }}>
+                    <span style={{ marginLeft: 8, fontSize: 'var(--font-small)', minWidth: '45px', textAlign: 'right', fontWeight: '500' }}>
                       {(selectedEmployee.influence_score * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -1574,7 +1574,7 @@ const RelationshipAnalysis = ({
                       showInfo={false}
                       style={{ flex: 1, minWidth: 0 }}
                     />
-                    <span style={{ marginLeft: 8, fontSize: '11px', minWidth: '45px', textAlign: 'right', fontWeight: '500' }}>
+                    <span style={{ marginLeft: 8, fontSize: 'var(--font-small)', minWidth: '45px', textAlign: 'right', fontWeight: '500' }}>
                       {(selectedEmployee.risk_level * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -1600,7 +1600,7 @@ const RelationshipAnalysis = ({
               </Space>
             ) : (
               <div style={{ textAlign: 'center', padding: '50px 0' }}>
-                <UserOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />
+                <UserOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#d9d9d9' }} />
                 <div style={{ marginTop: 16 }}>
                   <Text type="secondary">그래프에서 직원을 선택하세요</Text>
                 </div>
@@ -1630,7 +1630,7 @@ const RelationshipAnalysis = ({
                         pagination={{ pageSize: 8 }}
                         size="small"
                         scroll={{ y: 400, x: 'max-content' }}
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: 'var(--font-small)' }}
                       />
                     </Card>
                   </Col>
@@ -1645,7 +1645,7 @@ const RelationshipAnalysis = ({
                         pagination={{ pageSize: 8 }}
                         size="small"
                         scroll={{ y: 400, x: 'max-content' }}
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: 'var(--font-small)' }}
                       />
                     </Card>
                   </Col>
@@ -1666,7 +1666,7 @@ const RelationshipAnalysis = ({
                         pagination={{ pageSize: 8 }}
                         size="small"
                         scroll={{ y: 400, x: 'max-content' }}
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: 'var(--font-small)' }}
                       />
                     </Card>
                   </Col>
@@ -1681,7 +1681,7 @@ const RelationshipAnalysis = ({
                         pagination={{ pageSize: 8 }}
                         size="small"
                         scroll={{ y: 400, x: 'max-content' }}
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: 'var(--font-small)' }}
                       />
                     </Card>
                   </Col>

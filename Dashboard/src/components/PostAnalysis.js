@@ -958,6 +958,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                   throw new Error(`모델 학습 실패: ${trainResponse.status}`);
                 }
                 
+                // eslint-disable-next-line no-unused-vars
                 const trainResult = await trainResponse.json();
                 console.log('✅ Chronos: 모델 학습 완료');
                 updateAgentProgress('chronos', 50);
@@ -1065,6 +1066,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                           retryCount++;
                           if (retryCount <= maxRetries) {
                             console.warn(`Cognita 분석 재시도 ${retryCount}/${maxRetries} (직원 ${employeeId}): ${response.status}`);
+                            // eslint-disable-next-line no-loop-func
                             await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // 지수 백오프
                           } else {
                             console.error(`Cognita 분석 최종 실패 (직원 ${employeeId}): ${response.status}`);
@@ -1082,6 +1084,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                         }
                         
                         if (retryCount <= maxRetries) {
+                          // eslint-disable-next-line no-loop-func
                           await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
                         }
                       }
@@ -2089,7 +2092,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                                   value={(result.performance?.accuracy || result.test_performance?.accuracy) ? ((result.performance?.accuracy || result.test_performance?.accuracy) * 100) : 0} 
                                   precision={2}
                                   suffix="%" 
-                                  valueStyle={{ fontSize: '16px' }}
+                                  valueStyle={{ fontSize: 'var(--font-medium)' }}
                                 />
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2115,7 +2118,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                               />
                               {result.hyperparameters && (
                                 <div>
-                                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                                  <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                                     최적화된 하이퍼파라미터 저장됨
                                   </Text>
                                 </div>
@@ -2335,7 +2338,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                           value={optimizationResults.performance_summary.performance_metrics?.f1_score ? (optimizationResults.performance_summary.performance_metrics.f1_score * 100) : 0}
                           precision={2}
                           suffix="%"
-                          valueStyle={{ color: '#52c41a', fontSize: '24px' }}
+                          valueStyle={{ color: '#52c41a', fontSize: 'var(--font-xxlarge)' }}
                         />
                       </Col>
                       <Col span={6}>
@@ -2553,7 +2556,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                                     value={adjustedRiskResults.performance_metrics.f1_score ? (adjustedRiskResults.performance_metrics.f1_score * 100) : 0}
                                     precision={2}
                                     suffix="%"
-                                    valueStyle={{ color: '#52c41a', fontSize: '20px' }}
+                                    valueStyle={{ color: '#52c41a', fontSize: 'var(--font-xlarge)' }}
                                   />
                                 </Col>
                                 <Col span={6}>
@@ -2599,14 +2602,14 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                                         <div style={{ padding: '8px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '4px' }}>
                                           <Text strong style={{ color: '#52c41a' }}>TN: {adjustedRiskResults.confusion_matrix.true_negative}</Text>
                                           <br />
-                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 잔류</Text>
+                                          <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>예측 잔류</Text>
                                         </div>
                                       </Col>
                                       <Col span={12}>
                                         <div style={{ padding: '8px', backgroundColor: '#fff2e8', border: '1px solid #ffbb96', borderRadius: '4px' }}>
                                           <Text strong style={{ color: '#fa8c16' }}>FP: {adjustedRiskResults.confusion_matrix.false_positive}</Text>
                                           <br />
-                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 퇴사</Text>
+                                          <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>예측 퇴사</Text>
                                         </div>
                                       </Col>
                                     </Row>
@@ -2620,14 +2623,14 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                                         <div style={{ padding: '8px', backgroundColor: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '4px' }}>
                                           <Text strong style={{ color: '#f5222d' }}>FN: {adjustedRiskResults.confusion_matrix.false_negative}</Text>
                                           <br />
-                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 잔류</Text>
+                                          <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>예측 잔류</Text>
                                         </div>
                                       </Col>
                                       <Col span={12}>
                                         <div style={{ padding: '8px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '4px' }}>
                                           <Text strong style={{ color: '#52c41a' }}>TP: {adjustedRiskResults.confusion_matrix.true_positive}</Text>
                                           <br />
-                                          <Text type="secondary" style={{ fontSize: '12px' }}>예측 퇴사</Text>
+                                          <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>예측 퇴사</Text>
                                         </div>
                                       </Col>
                                     </Row>
@@ -2819,7 +2822,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                     <Row gutter={[16, 16]}>
                       <Col span={8}>
                         <div style={{ textAlign: 'center', padding: '16px' }}>
-                          <CheckCircleOutlined style={{ fontSize: '32px', color: '#52c41a', marginBottom: '8px' }} />
+                          <CheckCircleOutlined style={{ fontSize: 'var(--icon-large)', color: '#52c41a', marginBottom: '8px' }} />
                           <div>
                             <Text strong>서버 저장 완료</Text>
                             <br />
@@ -2829,7 +2832,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                       </Col>
                       <Col span={8}>
                         <div style={{ textAlign: 'center', padding: '16px' }}>
-                          <CheckCircleOutlined style={{ fontSize: '32px', color: '#52c41a', marginBottom: '8px' }} />
+                          <CheckCircleOutlined style={{ fontSize: 'var(--icon-large)', color: '#52c41a', marginBottom: '8px' }} />
                           <div>
                             <Text strong>배치 분석 연동</Text>
                             <br />
@@ -2839,7 +2842,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                       </Col>
                       <Col span={8}>
                         <div style={{ textAlign: 'center', padding: '16px' }}>
-                          <CheckCircleOutlined style={{ fontSize: '32px', color: '#52c41a', marginBottom: '8px' }} />
+                          <CheckCircleOutlined style={{ fontSize: 'var(--icon-large)', color: '#52c41a', marginBottom: '8px' }} />
                           <div>
                             <Text strong>실시간 조정</Text>
                             <br />
@@ -2858,7 +2861,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                           <div>
                             <Text strong>최적화 설정 파일</Text>
                             <br />
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                            <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                               {optimizationResults.saved_files.optimization_config?.split('/').pop() || 'bayesian_optimization_*.json'}
                             </Text>
                           </div>
@@ -2880,7 +2883,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                           <div>
                             <Text strong>상세 분석 데이터</Text>
                             <br />
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                            <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                               {optimizationResults.saved_files.detailed_data?.split('/').pop() || 'optimization_data_*.csv'}
                             </Text>
                           </div>
@@ -2901,7 +2904,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                           <div>
                             <Text strong>임계값 요약</Text>
                             <br />
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                            <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                               {optimizationResults.saved_files.threshold_summary?.split('/').pop() || 'threshold_summary_*.csv'}
                             </Text>
                           </div>

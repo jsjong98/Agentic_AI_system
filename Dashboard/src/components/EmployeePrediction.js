@@ -324,10 +324,10 @@ const EmployeePrediction = ({
                     </ResponsiveContainer>
                     
                     <div style={{ marginTop: -60 }}>
-                      <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>
+                      <div style={{ fontSize: 'var(--font-huge)', fontWeight: 'bold' }}>
                         {(predictionResult.weighted_prediction.weighted_score * 100).toFixed(1)}%
                       </div>
-                      <div style={{ fontSize: '1rem', color: '#666' }}>
+                      <div style={{ fontSize: 'var(--font-medium)', color: '#666' }}>
                         위험도 점수
                       </div>
                     </div>
@@ -342,7 +342,7 @@ const EmployeePrediction = ({
                     borderRadius: '8px',
                     textAlign: 'center'
                   }}>
-                    <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
+                    <div style={{ fontSize: 'var(--font-xxlarge)', marginBottom: '8px' }}>
                       {apiUtils.getRiskLevelIcon(predictionResult.weighted_prediction.risk_level)}
                       <Text strong style={{ 
                         marginLeft: '8px',
@@ -352,7 +352,7 @@ const EmployeePrediction = ({
                       </Text>
                     </div>
                     
-                    <div style={{ fontSize: '1.2rem', marginBottom: '16px' }}>
+                    <div style={{ fontSize: 'var(--font-xlarge)', marginBottom: '16px' }}>
                       <Text strong>
                         최종 예측: {predictionResult.weighted_prediction.prediction_label}
                       </Text>
@@ -362,7 +362,7 @@ const EmployeePrediction = ({
                       <Col span={12}>
                         <div>
                           <Text type="secondary">가중 점수</Text>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                          <div style={{ fontSize: 'var(--font-large)', fontWeight: 'bold' }}>
                             {apiUtils.formatNumber(predictionResult.weighted_prediction.weighted_score)}
                           </div>
                         </div>
@@ -370,7 +370,7 @@ const EmployeePrediction = ({
                       <Col span={12}>
                         <div>
                           <Text type="secondary">사용된 임계값</Text>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                          <div style={{ fontSize: 'var(--font-large)', fontWeight: 'bold' }}>
                             {apiUtils.formatNumber(predictionResult.weighted_prediction.threshold_used)}
                           </div>
                         </div>
@@ -407,7 +407,7 @@ const EmployeePrediction = ({
                           format={() => `${riskCount}/${totalCount} 위험`}
                           strokeColor={riskCount > totalCount / 2 ? '#ff4d4f' : '#52c41a'}
                         />
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                        <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                           {totalCount}개 Score 중 {riskCount}개가 위험으로 예측됨
                         </Text>
                       </div>
@@ -435,7 +435,7 @@ const EmployeePrediction = ({
                 Attrition 위험이 낮은 직원입니다. 
                 현재 상태를 유지하며 정기적인 모니터링을 권장합니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • 실제 이탈률: 약 1.5%<br/>
                 • 권장 조치: 현상 유지, 정기 면담
               </div>
@@ -454,7 +454,7 @@ const EmployeePrediction = ({
                 Attrition 위험이 중간 수준인 직원입니다. 
                 적극적인 관리와 개입이 필요합니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • 실제 이탈률: 약 44.3%<br/>
                 • 권장 조치: 면담, 업무 조정, 복리후생 개선
               </div>
@@ -473,7 +473,7 @@ const EmployeePrediction = ({
                 Attrition 위험이 매우 높은 직원입니다. 
                 즉시 집중적인 관리와 개입이 필요합니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • 실제 이탈률: 약 100%<br/>
                 • 권장 조치: 긴급 면담, 근무 환경 개선, 인센티브 제공
               </div>
