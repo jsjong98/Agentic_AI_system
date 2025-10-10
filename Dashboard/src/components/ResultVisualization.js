@@ -359,7 +359,7 @@ const ResultVisualization = ({
           className="card-shadow" 
           style={{ marginBottom: 24 }}
           extra={
-            <Text type="secondary" style={{ fontSize: '12px' }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
               {getChartInfo().description}
             </Text>
           }

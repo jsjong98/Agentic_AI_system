@@ -452,7 +452,7 @@ const SupervisorWorkflow = ({
                       <Avatar size="small" icon={<RobotOutlined />} />
                       <Text strong style={{ marginLeft: '8px' }}>{msg.agent}</Text>
                     </div>
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                       {msg.timestamp.toLocaleTimeString()}
                     </Text>
                   </div>
@@ -493,7 +493,7 @@ const SupervisorWorkflow = ({
                   <Card size="small">
                     <div style={{ textAlign: 'center' }}>
                       <Title level={4}>분석 완료</Title>
-                      <CheckCircleOutlined style={{ fontSize: '48px', color: '#52c41a' }} />
+                      <CheckCircleOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#52c41a' }} />
                     </div>
                   </Card>
                 </Col>

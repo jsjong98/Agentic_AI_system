@@ -172,7 +172,7 @@ const ExportResults = ({
                 >
                   <Text strong>상세 데이터 포함</Text>
                   <br />
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                  <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                     개별 직원 데이터 및 예측 결과 포함
                   </Text>
                 </Checkbox>
@@ -254,7 +254,7 @@ const ExportResults = ({
                     <div>
                       <div>{item.timestamp}</div>
                       {item.files && item.files.length > 0 && (
-                        <div style={{ fontSize: '12px', color: '#666' }}>
+                        <div style={{ fontSize: 'var(--font-small)', color: '#666' }}>
                           {item.files.length}개 파일 생성
                         </div>
                       )}
@@ -285,7 +285,7 @@ const ExportResults = ({
                 Excel에서 바로 열 수 있는 표 형식의 데이터입니다. 
                 데이터 분석이나 보고서 작성에 적합합니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • Excel, Google Sheets에서 직접 열기 가능<br/>
                 • 표 형태로 데이터 확인 용이<br/>
                 • 추가 분석 및 차트 생성 가능
@@ -308,7 +308,7 @@ const ExportResults = ({
                 프로그래밍에 친화적인 구조화된 데이터 형식입니다. 
                 API 연동이나 자동화 시스템에 적합합니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • 프로그래밍 언어에서 쉽게 파싱<br/>
                 • 중첩된 데이터 구조 표현 가능<br/>
                 • API 연동 및 자동화에 적합
@@ -324,7 +324,7 @@ const ExportResults = ({
           <Col xs={24} md={8}>
             <div>
               <Text strong>📊 데이터 분석</Text>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--font-small)', color: '#666', marginTop: 4 }}>
                 CSV 파일을 Excel이나 Python/R로 불러와서 추가 분석 수행
               </div>
             </div>
@@ -332,7 +332,7 @@ const ExportResults = ({
           <Col xs={24} md={8}>
             <div>
               <Text strong>📋 보고서 작성</Text>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--font-small)', color: '#666', marginTop: 4 }}>
                 결과 데이터를 PowerPoint나 Word 문서에 삽입하여 보고서 작성
               </div>
             </div>
@@ -340,7 +340,7 @@ const ExportResults = ({
           <Col xs={24} md={8}>
             <div>
               <Text strong>🔄 시스템 연동</Text>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--font-small)', color: '#666', marginTop: 4 }}>
                 JSON 데이터를 다른 시스템이나 데이터베이스로 자동 전송
               </div>
             </div>

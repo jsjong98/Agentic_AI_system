@@ -434,9 +434,9 @@ const WeightOptimization = ({
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-            <SwapOutlined style={{ fontSize: '24px', marginBottom: '8px' }} />
+            <SwapOutlined style={{ fontSize: 'var(--icon-medium)', marginBottom: '8px' }} />
             <div>여러 최적화 방법을 비교해보세요.</div>
-            <div style={{ fontSize: '12px' }}>Grid Search와 Scipy Optimization을 비교합니다.</div>
+            <div style={{ fontSize: 'var(--font-small)' }}>Grid Search와 Scipy Optimization을 비교합니다.</div>
           </div>
         )}
       </Card>
@@ -451,7 +451,7 @@ const WeightOptimization = ({
                 가우시안 프로세스를 사용하여 효율적으로 최적점을 탐색합니다. 
                 적은 반복으로도 좋은 결과를 얻을 수 있습니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • 권장: 정확한 결과가 필요한 경우<br/>
                 • 시간: 중간 (100-200회 반복)<br/>
                 • 성능: 높음
@@ -466,7 +466,7 @@ const WeightOptimization = ({
                 모든 가능한 조합을 체계적으로 탐색합니다. 
                 확실하지만 시간이 오래 걸릴 수 있습니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • 권장: 빠른 테스트가 필요한 경우<br/>
                 • 시간: 빠름 (3-5차원)<br/>
                 • 성능: 중간
@@ -481,7 +481,7 @@ const WeightOptimization = ({
                 수학적 최적화 알고리즘을 사용합니다. 
                 매우 빠르지만 지역 최적점에 빠질 수 있습니다.
               </Text>
-              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+              <div style={{ marginTop: 8, fontSize: 'var(--font-small)', color: '#666' }}>
                 • 권장: 빠른 결과가 필요한 경우<br/>
                 • 시간: 매우 빠름<br/>
                 • 성능: 변동적

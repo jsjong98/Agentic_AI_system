@@ -91,6 +91,73 @@ const GroupStatistics = ({
     }
   };
 
+  // 위험 요인 추출 함수
+  const extractRiskFactors = (employee) => {
+    const factors = [];
+    
+    try {
+      // 1. Key Insights에서 위험 요인 추출
+      if (employee.key_insights && Array.isArray(employee.key_insights)) {
+        employee.key_insights.forEach(insight => {
+          // insight에서 주요 키워드 추출
+          const lowerInsight = insight.toLowerCase();
+          if (lowerInsight.includes('만족도') || lowerInsight.includes('satisfaction')) {
+            factors.push('낮은 업무 만족도');
+          }
+          if (lowerInsight.includes('근무시간') || lowerInsight.includes('overtime') || lowerInsight.includes('워라밸')) {
+            factors.push('장시간 근무');
+          }
+          if (lowerInsight.includes('급여') || lowerInsight.includes('salary') || lowerInsight.includes('월급')) {
+            factors.push('낮은 급여 수준');
+          }
+          if (lowerInsight.includes('승진') || lowerInsight.includes('promotion')) {
+            factors.push('승진 기회 부족');
+          }
+          if (lowerInsight.includes('거리') || lowerInsight.includes('distance') || lowerInsight.includes('출퇴근')) {
+            factors.push('긴 출퇴근 거리');
+          }
+          if (lowerInsight.includes('교육') || lowerInsight.includes('training')) {
+            factors.push('교육 기회 부족');
+          }
+          if (lowerInsight.includes('관계') || lowerInsight.includes('relationship') || lowerInsight.includes('소통')) {
+            factors.push('낮은 관계 만족도');
+          }
+        });
+      }
+      
+      // 2. 각 에이전트별 위험 요인 추출
+      // Structura (조직 구조)
+      if (employee.structura_score > 0.6) {
+        factors.push('조직 구조 불만');
+      }
+      
+      // Chronos (시계열 패턴)
+      if (employee.chronos_score > 0.6) {
+        factors.push('부정적 근무 패턴');
+      }
+      
+      // Cognita (관계망)
+      if (employee.cognita_score > 0.6) {
+        factors.push('낮은 조직 내 영향력');
+      }
+      
+      // Sentio (감정 분석)
+      if (employee.sentio_score > 0.6) {
+        factors.push('부정적 업무 태도');
+      }
+      
+      // Agora (시장 상황)
+      if (employee.agora_score > 0.6) {
+        factors.push('높은 외부 이직 유인');
+      }
+      
+    } catch (error) {
+      console.warn('위험 요인 추출 오류:', error);
+    }
+    
+    return factors;
+  };
+
   // API 데이터로 통계 생성 (comprehensive_report.json 기반)
   const generateStatisticsFromAPIData = (results) => {
     const groupedStats = {};
@@ -138,9 +205,20 @@ const GroupStatistics = ({
       } else if (riskLevel === 'LOW') {
         groupedStats[groupKey].low_risk++;
       }
+      
+      // 위험 요인 수집 (고위험 및 중위험 직원만)
+      if (riskLevel === 'HIGH' || riskLevel === 'MEDIUM') {
+        const riskFactors = extractRiskFactors(employee);
+        riskFactors.forEach(factor => {
+          if (!groupedStats[groupKey].common_risk_factors[factor]) {
+            groupedStats[groupKey].common_risk_factors[factor] = 0;
+          }
+          groupedStats[groupKey].common_risk_factors[factor]++;
+        });
+      }
     });
     
-    // 평균 위험도 계산
+    // 평균 위험도 계산 및 위험 요인 정렬
     Object.keys(groupedStats).forEach(groupKey => {
       const scores = groupedStats[groupKey].risk_scores;
       if (scores.length > 0) {
@@ -148,7 +226,18 @@ const GroupStatistics = ({
       }
       delete groupedStats[groupKey].risk_scores; // 임시 배열 제거
       
+      // 위험 요인을 빈도순으로 정렬
+      const sortedFactors = Object.entries(groupedStats[groupKey].common_risk_factors)
+        .sort(([, a], [, b]) => b - a)
+        .reduce((obj, [key, value]) => {
+          obj[key] = value;
+          return obj;
+        }, {});
+      
+      groupedStats[groupKey].common_risk_factors = sortedFactors;
+      
       console.log(`📊 ${groupKey}: 고위험 ${groupedStats[groupKey].high_risk}명, 중위험 ${groupedStats[groupKey].medium_risk}명, 저위험 ${groupedStats[groupKey].low_risk}명`);
+      console.log(`   주요 위험 요인:`, Object.keys(sortedFactors).slice(0, 3).join(', '));
     });
     
     setStatistics({
@@ -252,7 +341,8 @@ const GroupStatistics = ({
     }
   };
 
-  // 배치 분석 결과로부터 통계 생성
+  // 배치 분석 결과로부터 통계 생성 (현재는 API 방식 사용, 향후 오프라인 모드용으로 보관)
+  // eslint-disable-next-line no-unused-vars
   const generateStatisticsFromBatchResults = () => {
     // globalBatchResults가 배열인지 객체인지 확인
     const results = Array.isArray(globalBatchResults) ? globalBatchResults : 
@@ -736,26 +826,90 @@ const GroupStatistics = ({
           </Card>
         </Col>
 
-        {/* 위험 요인 분석 (부서별일 때만) */}
-        {groupBy === 'department' && statistics && (
+        {/* 위험 요인 분석 */}
+        {statistics && (
           <Col span={24}>
-            <Card title="부서별 주요 위험 요인 분석">
+            <Card title={
+              groupBy === 'department' ? '부서별 주요 위험 요인 분석' :
+              groupBy === 'job_role' ? '직무별 주요 위험 요인 분석' :
+              '직급별 주요 위험 요인 분석'
+            }>
               <Row gutter={[16, 16]}>
-                {Object.entries(statistics.statistics).map(([deptName, stats]) => (
-                  <Col span={8} key={deptName}>
-                    <Card size="small" title={deptName}>
-                      <Space direction="vertical" style={{ width: '100%' }}>
-                        <Text strong>위험 요인 TOP 3:</Text>
-                        {Object.entries(stats.common_risk_factors || {}).slice(0, 3).map(([factor, count]) => (
-                          <div key={factor} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Text>{factor}</Text>
-                            <Tag color="red">{count}건</Tag>
-                          </div>
-                        ))}
-                      </Space>
-                    </Card>
-                  </Col>
-                ))}
+                {Object.entries(statistics.statistics).map(([deptName, stats]) => {
+                  const topFactors = Object.entries(stats.common_risk_factors || {}).slice(0, 3);
+                  const hasFactors = topFactors.length > 0;
+                  const totalGroups = Object.keys(statistics.statistics).length;
+                  // 그룹 개수에 따라 칼럼 크기 조정 (3개 이하: 8, 4-6개: 6, 7개 이상: 4)
+                  const colSpan = totalGroups <= 3 ? 8 : totalGroups <= 6 ? 6 : 4;
+                  
+                  return (
+                    <Col span={colSpan} key={deptName}>
+                      <Card 
+                        size="small" 
+                        title={
+                          <Space>
+                            <Text strong>{deptName}</Text>
+                            <Tag color={stats.high_risk > 0 ? 'red' : 'green'}>
+                              위험군: {stats.high_risk + stats.medium_risk}명
+                            </Tag>
+                          </Space>
+                        }
+                      >
+                        <Space direction="vertical" style={{ width: '100%' }} size="small">
+                          <Text strong style={{ color: '#1890ff' }}>🎯 주요 위험 요인 TOP 3</Text>
+                          
+                          {hasFactors ? (
+                            <>
+                              {topFactors.map(([factor, count], index) => {
+                                const colors = ['#ff4d4f', '#fa8c16', '#faad14'];
+                                const medals = ['🥇', '🥈', '🥉'];
+                                
+                                return (
+                                  <div 
+                                    key={factor} 
+                                    style={{ 
+                                      display: 'flex', 
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      padding: '8px',
+                                      backgroundColor: '#f5f5f5',
+                                      borderRadius: '4px',
+                                      border: `1px solid ${colors[index]}`
+                                    }}
+                                  >
+                                    <Space>
+                                      <span>{medals[index]}</span>
+                                      <Text>{factor}</Text>
+                                    </Space>
+                                    <Tag color={colors[index]}>{count}명</Tag>
+                                  </div>
+                                );
+                              })}
+                              <Text type="secondary" style={{ fontSize: 'var(--font-small)', marginTop: '8px' }}>
+                                💡 총 {stats.high_risk + stats.medium_risk}명의 위험군에서 추출된 요인입니다
+                              </Text>
+                            </>
+                          ) : (
+                            <div style={{ 
+                              padding: '16px', 
+                              textAlign: 'center',
+                              backgroundColor: '#f0f9ff',
+                              borderRadius: '4px',
+                              border: '1px dashed #91d5ff'
+                            }}>
+                              <Text type="secondary">
+                                ✨ 위험 요인이 발견되지 않았습니다<br/>
+                                <Text style={{ fontSize: 'var(--font-small)' }}>
+                                  (안정적인 그룹입니다)
+                                </Text>
+                              </Text>
+                            </div>
+                          )}
+                        </Space>
+                      </Card>
+                    </Col>
+                  );
+                })}
               </Row>
             </Card>
           </Col>

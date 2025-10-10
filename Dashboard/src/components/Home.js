@@ -434,242 +434,6 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
              '• "개선 방안", "통계 보기"\n\n' +
              'Supervisor 서버(5006 포트)가 실행 중인지 확인해주세요.';
     }
-    
-    // 아래 코드는 LLM이 실패했을 때 폴백용으로 보관 (도달하지 않음)
-    const latestPrediction = predictionHistory.length > 0 ? predictionHistory[0] : null;
-    
-    // 기본 응답 템플릿 (폴백용)
-    const responses = {
-      '최근': () => {
-        if (!latestPrediction) {
-          return '아직 분석된 데이터가 없습니다. 배치 분석을 먼저 실행해주세요.';
-        }
-        const riskRate = (latestPrediction.highRiskCount / latestPrediction.totalEmployees * 100).toFixed(1);
-        return `최근 분석 결과(${new Date(latestPrediction.timestamp).toLocaleDateString('ko-KR')}):\n\n` +
-               `• 전체 직원: ${latestPrediction.totalEmployees.toLocaleString()}명\n` +
-               `• 고위험군: ${latestPrediction.highRiskCount}명 (${riskRate}%)\n` +
-               `• 중위험군: ${latestPrediction.mediumRiskCount}명\n` +
-               `• 저위험군: ${latestPrediction.lowRiskCount}명\n` +
-               `• 모델 정확도: ${latestPrediction.accuracy}%\n\n` +
-               `${latestPrediction.summary}`;
-      },
-      '위험': () => {
-        if (!latestPrediction) {
-          return '분석된 데이터가 없어 위험 요인을 파악할 수 없습니다.';
-        }
-        let response = `현재 고위험군 ${latestPrediction.highRiskCount}명의 주요 특징:\n\n`;
-        
-        if (latestPrediction.keyInsights && latestPrediction.keyInsights.length > 0) {
-          latestPrediction.keyInsights.forEach((insight, index) => {
-            response += `${index + 1}. ${insight}\n`;
-          });
-        }
-        
-        response += '\n개별 면담과 맞춤형 관리 방안 수립을 권장합니다.';
-        return response;
-      },
-      '개선': () => {
-        return '이직 위험 개선을 위한 권장 사항:\n\n' +
-               '🎯 즉시 실행 가능한 조치:\n' +
-               '• 고위험군 직원 개별 면담 실시\n' +
-               '• 업무 만족도 조사 및 피드백 수집\n' +
-               '• 경력 개발 계획 수립 지원\n\n' +
-               '📈 중장기 개선 방안:\n' +
-               '• 원격근무 및 유연근무제 확대\n' +
-               '• 승진 및 평가 시스템 투명성 강화\n' +
-               '• 팀별 소통 활성화 프로그램\n' +
-               '• 교육 및 역량 개발 기회 확대\n\n' +
-               '정기적인 모니터링을 통해 개선 효과를 측정하세요.';
-      },
-      '통계': () => {
-        if (!latestPrediction) {
-          return '통계 정보를 제공할 분석 데이터가 없습니다.';
-        }
-        
-        let response = `📊 최신 예측 모델 성능:\n` +
-                      `• 정확도: ${latestPrediction.accuracy}%\n` +
-                      `• 분석 일시: ${new Date(latestPrediction.timestamp).toLocaleString('ko-KR')}\n\n`;
-        
-        if (latestPrediction.departmentStats) {
-          response += '🏢 부서별 위험도 현황:\n';
-          Object.entries(latestPrediction.departmentStats)
-            .sort(([,a], [,b]) => ((b.high + b.medium) / b.total) - ((a.high + a.medium) / a.total))
-            .forEach(([dept, stats]) => {
-              const riskRate = ((stats.high + stats.medium) / stats.total * 100).toFixed(1);
-              response += `• ${dept}: ${riskRate}% (${stats.high + stats.medium}/${stats.total}명)\n`;
-            });
-        }
-        
-        return response;
-      },
-      '검색': async (searchQuery) => {
-        try {
-          const response = await fetch(`http://localhost:5006/api/search/employees?query=${encodeURIComponent(searchQuery)}&limit=10`);
-          const data = await response.json();
-          
-          if (data.success && data.employees.length > 0) {
-            let result = `🔍 "${searchQuery}" 검색 결과 (${data.total}명):\n\n`;
-            
-            data.employees.forEach((emp, index) => {
-              const riskIcon = emp.risk_level === 'HIGH' ? '🔴' : 
-                             emp.risk_level === 'MEDIUM' ? '🟡' : '🟢';
-              result += `${index + 1}. 직원 ${emp.employee_id}\n`;
-              result += `   • 부서: ${emp.department.replace('_', ' ')}\n`;
-              result += `   • 직무: ${emp.job_role}\n`;
-              result += `   • 직급: Level ${emp.job_level}\n`;
-              result += `   • 위험도: ${riskIcon} ${emp.risk_level}\n\n`;
-            });
-            
-            result += `💡 특정 직원의 상세 정보를 보려면 "직원 [번호] 상세"라고 입력하세요.`;
-            return result;
-          } else {
-            return `"${searchQuery}"에 대한 검색 결과가 없습니다.\n\n` +
-                   `💡 검색 팁:\n` +
-                   `• 직원 번호로 검색: "133", "1001"\n` +
-                   `• 부서로 검색: "Human Resources", "Sales"\n` +
-                   `• 위험도로 검색: "고위험", "HIGH"`;
-          }
-        } catch (error) {
-          return '검색 중 오류가 발생했습니다. 서버 연결을 확인해주세요.';
-        }
-      },
-      '직원': async (employeeId) => {
-        try {
-          const response = await fetch(`http://localhost:5006/api/employee/${employeeId}/details`);
-          const data = await response.json();
-          
-          if (data.success) {
-            const emp = data.employee_data;
-            let result = `👤 직원 ${employeeId} 상세 정보:\n\n`;
-            
-            if (emp.employee_info) {
-              const info = emp.employee_info;
-              result += `📋 기본 정보:\n`;
-              result += `• 부서: ${info.Department || 'N/A'}\n`;
-              result += `• 직무: ${info.JobRole || 'N/A'}\n`;
-              result += `• 직급: Level ${info.JobLevel || 'N/A'}\n`;
-              result += `• 나이: ${info.Age || 'N/A'}세\n`;
-              result += `• 근속년수: ${info.YearsAtCompany || 'N/A'}년\n\n`;
-            }
-            
-            if (emp.comprehensive_report) {
-              const report = emp.comprehensive_report;
-              const riskScore = report.risk_assessment?.overall_risk_score || 0;
-              const riskLevel = riskScore >= 0.7 ? '🔴 HIGH' : 
-                              riskScore >= 0.3 ? '🟡 MEDIUM' : '🟢 LOW';
-              
-              result += `⚠️ 위험도 평가:\n`;
-              result += `• 종합 위험도: ${riskLevel} (${(riskScore * 100).toFixed(1)}%)\n`;
-              result += `• 이직 확률: ${((report.prediction?.attrition_probability || 0) * 100).toFixed(1)}%\n\n`;
-            }
-            
-            if (emp.visualizations && emp.visualizations.length > 0) {
-              result += `📊 시각화 자료: ${emp.visualizations.length}개 파일\n`;
-              result += `• ${emp.visualizations.join(', ')}\n\n`;
-            }
-            
-            result += `📁 상세 분석 결과는 다음 경로에서 확인 가능:\n`;
-            result += `${emp.directory_path}`;
-            
-            return result;
-          } else {
-            return `직원 ${employeeId}를 찾을 수 없습니다.\n\n` +
-                   `💡 올바른 직원 번호를 입력했는지 확인해주세요.`;
-          }
-        } catch (error) {
-          return '직원 정보 조회 중 오류가 발생했습니다.';
-        }
-      },
-      '부서': (input) => {
-        if (!latestPrediction || !latestPrediction.departmentStats) {
-          return '부서별 데이터가 없습니다.';
-        }
-        
-        // 입력에서 부서명 추출 시도
-        const deptNames = Object.keys(latestPrediction.departmentStats);
-        const mentionedDept = deptNames.find(dept => input.includes(dept));
-        
-        if (mentionedDept) {
-          const stats = latestPrediction.departmentStats[mentionedDept];
-          const riskRate = ((stats.high + stats.medium) / stats.total * 100).toFixed(1);
-          return `${mentionedDept} 부서 현황:\n\n` +
-                 `• 전체 인원: ${stats.total}명\n` +
-                 `• 고위험: ${stats.high}명\n` +
-                 `• 중위험: ${stats.medium}명\n` +
-                 `• 저위험: ${stats.low}명\n` +
-                 `• 위험도: ${riskRate}%\n\n` +
-                 `${mentionedDept} 부서에 특화된 관리 방안이 필요합니다.`;
-        }
-        
-        return '구체적인 부서명을 말씀해 주시면 해당 부서의 상세 정보를 제공해드리겠습니다.';
-      },
-      default: predictionHistory.length > 0 
-        ? '안녕하세요! 다음과 같은 질문을 해보세요:\n\n' +
-          '📈 "최근 분석 결과는?" - 최신 예측 결과 요약\n' +
-          '⚠️ "위험 요인은?" - 고위험군 특징 분석\n' +
-          '💡 "개선 방안은?" - 이직 위험 개선 방법\n' +
-          '📊 "통계 정보는?" - 모델 성능 및 부서별 현황\n' +
-          '🏢 "IT 부서는?" - 특정 부서 상세 정보\n' +
-          '🔍 "검색 [키워드]" - 직원/부서 검색\n' +
-          '👤 "직원 [번호] 상세" - 특정 직원 정보\n\n' +
-          '구체적인 질문일수록 더 정확한 답변을 드릴 수 있습니다!'
-        : '안녕하세요! 현재 분석된 데이터가 없습니다.\n\n' +
-          '🚀 먼저 "배치 분석" 메뉴에서 직원 데이터를 업로드하고 분석을 실행해주세요.\n\n' +
-          '분석이 완료되면 다음과 같은 질문을 할 수 있습니다:\n' +
-          '• 최근 분석 결과\n' +
-          '• 위험 요인 분석\n' +
-          '• 개선 방안 제안\n' +
-          '• 부서별 통계\n' +
-          '• 직원 검색 및 상세 조회\n\n' +
-          '지금 분석을 시작하시겠어요?'
-    };
-
-    // 키워드 매칭 및 응답 생성
-    let responseContent = responses.default;
-    
-    // 검색 명령어 처리
-    if (userInput.includes('검색')) {
-      const searchQuery = userInput.replace(/검색\s*/, '').trim();
-      if (searchQuery) {
-        responseContent = await responses['검색'](searchQuery);
-      } else {
-        responseContent = '검색할 키워드를 입력해주세요. 예: "검색 133" 또는 "검색 Human Resources"';
-      }
-    }
-    // 직원 상세 조회 처리
-    else if (userInput.includes('직원') && (userInput.includes('상세') || userInput.includes('정보'))) {
-      const employeeMatch = userInput.match(/직원\s*(\d+)/);
-      if (employeeMatch) {
-        const employeeId = employeeMatch[1];
-        responseContent = await responses['직원'](employeeId);
-      } else {
-        responseContent = '직원 번호를 입력해주세요. 예: "직원 133 상세"';
-      }
-    }
-    // 기존 키워드 매칭
-    else {
-      for (const [key, responseFunc] of Object.entries(responses)) {
-        if (key !== 'default' && key !== '검색' && key !== '직원' && userInput.includes(key)) {
-          responseContent = typeof responseFunc === 'function' ? responseFunc(userInput) : responseFunc;
-          break;
-        }
-      }
-      
-      // 부서명 체크 (특별 처리)
-      if (responseContent === responses.default && latestPrediction?.departmentStats) {
-        const deptNames = Object.keys(latestPrediction.departmentStats);
-        if (deptNames.some(dept => userInput.includes(dept))) {
-          responseContent = responses['부서'](userInput);
-        }
-      }
-    }
-
-    return {
-      id: Date.now() + 1,
-      type: 'bot',
-      content: responseContent,
-      timestamp: new Date().toISOString()
-    };
   };
 
   // 예측 결과 상세 보기
@@ -752,7 +516,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
                 <Title level={2} style={{ color: 'white', margin: 0 }}>
                   🏠 Retain Sentinel 360 홈
                 </Title>
-                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 'var(--font-medium)' }}>
                   AI 기반 이직 예측 및 분석 시스템에 오신 것을 환영합니다
                 </Text>
               </Col>
@@ -982,7 +746,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                  <BarChartOutlined style={{ fontSize: '48px', color: '#d9d9d9', marginBottom: '16px' }} />
+                  <BarChartOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#d9d9d9', marginBottom: '16px' }} />
                   <Title level={4} style={{ color: '#999' }}>
                     아직 분석 결과가 없습니다
                   </Title>
@@ -1072,7 +836,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
                 />
               ) : (
                 <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                  <HistoryOutlined style={{ fontSize: '48px', color: '#d9d9d9', marginBottom: '16px' }} />
+                  <HistoryOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#d9d9d9', marginBottom: '16px' }} />
                   <Title level={4} style={{ color: '#999' }}>
                     분석 히스토리가 없습니다
                   </Title>
@@ -1095,7 +859,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
               <Timeline
                 items={[
                   {
-                    dot: <TeamOutlined style={{ fontSize: '16px' }} />,
+                    dot: <TeamOutlined style={{ fontSize: 'var(--icon-small)' }} />,
                     children: (
                       <div>
                         <Text strong>배치 분석</Text>
@@ -1109,7 +873,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
                     )
                   },
                   {
-                    dot: <BarChartOutlined style={{ fontSize: '16px' }} />,
+                    dot: <BarChartOutlined style={{ fontSize: 'var(--icon-small)' }} />,
                     children: (
                       <div>
                         <Text strong>단체 통계</Text>
@@ -1123,7 +887,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
                     )
                   },
                   {
-                    dot: <CheckCircleOutlined style={{ fontSize: '16px' }} />,
+                    dot: <CheckCircleOutlined style={{ fontSize: 'var(--icon-small)' }} />,
                     children: (
                       <div>
                         <Text strong>사후 분석</Text>
@@ -1269,7 +1033,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
                 >
                   히스토리 가져오기 (JSON 파일에서 복원)
                 </Button>
-                <Text type="secondary" style={{ fontSize: '12px' }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-small)' }}>
                   * 가져오기 시 기존 히스토리와 병합되며, 중복은 자동으로 제거됩니다.
                 </Text>
               </Space>
@@ -1284,7 +1048,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
               >
                 모든 히스토리 삭제
               </Button>
-              <Text type="secondary" style={{ fontSize: '12px', marginTop: '8px', display: 'block' }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-small)', marginTop: '8px', display: 'block' }}>
                 * 이 작업은 되돌릴 수 없습니다. 삭제 전 백업을 권장합니다.
               </Text>
             </Card>
