@@ -312,12 +312,17 @@ const ReportGeneration = () => {
     try {
       setLoading(true);
       
-      // 1. results 폴더에서 직접 로드 (최우선)
-      console.log('🔄 Step 1: results 폴더 확인...');
+      // 1. results 폴더에서 직접 로드 (최우선) - 항상 최신 데이터!
+      console.log('🔄 Step 1: results 폴더에서 comprehensive_report.json 기반 로드...');
       const resultsData = await loadFromResultsFolder();
       if (resultsData && resultsData.results && resultsData.results.length > 0) {
+        console.log(`✅ API에서 로드한 위험도 분포:`, {
+          high: resultsData.results.filter(r => r.risk_level === 'HIGH').length,
+          medium: resultsData.results.filter(r => r.risk_level === 'MEDIUM').length,
+          low: resultsData.results.filter(r => r.risk_level === 'LOW').length
+        });
         setBatchResults(resultsData);
-        message.success(`results 폴더에서 ${resultsData.total_employees}명의 직원 데이터 로드 완료`);
+        message.success(`최신 데이터 로드: ${resultsData.total_employees}명 (comprehensive_report.json 기준)`);
         return;
       }
       

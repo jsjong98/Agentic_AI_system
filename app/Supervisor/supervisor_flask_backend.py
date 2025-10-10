@@ -660,6 +660,9 @@ def batch_analyze():
         batch_results = []
         successful_count = 0
         
+        # Integration API로 종합 평가 요청 준비
+        import requests
+        
         for i, employee_id in enumerate(employee_ids):
             employee_result = {
                 'employee_id': employee_id,
@@ -678,6 +681,82 @@ def batch_analyze():
                     else:
                         employee_result['success'] = False
                         logger.warning(f"⚠️ 직원 {employee_id}: {agent_name} 분석 실패")
+            
+            # comprehensive_report.json 파일에서 직접 읽기 (API 호출 대신)
+            if employee_result['success']:
+                try:
+                    # 직원 정보를 원본 데이터에서 추출
+                    employee_data = None
+                    if 'employees' in data:
+                        for emp in data['employees']:
+                            emp_id = emp.get('EmployeeNumber') or emp.get('employee_id') or emp.get('id')
+                            if str(emp_id) == str(employee_id):
+                                employee_data = emp
+                                break
+                    
+                    if not employee_data:
+                        logger.warning(f"⚠️ 직원 {employee_id}: 원본 데이터에서 직원 정보를 찾을 수 없습니다.")
+                        employee_data = {}
+                    
+                    department = employee_data.get('Department', 'Unknown')
+                    job_role = employee_data.get('JobRole', 'Unknown')
+                    job_level = employee_data.get('JobLevel', 'Unknown')
+                    
+                    # 부서명 정규화
+                    dept_normalized = department.replace(' ', '_').replace('&', '_')
+                    
+                    # 계층적 경로: results/Department/JobRole/JobLevel/employee_*/comprehensive_report.json
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    comprehensive_report_path = os.path.join(
+                        project_root, 'results', dept_normalized, job_role, str(job_level), 
+                        f'employee_{employee_id}', 'comprehensive_report.json'
+                    )
+                    
+                    if os.path.exists(comprehensive_report_path):
+                        with open(comprehensive_report_path, 'r', encoding='utf-8') as f:
+                            comp_report = json.load(f)
+                        
+                        comp_assessment = comp_report.get('comprehensive_assessment', {})
+                        
+                        # analysis_result 구조에 comprehensive_assessment 추가
+                        employee_result['analysis_result'] = {
+                            'comprehensive_assessment': comp_assessment,
+                            'combined_analysis': {
+                                'integrated_assessment': comp_assessment
+                            },
+                            'employee_data': employee_data
+                        }
+                        
+                        risk_level = comp_assessment.get('overall_risk_level', 'UNKNOWN')
+                        risk_score = comp_assessment.get('overall_risk_score', 0)
+                        logger.info(f"✅ 직원 {employee_id}: 종합 평가 로드 - {risk_level} ({risk_score:.2%})")
+                    else:
+                        # 파일이 없으면 단순 경로 시도 (하위 호환성)
+                        simple_path = os.path.join(
+                            project_root, 'results', dept_normalized, 
+                            f'employee_{employee_id}', 'comprehensive_report.json'
+                        )
+                        
+                        if os.path.exists(simple_path):
+                            with open(simple_path, 'r', encoding='utf-8') as f:
+                                comp_report = json.load(f)
+                            
+                            comp_assessment = comp_report.get('comprehensive_assessment', {})
+                            
+                            employee_result['analysis_result'] = {
+                                'comprehensive_assessment': comp_assessment,
+                                'combined_analysis': {
+                                    'integrated_assessment': comp_assessment
+                                },
+                                'employee_data': employee_data
+                            }
+                            
+                            logger.info(f"✅ 직원 {employee_id}: 종합 평가 로드 (단순 경로)")
+                        else:
+                            logger.warning(f"⚠️ 직원 {employee_id}: comprehensive_report.json 파일 없음 - {comprehensive_report_path}")
+                            
+                except Exception as file_error:
+                    logger.warning(f"⚠️ 직원 {employee_id}: 파일 읽기 오류 - {str(file_error)}")
             
             batch_results.append(employee_result)
             if employee_result['success']:
@@ -935,124 +1014,142 @@ def normalize_risk_level(risk_level: str = None, risk_score: float = None) -> st
 def load_latest_results_data(base_context: Dict[str, Any]) -> Dict[str, Any]:
     """
     results/ 폴더에서 최신 배치 분석 결과를 로드하여 컨텍스트를 풍부하게 만듦
-    배치 분석 결과의 실제 risk_level과 risk_score를 기반으로 통계 생성
+    부서별 폴더의 개별 직원 comprehensive_report.json 파일들을 직접 읽어서 정확한 통계 생성
     """
     enriched_context = base_context.copy()
     
     try:
         import os
+        import glob
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         results_dir = os.path.join(project_root, 'results')
-        batch_analysis_dir = os.path.join(results_dir, 'batch_analysis')
         
-        # batch_analysis 폴더에서 최신 individual_results 파일 찾기
-        if os.path.exists(batch_analysis_dir):
-            individual_files = [f for f in os.listdir(batch_analysis_dir) 
-                              if f.startswith('individual_results_') and f.endswith('.json')]
+        # 부서별 폴더에서 개별 직원 파일들을 읽기
+        # 계층적 구조: results/Department/JobRole/JobLevel/employee_*/comprehensive_report.json
+        department_dirs = ['Human_Resources', 'Research_&_Development', 'Sales']
+        
+        all_employees = []
+        
+        for dept in department_dirs:
+            dept_path = os.path.join(results_dir, dept)
+            if not os.path.exists(dept_path):
+                continue
             
-            if individual_files:
-                # 가장 최신 파일 선택
-                latest_file = sorted(individual_files)[-1]
-                file_path = os.path.join(batch_analysis_dir, latest_file)
+            # 계층적 구조: Department/**/employee_*/comprehensive_report.json
+            # glob으로 모든 하위 디렉토리의 employee_ 폴더 찾기
+            employee_dirs = glob.glob(os.path.join(dept_path, '**', 'employee_*'), recursive=True)
+            
+            for emp_dir in employee_dirs:
+                comprehensive_file = os.path.join(emp_dir, 'comprehensive_report.json')
+                if os.path.exists(comprehensive_file):
+                    try:
+                        with open(comprehensive_file, 'r', encoding='utf-8') as f:
+                            comp_data = json.load(f)
+                        
+                        # 위험도 정보 추출
+                        overall_assessment = comp_data.get('comprehensive_assessment', {})
+                        risk_score = overall_assessment.get('overall_risk_score', 0)
+                        risk_level = overall_assessment.get('overall_risk_level', 'UNKNOWN')
+                        
+                        # 직원 기본 정보
+                        employee_info_file = os.path.join(emp_dir, 'employee_info.json')
+                        department = dept.replace('_', ' ')
+                        employee_id = os.path.basename(emp_dir).replace('employee_', '')
+                        
+                        # worker_contributions에서 에이전트 점수 추출
+                        worker_contrib = comp_data.get('worker_contributions', {})
+                        
+                        all_employees.append({
+                            'employee_id': employee_id,
+                            'department': department,
+                            'risk_score': risk_score,
+                            'risk_level': risk_level,
+                            'agent_scores': {
+                                'structura': worker_contrib.get('structura', {}).get('score', 0),
+                                'chronos': worker_contrib.get('chronos', {}).get('score', 0),
+                                'cognita': worker_contrib.get('cognita', {}).get('score', 0),
+                                'sentio': worker_contrib.get('sentio', {}).get('score', 0),
+                                'agora': worker_contrib.get('agora', {}).get('score', 0)
+                            }
+                        })
+                    except Exception as e:
+                        logger.warning(f"⚠️ 직원 {emp_dir} 파일 로드 실패: {e}")
+                        continue
+        
+        if all_employees:
+            # 위험도별 통계 계산 (실제 comprehensive_report 기반)
+            high_risk = 0
+            medium_risk = 0
+            low_risk = 0
+            unknown_risk = 0
+            
+            for emp in all_employees:
+                risk_level = emp.get('risk_level')
+                risk_score = emp.get('risk_score', 0)
                 
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    batch_data = json.load(f)
+                # 실제 위험도 레벨 정규화
+                normalized_level = normalize_risk_level(risk_level, risk_score)
                 
-                individual_results = batch_data.get('individual_results', [])
-                
-                if individual_results:
-                    # 위험도별 통계 계산 (실제 배치 분석 결과 기반)
-                    high_risk = 0
-                    medium_risk = 0
-                    low_risk = 0
-                    unknown_risk = 0
-                    
-                    for result in individual_results:
-                        risk_level = result.get('risk_level')
-                        risk_score = result.get('risk_score', 0)
-                        
-                        # 실제 위험도 레벨 정규화
-                        normalized_level = normalize_risk_level(risk_level, risk_score)
-                        
-                        if normalized_level == 'high':
-                            high_risk += 1
-                        elif normalized_level == 'medium':
-                            medium_risk += 1
-                        elif normalized_level == 'low':
-                            low_risk += 1
-                        else:
-                            unknown_risk += 1
-                    
-                    total = len(individual_results)
-                    
-                    # 부서별 통계 (실제 위험도 레벨 기반)
-                    department_stats = {}
-                    for result in individual_results:
-                        dept = result.get('department', '미분류')
-                        if dept not in department_stats:
-                            department_stats[dept] = {'high': 0, 'medium': 0, 'low': 0, 'unknown': 0, 'total': 0}
-                        
-                        risk_level = result.get('risk_level')
-                        risk_score = result.get('risk_score', 0)
-                        normalized_level = normalize_risk_level(risk_level, risk_score)
-                        
-                        department_stats[dept][normalized_level] += 1
-                        department_stats[dept]['total'] += 1
-                    
-                    # 평균 에이전트 점수 계산
-                    agent_scores = {'structura': [], 'chronos': [], 'cognita': [], 'sentio': [], 'agora': []}
-                    for result in individual_results:
-                        agent_results = result.get('agent_results', {})
-                        for agent_name in agent_scores.keys():
-                            if agent_name in agent_results:
-                                score = 0
-                                if agent_name == 'structura':
-                                    score = agent_results[agent_name].get('attrition_probability', 0)
-                                elif agent_name == 'chronos':
-                                    score = agent_results[agent_name].get('risk_score', 0)
-                                elif agent_name == 'cognita':
-                                    score = agent_results[agent_name].get('overall_risk_score', 0)
-                                elif agent_name == 'sentio':
-                                    score = agent_results[agent_name].get('risk_score', 0)
-                                elif agent_name == 'agora':
-                                    score = agent_results[agent_name].get('market_risk_score', 0)
-                                
-                                if score > 0:
-                                    agent_scores[agent_name].append(score)
-                    
-                    # 평균 계산
-                    avg_agent_scores = {}
-                    for agent_name, scores in agent_scores.items():
-                        if scores:
-                            avg_agent_scores[agent_name] = sum(scores) / len(scores)
-                    
-                    # 컨텍스트 업데이트 (실제 배치 분석 결과 기반)
-                    enriched_context['totalEmployees'] = total
-                    enriched_context['highRiskCount'] = high_risk
-                    enriched_context['mediumRiskCount'] = medium_risk
-                    enriched_context['lowRiskCount'] = low_risk
-                    enriched_context['unknownRiskCount'] = unknown_risk  # 인식 불가능한 레벨
-                    enriched_context['departmentStats'] = department_stats
-                    enriched_context['avgAgentScores'] = avg_agent_scores
-                    enriched_context['analysis_timestamp'] = batch_data.get('analysis_timestamp', 'N/A')
-                    enriched_context['results_loaded'] = True
-                    enriched_context['data_source'] = 'batch_analysis'
-                    enriched_context['risk_thresholds'] = {'high': 0.7, 'medium': 0.3}  # 사용된 임계값
-                    
-                    # 로그에 실제 위험도 분포 출력
-                    high_rate = (high_risk / total * 100) if total > 0 else 0
-                    logger.info(f"✅ 최신 분석 데이터 로드 완료: {total}명, {len(department_stats)}개 부서")
-                    logger.info(f"   위험도 분포: 고위험 {high_risk}명 ({high_rate:.1f}%), 중위험 {medium_risk}명, 저위험 {low_risk}명" + 
-                               (f", 미분류 {unknown_risk}명" if unknown_risk > 0 else ""))
+                if normalized_level == 'high':
+                    high_risk += 1
+                elif normalized_level == 'medium':
+                    medium_risk += 1
+                elif normalized_level == 'low':
+                    low_risk += 1
                 else:
-                    enriched_context['results_loaded'] = False
-                    logger.warning("⚠️ batch_analysis 파일에 데이터가 없습니다")
-            else:
-                enriched_context['results_loaded'] = False
-                logger.warning("⚠️ batch_analysis 폴더에 파일이 없습니다")
+                    unknown_risk += 1
+            
+            total = len(all_employees)
+            
+            # 부서별 통계
+            department_stats = {}
+            for emp in all_employees:
+                dept = emp.get('department', '미분류')
+                if dept not in department_stats:
+                    department_stats[dept] = {'high': 0, 'medium': 0, 'low': 0, 'unknown': 0, 'total': 0}
+                
+                risk_level = emp.get('risk_level')
+                risk_score = emp.get('risk_score', 0)
+                normalized_level = normalize_risk_level(risk_level, risk_score)
+                
+                department_stats[dept][normalized_level] += 1
+                department_stats[dept]['total'] += 1
+            
+            # 평균 에이전트 점수 계산
+            agent_scores_list = {'structura': [], 'chronos': [], 'cognita': [], 'sentio': [], 'agora': []}
+            for emp in all_employees:
+                for agent_name, score in emp.get('agent_scores', {}).items():
+                    if score > 0:
+                        agent_scores_list[agent_name].append(score)
+            
+            # 평균 계산
+            avg_agent_scores = {}
+            for agent_name, scores in agent_scores_list.items():
+                if scores:
+                    avg_agent_scores[agent_name] = sum(scores) / len(scores)
+            
+            # 컨텍스트 업데이트 (실제 comprehensive_report 기반)
+            enriched_context['totalEmployees'] = total
+            enriched_context['highRiskCount'] = high_risk
+            enriched_context['mediumRiskCount'] = medium_risk
+            enriched_context['lowRiskCount'] = low_risk
+            enriched_context['unknownRiskCount'] = unknown_risk
+            enriched_context['departmentStats'] = department_stats
+            enriched_context['avgAgentScores'] = avg_agent_scores
+            enriched_context['analysis_timestamp'] = datetime.now().isoformat()
+            enriched_context['results_loaded'] = True
+            enriched_context['data_source'] = 'comprehensive_reports'
+            enriched_context['risk_thresholds'] = {'high': 0.7, 'medium': 0.3}
+            
+            # 로그에 실제 위험도 분포 출력
+            high_rate = (high_risk / total * 100) if total > 0 else 0
+            logger.info(f"✅ 최신 분석 데이터 로드 완료: {total}명, {len(department_stats)}개 부서")
+            logger.info(f"   데이터 소스: 부서별 comprehensive_report.json 파일")
+            logger.info(f"   위험도 분포: 고위험 {high_risk}명 ({high_rate:.1f}%), 중위험 {medium_risk}명, 저위험 {low_risk}명" + 
+                       (f", 미분류 {unknown_risk}명" if unknown_risk > 0 else ""))
         else:
             enriched_context['results_loaded'] = False
-            logger.warning(f"⚠️ batch_analysis 폴더를 찾을 수 없습니다: {batch_analysis_dir}")
+            logger.warning("⚠️ 부서별 폴더에서 직원 데이터를 찾을 수 없습니다")
     
     except Exception as e:
         enriched_context['results_loaded'] = False

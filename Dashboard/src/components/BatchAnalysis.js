@@ -98,89 +98,87 @@ const BatchAnalysis = ({
   // 결과 내보내기 관련 상태
   const [isExporting, setIsExporting] = useState(false);
 
-  // 캐시된 결과 로드 (저장된 파일 기반)
+  // 캐시된 결과 로드 (comprehensive_report.json 기반 - 정확한 데이터!)
   const loadCachedResults = useCallback(async () => {
     try {
-      console.log('🔄 저장된 파일 기반 캐시 로드 시작...');
+      console.log('🔄 comprehensive_report.json 기반 캐시 로드 시작...');
       
-      // 1. 저장된 배치 분석 파일 목록 조회
+      // 1. results 폴더에서 직접 로드 (보고서 출력과 동일한 API)
       try {
-        const response = await fetch('http://localhost:5007/api/batch-analysis/list-saved-files');
+        console.log('📂 /api/results/list-all-employees 호출 중...');
+        const response = await fetch('http://localhost:5007/api/results/list-all-employees');
         if (response.ok) {
           const data = await response.json();
-          if (data.success && data.files && data.files.length > 0) {
-            console.log('✅ 저장된 파일 목록 로드:', data.files.length, '개');
+          if (data.success && data.results && data.results.length > 0) {
+            console.log('✅ comprehensive_report.json 기반 데이터 로드:', data.results.length, '명');
             
-            // 파일 정보를 캐시 형태로 변환
-            const fileBasedCache = data.files.map((file, index) => ({
-              id: `file_${file.timestamp}_${index}`,
-              title: file.display_name,
-              timestamp: file.modified_time,
-              totalEmployees: file.employee_count,
-              filename: file.filename,
-              fileSize: file.file_size,
-              accuracy: 85, // 기본값
-              highRiskCount: Math.floor(file.employee_count * 0.15), // 추정값
-              mediumRiskCount: Math.floor(file.employee_count * 0.25), // 추정값
-              lowRiskCount: Math.floor(file.employee_count * 0.6), // 추정값
-              summary: `${file.employee_count}명 직원 분석 결과`,
-              keyInsights: [`총 ${file.employee_count}명 분석 완료`],
+            // 위험도 분포 계산 (comprehensive_report.json의 overall_risk_level 직접 사용!)
+            const highRiskCount = data.results.filter(r => r.risk_level === 'HIGH').length;
+            const mediumRiskCount = data.results.filter(r => r.risk_level === 'MEDIUM').length;
+            const lowRiskCount = data.results.filter(r => r.risk_level === 'LOW').length;
+            
+            console.log(`📊 정확한 위험도 분포: 고위험 ${highRiskCount}명, 중위험 ${mediumRiskCount}명, 저위험 ${lowRiskCount}명`);
+            
+            // 캐시 형태로 변환
+            const fileBasedCache = [{
+              id: `comprehensive_${data.timestamp}`,
+              title: `배치 분석 결과 (${data.total_employees}명) - comprehensive_report.json 기준`,
+              timestamp: data.timestamp,
+              totalEmployees: data.total_employees,
+              accuracy: 85,
+              highRiskCount: highRiskCount,
+              mediumRiskCount: mediumRiskCount,
+              lowRiskCount: lowRiskCount,
+              summary: `${data.total_employees}명 분석 완료 (정확한 comprehensive_report 기준)`,
+              keyInsights: [
+                `고위험군 ${highRiskCount}명 (${(highRiskCount/data.total_employees*100).toFixed(1)}%)`,
+                `중위험군 ${mediumRiskCount}명 (${(mediumRiskCount/data.total_employees*100).toFixed(1)}%)`,
+                `저위험군 ${lowRiskCount}명 (${(lowRiskCount/data.total_employees*100).toFixed(1)}%)`
+              ],
               departmentStats: {},
-              source: 'saved_file'
-            }));
+              source: 'comprehensive_report'
+            }];
             
             setCachedResults(fileBasedCache);
             setShowCacheOptions(true);
             
-            // 🔄 저장된 파일을 predictionService 히스토리와 동기화
+            // 🔄 comprehensive_report 기반 데이터를 predictionService 히스토리에 저장
             try {
-              const existingHistory = predictionService.getPredictionHistory();
-              const existingTimestamps = new Set(existingHistory.map(h => 
-                new Date(h.timestamp).toISOString().split('T')[0] // 날짜만 비교
-              ));
+              const cache = fileBasedCache[0]; // 단일 결과
               
-              // 히스토리에 없는 파일만 추가
-              let syncedCount = 0;
-              fileBasedCache.forEach(cache => {
-                const cacheDate = new Date(cache.timestamp).toISOString().split('T')[0];
-                if (!existingTimestamps.has(cacheDate) && cache.totalEmployees > 0) {
-                  // predictionData 생성
-                  const predictionData = {
-                    title: cache.title,
-                    totalEmployees: cache.totalEmployees,
-                    highRiskCount: cache.highRiskCount,
-                    mediumRiskCount: cache.mediumRiskCount,
-                    lowRiskCount: cache.lowRiskCount,
-                    accuracy: cache.accuracy,
-                    summary: cache.summary,
-                    keyInsights: cache.keyInsights,
-                    departmentStats: cache.departmentStats,
-                    rawData: null
-                  };
-                  
-                  predictionService.savePredictionResult(predictionData);
-                  syncedCount++;
-                }
-              });
+              // predictionData 생성 (정확한 comprehensive_report 기반!)
+              const predictionData = {
+                title: cache.title,
+                totalEmployees: cache.totalEmployees,
+                highRiskCount: cache.highRiskCount,
+                mediumRiskCount: cache.mediumRiskCount,
+                lowRiskCount: cache.lowRiskCount,
+                accuracy: cache.accuracy,
+                summary: cache.summary,
+                keyInsights: cache.keyInsights,
+                departmentStats: cache.departmentStats,
+                timestamp: cache.timestamp,
+                status: 'completed',
+                rawData: null
+              };
               
-              if (syncedCount > 0) {
-                console.log(`✅ ${syncedCount}개 파일을 분석 히스토리와 동기화`);
-              } else {
-                console.log('ℹ️ 모든 파일이 이미 히스토리에 존재합니다');
-              }
+              // 히스토리에 저장 (comprehensive_report 기반 정확한 데이터!)
+              predictionService.savePredictionResult(predictionData);
+              console.log('✅ comprehensive_report 기반 정확한 데이터를 히스토리에 저장 완료!');
             } catch (syncError) {
               console.warn('히스토리 동기화 중 오류 (계속 진행):', syncError);
             }
             
             if (!globalBatchResults && fileBasedCache.length > 0) {
-              message.info(`저장된 분석 결과를 발견했습니다 (${fileBasedCache.length}개 파일)`);
+              message.success(`✅ comprehensive_report 기반 정확한 분석 결과 로드 완료! (고위험 ${fileBasedCache[0].highRiskCount}명)`);
             }
           } else {
-            console.log('저장된 파일 없음');
+            console.log('❌ comprehensive_report 데이터가 없습니다');
             setCachedResults([]);
           }
         } else {
-          console.warn('저장된 파일 목록 조회 실패:', response.status);
+          console.warn('❌ API 호출 실패:', response.status);
+          setCachedResults([]);
         }
       } catch (fileListError) {
         console.error('저장된 파일 목록 조회 실패:', fileListError);
