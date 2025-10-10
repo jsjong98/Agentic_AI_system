@@ -2603,6 +2603,72 @@ def save_batch_analysis_results():
                     print(f"직원 {employee_number} 메타데이터 조회 실패: {e}")
             
             # 개별 직원 결과 정리
+            # comprehensive_assessment 추출: 1순위 파일에서, 2순위 메모리에서
+            analysis_result = employee.get('analysis_result', {})
+            comprehensive_assessment = {}
+            
+            # 1순위: 저장된 comprehensive_report.json 파일에서 읽기 (가장 정확!)
+            employee_number = employee.get('employee_number', 'Unknown')
+            try:
+                # 직원 폴더 경로 찾기 (여러 경로 시도)
+                # 경로 1: Department/JobRole/JobLevel/employee_*/ (계층 구조)
+                # 경로 2: Department/employee_*/ (단순 구조 - 하위 호환성)
+                
+                # JobRole과 JobLevel 정보 가져오기
+                temp_job_role = job_role if 'job_role' in locals() else 'Unknown'
+                temp_job_level = job_level if 'job_level' in locals() else 'Unknown'
+                
+                # 계층 구조 경로 시도
+                if temp_job_role != 'Unknown' and temp_job_level != 'Unknown':
+                    employee_dir_hierarchical = os.path.join(results_base_dir, normalized_dept, temp_job_role, str(temp_job_level), f'employee_{employee_number}')
+                    comprehensive_report_path = os.path.join(employee_dir_hierarchical, 'comprehensive_report.json')
+                    
+                    if not os.path.exists(comprehensive_report_path):
+                        # 단순 구조 경로로 fallback
+                        employee_dir = os.path.join(results_base_dir, normalized_dept, f'employee_{employee_number}')
+                        comprehensive_report_path = os.path.join(employee_dir, 'comprehensive_report.json')
+                else:
+                    # 단순 구조 경로
+                    employee_dir = os.path.join(results_base_dir, normalized_dept, f'employee_{employee_number}')
+                    comprehensive_report_path = os.path.join(employee_dir, 'comprehensive_report.json')
+                
+                if os.path.exists(comprehensive_report_path):
+                    with open(comprehensive_report_path, 'r', encoding='utf-8') as f:
+                        comp_report_data = json.load(f)
+                        comprehensive_assessment = comp_report_data.get('comprehensive_assessment', {})
+                        
+                        # 파일에서 정확한 위험도 가져오기
+                        if comprehensive_assessment:
+                            risk_level_from_file = comprehensive_assessment.get('overall_risk_level', '').upper()
+                            risk_score_from_file = comprehensive_assessment.get('overall_risk_score', 0)
+                            
+                            # HIGH/MEDIUM/LOW → high/medium/low 정규화
+                            if risk_level_from_file == 'HIGH':
+                                risk_level = 'high'
+                            elif risk_level_from_file == 'MEDIUM':
+                                risk_level = 'medium'
+                            elif risk_level_from_file == 'LOW':
+                                risk_level = 'low'
+                            else:
+                                risk_level = 'unknown'
+                            
+                            risk_score = risk_score_from_file
+                            
+                            print(f"✅ 직원 {employee_number}: 파일에서 읽음 - {risk_level} ({risk_score:.2f})")
+                else:
+                    print(f"⚠️ 직원 {employee_number}: comprehensive_report.json 파일 없음, 메모리에서 시도")
+                    comprehensive_assessment = analysis_result.get('comprehensive_assessment', {})
+            except Exception as file_err:
+                print(f"⚠️ 직원 {employee_number}: 파일 읽기 실패 - {file_err}, 메모리에서 시도")
+                comprehensive_assessment = analysis_result.get('comprehensive_assessment', {})
+            
+            # comprehensive_assessment가 없으면 현재 계산된 값으로 생성
+            if not comprehensive_assessment:
+                comprehensive_assessment = {
+                    'overall_risk_score': risk_score,
+                    'overall_risk_level': risk_level.upper() if risk_level != 'unknown' else 'UNKNOWN'
+                }
+            
             employee_result = {
                 'employee_id': employee_number,
                 'employee_number': employee_number,
@@ -2612,12 +2678,17 @@ def save_batch_analysis_results():
                 'risk_score': risk_score,
                 'risk_level': risk_level,
                 'analysis_timestamp': analysis_timestamp,
-                'agent_results': {}
+                'agent_results': {},
+                'analysis_result': {
+                    'comprehensive_assessment': comprehensive_assessment,
+                    'combined_analysis': {
+                        'integrated_assessment': comprehensive_assessment  # predictionService.js가 찾는 경로
+                    },
+                    'employee_data': analysis_result.get('employee_data', {})
+                }
             }
             
-            # 각 에이전트 결과 추출
-            analysis_result = employee.get('analysis_result', {})
-            
+            # 각 에이전트 결과 추출 (기존 데이터 활용)
             # Structura 결과 (XAI 포함)
             if 'structura_result' in analysis_result:
                 structura = analysis_result['structura_result']
@@ -2628,9 +2699,9 @@ def save_batch_analysis_results():
                 
                 # XAI 정보가 없으면 기본 정보 생성
                 feature_importance = structura.get('feature_importance', {})
-                if not feature_importance and 'employee_data' in employee.get('analysis_result', {}):
+                if not feature_importance and 'employee_data' in analysis_result:
                     # 직원 데이터에서 기본 feature importance 생성
-                    emp_data = employee['analysis_result']['employee_data']
+                    emp_data = analysis_result['employee_data']
                     feature_importance = {
                         'Age': min(abs(emp_data.get('Age', 30) - 35) / 35, 1.0) * 0.3,
                         'YearsAtCompany': min(emp_data.get('YearsAtCompany', 5) / 20, 1.0) * 0.25,
@@ -3467,32 +3538,54 @@ def calculate_department_risk_distribution(dept_path, dept_data):
                     if not os.path.exists(employee_dir):
                         continue
                     
-                    # 배치 분석 결과 파일 찾기
-                    batch_files = [f for f in os.listdir(employee_dir) 
-                                 if f.startswith('batch_analysis_') and f.endswith('.json')]
+                    # 1순위: comprehensive_report.json에서 정확한 위험도 읽기
+                    comprehensive_report_path = os.path.join(employee_dir, 'comprehensive_report.json')
                     
-                    if batch_files:
-                        latest_batch_file = sorted(batch_files)[-1]
-                        batch_file_path = os.path.join(employee_dir, latest_batch_file)
-                        
-                        try:
-                            with open(batch_file_path, 'r', encoding='utf-8') as f:
-                                batch_data = json.load(f)
+                    try:
+                        if os.path.exists(comprehensive_report_path):
+                            with open(comprehensive_report_path, 'r', encoding='utf-8') as f:
+                                comp_report = json.load(f)
                             
-                            risk_score = batch_data.get('risk_score', 0)
+                            comp_assessment = comp_report.get('comprehensive_assessment', {})
+                            risk_score = comp_assessment.get('overall_risk_score', 0)
+                            risk_level = comp_assessment.get('overall_risk_level', 'UNKNOWN').upper()
+                            
                             total_risk_score += risk_score
                             total_employees += 1
                             
-                            # 위험도 분류
-                            if risk_score >= 0.7:
+                            # comprehensive_report의 overall_risk_level을 직접 사용 (정확!)
+                            if risk_level == 'HIGH':
                                 risk_distribution['high_risk'] += 1
-                            elif risk_score >= 0.3:
+                            elif risk_level == 'MEDIUM':
                                 risk_distribution['medium_risk'] += 1
-                            else:
+                            elif risk_level == 'LOW':
                                 risk_distribution['low_risk'] += 1
+                        else:
+                            # 2순위: batch_analysis 파일에서 읽기 (fallback)
+                            batch_files = [f for f in os.listdir(employee_dir) 
+                                         if f.startswith('batch_analysis_') and f.endswith('.json')]
+                            
+                            if batch_files:
+                                latest_batch_file = sorted(batch_files)[-1]
+                                batch_file_path = os.path.join(employee_dir, latest_batch_file)
                                 
-                        except Exception as e:
-                            print(f"⚠️ 직원 {employee_id} 배치 파일 읽기 실패: {e}")
+                                with open(batch_file_path, 'r', encoding='utf-8') as f:
+                                    batch_data = json.load(f)
+                                
+                                risk_score = batch_data.get('risk_score', 0)
+                                total_risk_score += risk_score
+                                total_employees += 1
+                                
+                                # fallback: risk_score로 분류 (부정확)
+                                if risk_score >= 0.7:
+                                    risk_distribution['high_risk'] += 1
+                                elif risk_score >= 0.3:
+                                    risk_distribution['medium_risk'] += 1
+                                else:
+                                    risk_distribution['low_risk'] += 1
+                                
+                    except Exception as e:
+                        print(f"⚠️ 직원 {employee_id} 파일 읽기 실패: {e}")
         
         # 평균 위험도 계산
         if total_employees > 0:
@@ -3539,32 +3632,54 @@ def calculate_job_role_risk_distribution(dept_path, job_role, levels):
                 if not os.path.exists(employee_dir):
                     continue
                 
-                # 배치 분석 결과 파일 찾기
-                batch_files = [f for f in os.listdir(employee_dir) 
-                             if f.startswith('batch_analysis_') and f.endswith('.json')]
+                # 1순위: comprehensive_report.json에서 정확한 위험도 읽기
+                comprehensive_report_path = os.path.join(employee_dir, 'comprehensive_report.json')
                 
-                if batch_files:
-                    latest_batch_file = sorted(batch_files)[-1]
-                    batch_file_path = os.path.join(employee_dir, latest_batch_file)
-                    
-                    try:
-                        with open(batch_file_path, 'r', encoding='utf-8') as f:
-                            batch_data = json.load(f)
+                try:
+                    if os.path.exists(comprehensive_report_path):
+                        with open(comprehensive_report_path, 'r', encoding='utf-8') as f:
+                            comp_report = json.load(f)
                         
-                        risk_score = batch_data.get('risk_score', 0)
+                        comp_assessment = comp_report.get('comprehensive_assessment', {})
+                        risk_score = comp_assessment.get('overall_risk_score', 0)
+                        risk_level = comp_assessment.get('overall_risk_level', 'UNKNOWN').upper()
+                        
                         total_risk_score += risk_score
                         total_employees += 1
                         
-                        # 위험도 분류
-                        if risk_score >= 0.7:
+                        # comprehensive_report의 overall_risk_level을 직접 사용 (정확!)
+                        if risk_level == 'HIGH':
                             risk_distribution['high_risk'] += 1
-                        elif risk_score >= 0.3:
+                        elif risk_level == 'MEDIUM':
                             risk_distribution['medium_risk'] += 1
-                        else:
+                        elif risk_level == 'LOW':
                             risk_distribution['low_risk'] += 1
+                    else:
+                        # 2순위: batch_analysis 파일에서 읽기 (fallback)
+                        batch_files = [f for f in os.listdir(employee_dir) 
+                                     if f.startswith('batch_analysis_') and f.endswith('.json')]
+                        
+                        if batch_files:
+                            latest_batch_file = sorted(batch_files)[-1]
+                            batch_file_path = os.path.join(employee_dir, latest_batch_file)
                             
-                    except Exception as e:
-                        print(f"⚠️ 직원 {employee_id} 배치 파일 읽기 실패: {e}")
+                            with open(batch_file_path, 'r', encoding='utf-8') as f:
+                                batch_data = json.load(f)
+                            
+                            risk_score = batch_data.get('risk_score', 0)
+                            total_risk_score += risk_score
+                            total_employees += 1
+                            
+                            # fallback: risk_score로 분류
+                            if risk_score >= 0.7:
+                                risk_distribution['high_risk'] += 1
+                            elif risk_score >= 0.3:
+                                risk_distribution['medium_risk'] += 1
+                            else:
+                                risk_distribution['low_risk'] += 1
+                            
+                except Exception as e:
+                    print(f"⚠️ 직원 {employee_id} 파일 읽기 실패: {e}")
         
         risk_distribution['total_employees'] = total_employees
         if total_employees > 0:
@@ -3616,32 +3731,54 @@ def calculate_job_level_risk_distribution(dept_path, level):
                 if not os.path.isdir(employee_dir):
                     continue
                 
-                # 배치 분석 결과 파일 찾기
-                batch_files = [f for f in os.listdir(employee_dir) 
-                             if f.startswith('batch_analysis_') and f.endswith('.json')]
+                # 1순위: comprehensive_report.json에서 정확한 위험도 읽기
+                comprehensive_report_path = os.path.join(employee_dir, 'comprehensive_report.json')
                 
-                if batch_files:
-                    latest_batch_file = sorted(batch_files)[-1]
-                    batch_file_path = os.path.join(employee_dir, latest_batch_file)
-                    
-                    try:
-                        with open(batch_file_path, 'r', encoding='utf-8') as f:
-                            batch_data = json.load(f)
+                try:
+                    if os.path.exists(comprehensive_report_path):
+                        with open(comprehensive_report_path, 'r', encoding='utf-8') as f:
+                            comp_report = json.load(f)
                         
-                        risk_score = batch_data.get('risk_score', 0)
+                        comp_assessment = comp_report.get('comprehensive_assessment', {})
+                        risk_score = comp_assessment.get('overall_risk_score', 0)
+                        risk_level = comp_assessment.get('overall_risk_level', 'UNKNOWN').upper()
+                        
                         total_risk_score += risk_score
                         total_employees += 1
                         
-                        # 위험도 분류
-                        if risk_score >= 0.7:
+                        # comprehensive_report의 overall_risk_level을 직접 사용 (정확!)
+                        if risk_level == 'HIGH':
                             risk_distribution['high_risk'] += 1
-                        elif risk_score >= 0.3:
+                        elif risk_level == 'MEDIUM':
                             risk_distribution['medium_risk'] += 1
-                        else:
+                        elif risk_level == 'LOW':
                             risk_distribution['low_risk'] += 1
+                    else:
+                        # 2순위: batch_analysis 파일에서 읽기 (fallback)
+                        batch_files = [f for f in os.listdir(employee_dir) 
+                                     if f.startswith('batch_analysis_') and f.endswith('.json')]
+                        
+                        if batch_files:
+                            latest_batch_file = sorted(batch_files)[-1]
+                            batch_file_path = os.path.join(employee_dir, latest_batch_file)
                             
-                    except Exception as e:
-                        print(f"⚠️ 직원 배치 파일 읽기 실패: {e}")
+                            with open(batch_file_path, 'r', encoding='utf-8') as f:
+                                batch_data = json.load(f)
+                            
+                            risk_score = batch_data.get('risk_score', 0)
+                            total_risk_score += risk_score
+                            total_employees += 1
+                            
+                            # fallback: risk_score로 분류
+                            if risk_score >= 0.7:
+                                risk_distribution['high_risk'] += 1
+                            elif risk_score >= 0.3:
+                                risk_distribution['medium_risk'] += 1
+                            else:
+                                risk_distribution['low_risk'] += 1
+                            
+                except Exception as e:
+                    print(f"⚠️ 직원 파일 읽기 실패: {e}")
         
         risk_distribution['total_employees'] = total_employees
         if total_employees > 0:
@@ -4384,6 +4521,143 @@ def save_optimized_models():
         return jsonify({
             'success': False,
             'error': f'모델 저장 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+@app.route('/api/compute-comprehensive-assessment', methods=['POST'])
+def compute_comprehensive_assessment():
+    """
+    워커 에이전트 결과를 받아서 종합 평가(comprehensive_assessment) 계산
+    Supervisor가 배치 분석 시 호출
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'agent_results' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'agent_results가 필요합니다.'
+            }), 400
+        
+        agent_results = data.get('agent_results', {})
+        employee_id = data.get('employee_id', 'Unknown')
+        
+        # 각 에이전트 점수 추출
+        structura_score = 0
+        chronos_score = 0
+        cognita_score = 0
+        sentio_score = 0
+        agora_score = 0
+        
+        # Structura 점수 추출
+        if 'structura' in agent_results:
+            structura_result = agent_results['structura'].get('result', {})
+            if 'prediction' in structura_result:
+                structura_score = structura_result['prediction'].get('attrition_probability', 0)
+            elif 'attrition_probability' in structura_result:
+                structura_score = structura_result.get('attrition_probability', 0)
+        
+        # Chronos 점수 추출
+        if 'chronos' in agent_results:
+            chronos_result = agent_results['chronos'].get('result', {})
+            if 'prediction' in chronos_result:
+                chronos_score = chronos_result['prediction'].get('risk_score', 0)
+            elif 'risk_score' in chronos_result:
+                chronos_score = chronos_result.get('risk_score', 0)
+        
+        # Cognita 점수 추출
+        if 'cognita' in agent_results:
+            cognita_result = agent_results['cognita'].get('result', {})
+            if 'risk_analysis' in cognita_result:
+                cognita_score = cognita_result['risk_analysis'].get('overall_risk_score', 0)
+            elif 'overall_risk_score' in cognita_result:
+                cognita_score = cognita_result.get('overall_risk_score', 0)
+        
+        # Sentio 점수 추출
+        if 'sentio' in agent_results:
+            sentio_result = agent_results['sentio'].get('result', {})
+            if 'psychological_risk_score' in sentio_result:
+                sentio_score = sentio_result.get('psychological_risk_score', 0)
+            elif 'risk_score' in sentio_result:
+                sentio_score = sentio_result.get('risk_score', 0)
+        
+        # Agora 점수 추출
+        if 'agora' in agent_results:
+            agora_result = agent_results['agora'].get('result', {})
+            if 'market_analysis' in agora_result:
+                agora_score = agora_result['market_analysis'].get('risk_score', 0)
+            elif 'risk_score' in agora_result:
+                agora_score = agora_result.get('risk_score', 0)
+        
+        # 최적화된 가중치 로드 (기본값)
+        weights = {
+            'structura': 0.35,
+            'chronos': 0.25,
+            'cognita': 0.15,
+            'sentio': 0.15,
+            'agora': 0.10
+        }
+        
+        # 사용자 정의 가중치가 있으면 사용
+        if current_results and 'optimal_weights' in current_results:
+            weights = current_results['optimal_weights']
+        
+        # 가중 평균 계산
+        overall_risk_score = (
+            structura_score * weights['structura'] +
+            chronos_score * weights['chronos'] +
+            cognita_score * weights['cognita'] +
+            sentio_score * weights['sentio'] +
+            agora_score * weights['agora']
+        )
+        
+        # 위험도 레벨 결정 (임계값 기반)
+        high_risk_threshold = 0.7
+        medium_risk_threshold = 0.3
+        
+        # 사용자 정의 임계값이 있으면 사용
+        if current_results and 'thresholds' in current_results:
+            high_risk_threshold = current_results['thresholds'].get('high_risk', 0.7)
+            medium_risk_threshold = current_results['thresholds'].get('medium_risk', 0.3)
+        
+        if overall_risk_score >= high_risk_threshold:
+            overall_risk_level = 'HIGH'
+        elif overall_risk_score >= medium_risk_threshold:
+            overall_risk_level = 'MEDIUM'
+        else:
+            overall_risk_level = 'LOW'
+        
+        # comprehensive_assessment 생성
+        comprehensive_assessment = {
+            'overall_risk_score': float(overall_risk_score),
+            'overall_risk_level': overall_risk_level,
+            'agent_scores': {
+                'structura': float(structura_score),
+                'chronos': float(chronos_score),
+                'cognita': float(cognita_score),
+                'sentio': float(sentio_score),
+                'agora': float(agora_score)
+            },
+            'weights_applied': weights,
+            'thresholds_applied': {
+                'high_risk': float(high_risk_threshold),
+                'medium_risk': float(medium_risk_threshold)
+            },
+            'computation_timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'employee_id': employee_id,
+            'comprehensive_assessment': comprehensive_assessment
+        })
+        
+    except Exception as e:
+        logger.error(f"종합 평가 계산 실패: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'종합 평가 계산 실패: {str(e)}'
         }), 500
 
 

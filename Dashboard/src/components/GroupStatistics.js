@@ -40,20 +40,130 @@ const GroupStatistics = ({
   const [availableDepartments, setAvailableDepartments] = useState([]);
   const [dataSource, setDataSource] = useState('server'); // 'server' 또는 'batch'
 
-  // 컴포넌트 마운트 시 데이터 로드
+  // 컴포넌트 마운트 시 데이터 로드 (comprehensive_report.json 기반!)
   useEffect(() => {
-    // 배치 분석 결과가 있으면 우선 사용
-    if (globalBatchResults && globalBatchResults.results) {
-      console.log('배치 분석 결과를 사용하여 통계 생성:', globalBatchResults);
-      generateStatisticsFromBatchResults();
-      setDataSource('batch');
-    } else {
-      // 배치 결과가 없으면 서버에서 로드
-      loadStatistics();
-      setDataSource('server');
-    }
+    // 항상 API 우선 호출 (ReportGeneration.js, Home.js와 동일)
+    console.log('🔄 comprehensive_report.json 기반 통계 로드 시작...');
+    loadStatisticsFromAPI();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [globalBatchResults]);
+  }, [groupBy, departmentFilter]);
+
+  // API에서 comprehensive_report.json 기반 데이터 로드 (ReportGeneration.js와 동일!)
+  const loadStatisticsFromAPI = async () => {
+    setIsLoading(true);
+    try {
+      console.log('📂 /api/results/list-all-employees 호출 중...');
+      const response = await fetch('http://localhost:5007/api/results/list-all-employees');
+      
+      if (!response.ok) {
+        throw new Error('API 호출 실패');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.results && data.results.length > 0) {
+        console.log('✅ comprehensive_report.json 기반 데이터 로드:', data.results.length, '명');
+        
+        // 위험도 분포 확인
+        const highRiskCount = data.results.filter(r => r.risk_level === 'HIGH').length;
+        const mediumRiskCount = data.results.filter(r => r.risk_level === 'MEDIUM').length;
+        const lowRiskCount = data.results.filter(r => r.risk_level === 'LOW').length;
+        
+        console.log(`📊 정확한 위험도: 고위험 ${highRiskCount}명, 중위험 ${mediumRiskCount}명, 저위험 ${lowRiskCount}명`);
+        
+        // 그룹별 통계 생성 (원본 데이터도 함께 저장)
+        generateStatisticsFromAPIData(data.results);
+        setDataSource('comprehensive_report');
+        
+        message.success(`✅ comprehensive_report 기반 통계 로드 완료 (${data.results.length}명)`);
+        
+      } else {
+        console.warn('⚠️ API 응답에 데이터가 없습니다');
+        // Fallback: 기존 방식
+        loadStatistics();
+      }
+    } catch (error) {
+      console.error('❌ API 로드 실패:', error);
+      // Fallback: 기존 방식
+      loadStatistics();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // API 데이터로 통계 생성 (comprehensive_report.json 기반)
+  const generateStatisticsFromAPIData = (results) => {
+    const groupedStats = {};
+    
+    // 부서 필터링 적용
+    const filteredResults = departmentFilter 
+      ? results.filter(emp => emp.department === departmentFilter)
+      : results;
+    
+    console.log(`📊 필터링된 직원 수: ${filteredResults.length}명 (필터: ${departmentFilter || '없음'})`);
+    
+    filteredResults.forEach(employee => {
+      let groupKey = 'Unknown';
+      
+      // 그룹화 기준
+      if (groupBy === 'department') {
+        groupKey = employee.department || 'Unknown';
+      } else if (groupBy === 'job_role') {
+        groupKey = employee.job_role || 'Unknown';
+      } else if (groupBy === 'job_level') {
+        groupKey = employee.position ? `Level ${employee.position}` : 'Unknown';
+      }
+      
+      if (!groupedStats[groupKey]) {
+        groupedStats[groupKey] = {
+          total_employees: 0,
+          high_risk: 0,
+          medium_risk: 0,
+          low_risk: 0,
+          avg_risk_score: 0,
+          risk_scores: [],
+          common_risk_factors: {}
+        };
+      }
+      
+      groupedStats[groupKey].total_employees++;
+      groupedStats[groupKey].risk_scores.push(employee.risk_score || 0);
+      
+      // comprehensive_report의 overall_risk_level 직접 사용!
+      const riskLevel = (employee.risk_level || 'UNKNOWN').toUpperCase();
+      if (riskLevel === 'HIGH') {
+        groupedStats[groupKey].high_risk++;
+      } else if (riskLevel === 'MEDIUM') {
+        groupedStats[groupKey].medium_risk++;
+      } else if (riskLevel === 'LOW') {
+        groupedStats[groupKey].low_risk++;
+      }
+    });
+    
+    // 평균 위험도 계산
+    Object.keys(groupedStats).forEach(groupKey => {
+      const scores = groupedStats[groupKey].risk_scores;
+      if (scores.length > 0) {
+        groupedStats[groupKey].avg_risk_score = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+      }
+      delete groupedStats[groupKey].risk_scores; // 임시 배열 제거
+      
+      console.log(`📊 ${groupKey}: 고위험 ${groupedStats[groupKey].high_risk}명, 중위험 ${groupedStats[groupKey].medium_risk}명, 저위험 ${groupedStats[groupKey].low_risk}명`);
+    });
+    
+    setStatistics({
+      group_by: groupBy,
+      department_filter: departmentFilter,
+      statistics: groupedStats,
+      generated_at: new Date().toISOString(),
+      data_source: 'comprehensive_report'
+    });
+    
+    // 사용 가능한 부서 목록 업데이트 (원본 데이터에서 추출)
+    const uniqueDepartments = [...new Set(results.map(emp => emp.department).filter(Boolean))];
+    setAvailableDepartments(uniqueDepartments);
+    console.log(`📋 사용 가능한 부서: ${uniqueDepartments.join(', ')}`);
+  };
 
   // 배치 분석 결과에서 직원 정보 가져오기
   const getEmployeeMetadata = (employeeNumber, employeeData) => {
@@ -344,30 +454,21 @@ const GroupStatistics = ({
     setGroupBy(value);
     setDepartmentFilter(null);
     
-    // 데이터 소스에 따라 다른 함수 호출
-    if (dataSource === 'batch') {
-      generateStatisticsFromBatchResults();
-    } else {
-      loadStatistics(value, null);
-    }
+    // 항상 API 호출 (comprehensive_report.json 기반)
+    loadStatisticsFromAPI();
   };
 
   const handleDepartmentFilterChange = (value) => {
     setDepartmentFilter(value);
     
-    if (dataSource === 'batch') {
-      generateStatisticsFromBatchResults();
-    } else {
-      loadStatistics(groupBy, value);
-    }
+    // 항상 API 호출 (comprehensive_report.json 기반)
+    loadStatisticsFromAPI();
   };
 
   const handleRefresh = () => {
-    if (dataSource === 'batch' && globalBatchResults) {
-      generateStatisticsFromBatchResults();
-    } else {
-      loadStatistics(groupBy, departmentFilter);
-    }
+    // 항상 API 호출 (comprehensive_report.json 기반)
+    console.log('🔄 새로고침: comprehensive_report.json 기반 데이터 재로드');
+    loadStatisticsFromAPI();
   };
 
   const getRiskColor = (riskLevel) => {

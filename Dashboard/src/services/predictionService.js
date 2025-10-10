@@ -191,18 +191,18 @@ class PredictionService {
     
     console.log('🔄 배치 결과 변환 중:', { totalEmployees, sampleEmployee: results[0] });
     
-    // 위험도별 분류 (실제 배치 분석 결과 구조 사용)
+    // 위험도별 분류 - comprehensive_report의 overall_risk_level을 직접 사용
     const riskCounts = results.reduce((acc, employee) => {
-      // 실제 배치 분석 결과에서 위험도 점수 추출
-      const riskScore = employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-      const riskLevel = this.getRiskLevel(riskScore);
-      acc[riskLevel]++;
+      // comprehensive_report의 overall_risk_level을 직접 읽어옴 (정규화된 값 사용)
+      const riskLevel = employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_level;
+      const normalizedLevel = this.normalizeRiskLevel(riskLevel);
+      acc[normalizedLevel]++;
       return acc;
-    }, { high: 0, medium: 0, low: 0 });
+    }, { high: 0, medium: 0, low: 0, unknown: 0 });
 
-    console.log('📊 위험도별 분류:', riskCounts);
+    console.log('📊 위험도별 분류 (comprehensive_report 기준):', riskCounts);
 
-    // 부서별 통계 (실제 배치 분석 결과 구조 사용)
+    // 부서별 통계 - comprehensive_report의 overall_risk_level 사용
     const departmentStats = results.reduce((acc, employee) => {
       // 부서 정보 추출 (여러 경로에서 시도)
       const dept = employee.analysis_result?.employee_data?.Department || 
@@ -214,13 +214,16 @@ class PredictionService {
       }
       acc[dept].total++;
       
-      const riskScore = employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-      const riskLevel = this.getRiskLevel(riskScore);
-      acc[dept][riskLevel]++;
+      // comprehensive_report의 overall_risk_level을 직접 읽어옴
+      const riskLevel = employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_level;
+      const normalizedLevel = this.normalizeRiskLevel(riskLevel);
+      if (normalizedLevel !== 'unknown') {
+        acc[dept][normalizedLevel]++;
+      }
       return acc;
     }, {});
 
-    console.log('🏢 부서별 통계:', departmentStats);
+    console.log('🏢 부서별 통계 (comprehensive_report 기준):', departmentStats);
 
     // 주요 위험 요인 분석
     const riskFactors = this.analyzeRiskFactors(results);
@@ -243,21 +246,50 @@ class PredictionService {
     };
   }
 
-  // 위험도 레벨 결정
+  // 위험도 레벨 정규화 (comprehensive_report의 overall_risk_level 표준화)
+  normalizeRiskLevel(riskLevel) {
+    if (!riskLevel) return 'unknown';
+    
+    const levelStr = String(riskLevel).toLowerCase().trim();
+    
+    // HIGH 변형들
+    if (levelStr === 'high' || levelStr === '고위험군' || levelStr === '고위험' || 
+        levelStr === 'high_risk' || levelStr === 'critical') {
+      return 'high';
+    }
+    
+    // MEDIUM 변형들
+    if (levelStr === 'medium' || levelStr === '주의군' || levelStr === '중위험' || 
+        levelStr === 'mid' || levelStr === 'moderate' || levelStr === 'warning') {
+      return 'medium';
+    }
+    
+    // LOW 변형들
+    if (levelStr === 'low' || levelStr === '안전군' || levelStr === '저위험' || 
+        levelStr === 'safe' || levelStr === 'normal') {
+      return 'low';
+    }
+    
+    return 'unknown';
+  }
+
+  // 위험도 레벨 결정 (deprecated - normalizeRiskLevel 사용 권장)
   getRiskLevel(probability) {
     if (probability >= 0.7) return 'high';
     if (probability >= 0.4) return 'medium';
     return 'low';
   }
 
-  // 위험 요인 분석 (실제 배치 분석 결과 구조 사용)
+  // 위험 요인 분석 - comprehensive_report의 overall_risk_level 사용
   analyzeRiskFactors(results) {
     const factors = {};
     
     results.forEach(employee => {
-      const riskScore = employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
+      // comprehensive_report의 overall_risk_level을 직접 확인
+      const riskLevel = employee.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_level;
+      const normalizedLevel = this.normalizeRiskLevel(riskLevel);
       
-      if (riskScore && riskScore >= 0.7) {
+      if (normalizedLevel === 'high') {
         // 고위험군 직원의 특성 분석
         const employeeData = employee.analysis_result?.employee_data || {};
         
@@ -281,7 +313,7 @@ class PredictionService {
     return factors;
   }
 
-  // 인사이트 생성
+  // 인사이트 생성 - comprehensive_report의 overall_risk_level 사용
   generateInsights(results, departmentStats, riskFactors) {
     const insights = [];
     
@@ -293,20 +325,30 @@ class PredictionService {
       }))
       .sort((a, b) => b.riskRate - a.riskRate);
 
-    if (deptRisks.length > 0) {
+    if (deptRisks.length > 0 && parseFloat(deptRisks[0].riskRate) > 0) {
       insights.push(`${deptRisks[0].dept} 부서의 이직 위험도가 ${deptRisks[0].riskRate}%로 가장 높습니다.`);
     }
 
-    // 전체 위험도 분석 (실제 배치 분석 결과 구조 사용)
+    // 전체 위험도 분석 - comprehensive_report의 overall_risk_level 사용
     const totalHigh = results.filter(e => {
-      const riskScore = e.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_score;
-      return riskScore && riskScore >= 0.7;
+      const riskLevel = e.analysis_result?.combined_analysis?.integrated_assessment?.overall_risk_level;
+      const normalizedLevel = this.normalizeRiskLevel(riskLevel);
+      return normalizedLevel === 'high';
     }).length;
     const totalRiskRate = (totalHigh / results.length * 100).toFixed(1);
-    insights.push(`전체 직원 중 ${totalRiskRate}%가 고위험군으로 분류되었습니다.`);
+    
+    if (totalHigh > 0) {
+      insights.push(`전체 직원 중 ${totalRiskRate}%가 고위험군으로 분류되었습니다.`);
+    } else {
+      insights.push('현재 전체 직원의 이직 위험도가 안정적인 수준입니다.');
+    }
 
     // 추가 인사이트
-    insights.push('정기적인 직원 만족도 조사와 개별 면담을 통한 사전 예방이 필요합니다.');
+    if (totalHigh > 0) {
+      insights.push('정기적인 직원 만족도 조사와 개별 면담을 통한 사전 예방이 필요합니다.');
+    } else {
+      insights.push('안정적인 조직 문화 유지를 위해 지속적인 모니터링이 권장됩니다.');
+    }
 
     return insights;
   }

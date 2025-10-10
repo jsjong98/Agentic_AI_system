@@ -232,23 +232,67 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
     };
   }, []);
 
-  // 예측 결과 히스토리 로드
+  // 예측 결과 히스토리 로드 (comprehensive_report.json 기반 - ReportGeneration.js와 동일!)
   const loadPredictionHistory = async () => {
     try {
-      // 먼저 localStorage에서 동기적으로 로드
+      // 1순위: API에서 최신 데이터 로드 (comprehensive_report.json 기반)
+      console.log('🔄 API에서 comprehensive_report.json 기반 히스토리 로드...');
+      const response = await fetch('http://localhost:5007/api/results/list-all-employees');
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.results && data.results.length > 0) {
+          console.log('✅ comprehensive_report.json 기반 데이터 로드:', data.results.length, '명');
+          
+          // 위험도 분포 계산 (comprehensive_report.json의 overall_risk_level 직접 사용!)
+          const highRiskCount = data.results.filter(r => r.risk_level === 'HIGH').length;
+          const mediumRiskCount = data.results.filter(r => r.risk_level === 'MEDIUM').length;
+          const lowRiskCount = data.results.filter(r => r.risk_level === 'LOW').length;
+          
+          console.log(`📊 정확한 위험도 분포: 고위험 ${highRiskCount}명, 중위험 ${mediumRiskCount}명, 저위험 ${lowRiskCount}명`);
+          
+          // predictionHistory 형식으로 변환
+          const historyData = [{
+            id: `comprehensive_${data.timestamp}`,
+            title: `배치 분석 결과 (${data.total_employees}명)`,
+            timestamp: data.timestamp,
+            totalEmployees: data.total_employees,
+            highRiskCount: highRiskCount,
+            mediumRiskCount: mediumRiskCount,
+            lowRiskCount: lowRiskCount,
+            accuracy: 85,
+            status: 'completed',
+            summary: `${data.total_employees}명 분석 완료 (comprehensive_report.json 기준)`,
+            keyInsights: [
+              `고위험군 ${highRiskCount}명 (${(highRiskCount/data.total_employees*100).toFixed(1)}%)`,
+              `중위험군 ${mediumRiskCount}명 (${(mediumRiskCount/data.total_employees*100).toFixed(1)}%)`,
+              `저위험군 ${lowRiskCount}명 (${(lowRiskCount/data.total_employees*100).toFixed(1)}%)`
+            ],
+            departmentStats: {}
+          }];
+          
+          setPredictionHistory(historyData);
+          console.log('✅ Home 히스토리 로드 완료 (comprehensive_report 기준)');
+          return;
+        }
+      }
+      
+      // 2순위: API 실패 시 localStorage 폴백
+      console.log('⚠️ API 실패, localStorage 폴백...');
       const syncHistory = predictionService.getPredictionHistory();
       setPredictionHistory(syncHistory);
       
-      // 그 다음 IndexedDB에서 비동기적으로 로드 (필요한 경우)
-      if (syncHistory.length === 0) {
-        const asyncHistory = await predictionService.getPredictionHistoryAsync();
-        if (asyncHistory.length > 0) {
-          setPredictionHistory(asyncHistory);
-        }
-      }
     } catch (error) {
       console.error('예측 히스토리 로드 실패:', error);
-      message.error('예측 히스토리를 불러오는데 실패했습니다.');
+      
+      // 에러 발생 시 localStorage 폴백
+      try {
+        const syncHistory = predictionService.getPredictionHistory();
+        setPredictionHistory(syncHistory);
+      } catch (fallbackError) {
+        console.error('Fallback도 실패:', fallbackError);
+        message.error('예측 히스토리를 불러오는데 실패했습니다.');
+      }
     }
   };
 
