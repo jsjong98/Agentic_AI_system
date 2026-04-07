@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { notification } from 'antd';
 
 import Home from './components/Home';
+import HomeMain from './components/HomeMain';
 import BatchAnalysis from './components/BatchAnalysis';
 import PostAnalysis from './components/PostAnalysis';
 import ReportGeneration from './components/ReportGeneration';
@@ -205,7 +206,7 @@ const AdminSettingsPlaceholder = () => (
 
 const App = () => {
   const [user, setUser] = useState(getStoredUser());
-  const [selectedKey, setSelectedKey] = useState('home');
+  const [selectedKey, setSelectedKey] = useState('home-main');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
 
@@ -281,6 +282,7 @@ const App = () => {
 
   // 일반 탭 메뉴
   const tabItems = [
+    { key: 'home-main', label: 'Home' },
     { key: 'home', label: '인원현황' },
     { key: 'insights', label: '인사이트' },
     { key: 'risk-factors', label: '위험 요인' },
@@ -713,8 +715,10 @@ const App = () => {
     };
 
     switch (selectedKey) {
+      case 'home-main':
+        return <HomeMain {...commonProps} />;
       case 'home':
-        return <Home {...commonProps} onNavigate={setSelectedKey} />;
+        return <Home />;
       case 'insights':
         return <Insights />;
       case 'risk-factors':
@@ -734,7 +738,7 @@ const App = () => {
       case 'admin-settings':
         return <AdminSettingsPlaceholder />;
       default:
-        return <Home {...commonProps} onNavigate={setSelectedKey} />;
+        return <HomeMain {...commonProps} />;
     }
   };
 

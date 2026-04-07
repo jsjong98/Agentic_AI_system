@@ -1,58 +1,74 @@
 import React from 'react';
+import {
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  Radar, Legend, ResponsiveContainer, Tooltip,
+} from 'recharts';
 
-const kpiData = [
-  { label: '전사', value: '1,470명', color: '#2563eb', bg: '#e8f0fe' },
-  { label: '고위험군', value: '77명', color: '#d93954', bg: '#fde8ec' },
-  { label: '잠재위험', value: '202명', color: '#e8721a', bg: '#fef3e2' },
-  { label: '안정', value: '1,191명', color: '#2ea44f', bg: '#e6f6ec' },
-  { label: '평균점수', value: '0.28', color: '#7c3aed', bg: '#f3e8fd' },
+/* ── colour tokens ── */
+const C = {
+  red:    '#d93954',
+  orange: '#e8721a',
+  yellow: '#e5a100',
+  green:  '#2ea44f',
+  blue:   '#2563eb',
+  purple: '#7c3aed',
+};
+
+/* ── static data ── */
+const topFactors = [
+  { name: '초과근무시간',    value: 0.82, color: C.red    },
+  { name: '직무만족도',      value: 0.74, color: C.red    },
+  { name: '연봉(동료대비)',  value: 0.68, color: C.red    },
+  { name: '승진후 경과기간', value: 0.62, color: C.orange  },
+  { name: '사회적 고립지수', value: 0.58, color: C.orange  },
+  { name: '감성 부정지수',   value: 0.55, color: C.orange  },
+  { name: '로그인 불규칙성', value: 0.51, color: C.yellow  },
+  { name: '외부 플랫폼 접속', value: 0.47, color: C.yellow },
+  { name: 'PM 경험 부족',   value: 0.42, color: C.yellow  },
+  { name: '연봉 상승률',     value: 0.38, color: C.yellow  },
 ];
 
-const topFactors = [
-  { name: '초과근무시간', value: 0.82, color: '#d93954' },
-  { name: '직무만족도', value: 0.74, color: '#d93954' },
-  { name: '연봉(동료대비)', value: 0.68, color: '#d93954' },
-  { name: '승진후 경과기간', value: 0.62, color: '#e8721a' },
-  { name: '사회적 고립지수', value: 0.58, color: '#e8721a' },
-  { name: '감성 부정지수', value: 0.55, color: '#e8721a' },
-  { name: '로그인 불규칙성', value: 0.51, color: '#e5a100' },
-  { name: '외부 플랫폼 접속', value: 0.47, color: '#e5a100' },
-  { name: 'PM 경험 부족', value: 0.42, color: '#e5a100' },
-  { name: '연봉 상승률', value: 0.38, color: '#e5a100' },
+/* Radar chart data — 5 risk dimensions × 4 personas */
+const radarData = [
+  { factor: '구조적 불만족', P01: 85, P02: 70, P03: 55, P04: 80 },
+  { factor: '관계적 단절',   P01: 45, P02: 35, P03: 60, P04: 30 },
+  { factor: '행동적 이탈',   P01: 72, P02: 40, P03: 50, P04: 35 },
+  { factor: '심리적 소진',   P01: 90, P02: 50, P03: 65, P04: 40 },
+  { factor: '외부 Pull',    P01: 30, P02: 80, P03: 45, P04: 70 },
 ];
 
 const personas = [
   {
-    id: 'P01', title: '번아웃 직전', count: '77명', avg: '0.84',
-    tagBg: '#fde8ec', tagColor: '#d93954',
+    id: 'P01', title: '번아웃 직전',   count: '77명', avg: '0.84',
+    tagBg: '#fde8ec', tagColor: C.red,
     factors: [
-      { name: '초과근무시간', pct: 78, color: '#d93954' },
-      { name: '직무만족도', pct: 45, color: '#d93954' },
-      { name: '감성 부정지수', pct: 62, color: '#e8721a' },
+      { name: '초과근무시간', pct: 78, color: C.red    },
+      { name: '직무만족도',   pct: 45, color: C.red    },
+      { name: '감성 부정지수', pct: 62, color: C.orange },
     ],
   },
   {
-    id: 'P02', title: '보상 실망', count: '12명', avg: '0.79',
-    tagBg: '#e8f0fe', tagColor: '#2563eb',
+    id: 'P02', title: '보상 실망',     count: '12명', avg: '0.79',
+    tagBg: '#e8f0fe', tagColor: C.blue,
     factors: [
-      { name: '보상 격차', pct: 72, color: '#d93954' },
-      { name: '외부 보상 비교', pct: 65, color: '#e8721a' },
+      { name: '보상 격차 (vs 동료)', pct: 72, color: C.red    },
+      { name: '외부 보상 비교',      pct: 65, color: C.orange },
     ],
   },
   {
-    id: 'P03', title: '성장 정체', count: '40명', avg: '0.73',
-    tagBg: '#fef3e2', tagColor: '#e8721a',
+    id: 'P03', title: '성장 정체',     count: '40명', avg: '0.73',
+    tagBg: '#fef3e2', tagColor: C.orange,
     factors: [
-      { name: '승진후 경과기간', pct: 68, color: '#e8721a' },
-      { name: 'PM 경험 부족', pct: 55, color: '#e8721a' },
+      { name: '승진후 경과기간', pct: 68, color: C.orange },
+      { name: 'PM 경험 부족',   pct: 55, color: C.orange },
     ],
   },
   {
     id: 'P04', title: '보상체감 낮음', count: '26명', avg: '0.68',
-    tagBg: '#f3e8fd', tagColor: '#7c3aed',
+    tagBg: '#f3e8fd', tagColor: C.purple,
     factors: [
-      { name: '인센티브 미수령', pct: 58, color: '#e8721a' },
-      { name: '연봉 상승률 정체', pct: 42, color: '#e5a100' },
+      { name: '인센티브 미수령',  pct: 58, color: C.orange },
+      { name: '연봉 상승률 정체', pct: 42, color: C.yellow },
     ],
   },
 ];
@@ -61,91 +77,76 @@ const matrixData = [
   {
     label: '고위험',
     cells: [
-      { text: '자연감소', count: '8명', bg: '#fde8ec', color: '#d93954' },
-      { text: '선별적 개입', count: '14명', bg: '#fef3e2', color: '#e8721a' },
-      { text: '적극 개입', count: '22명', bg: '#fef3e2', color: '#e8721a' },
-      { text: '최우선 개입', count: '11명', bg: '#fde8ec', color: '#d93954' },
+      { text: '자연감소',    count: '8명',  bg: '#fde8ec', color: C.red    },
+      { text: '선별적 개입', count: '14명', bg: '#fef3e2', color: C.orange },
+      { text: '적극 개입',   count: '22명', bg: '#fef3e2', color: C.orange },
+      { text: '최우선 개입', count: '11명', bg: '#fde8ec', color: C.red    },
     ],
   },
   {
     label: '잠재적',
     cells: [
-      { text: '성과개선', count: '25명', bg: '#fff9e6', color: '#b8860b' },
-      { text: '잠재력 평가', count: '45명', bg: '#fff9e6', color: '#b8860b' },
-      { text: '역량 강화', count: '38명', bg: '#e8f0fe', color: '#2563eb' },
-      { text: '선제적 관리', count: '19명', bg: '#fef3e2', color: '#e8721a' },
+      { text: '성과개선',    count: '25명',  bg: '#fff9e6', color: '#b8860b' },
+      { text: '잠재력 평가', count: '45명',  bg: '#fff9e6', color: '#b8860b' },
+      { text: '역량 강화',   count: '38명',  bg: '#e8f0fe', color: C.blue   },
+      { text: '선제적 관리', count: '19명',  bg: '#fef3e2', color: C.orange  },
     ],
   },
   {
     label: '저위험',
     cells: [
-      { text: '유지 관리', count: '120명', bg: '#e6f6ec', color: '#2ea44f' },
-      { text: '안정 유지', count: '245명', bg: '#e6f6ec', color: '#2ea44f' },
-      { text: '성장 지원', count: '210명', bg: '#e8f0fe', color: '#2563eb' },
-      { text: '핵심인재', count: '177명', bg: '#e8f0fe', color: '#2563eb' },
+      { text: '유지 관리', count: '120명', bg: '#e6f6ec', color: C.green },
+      { text: '안정 유지', count: '245명', bg: '#e6f6ec', color: C.green },
+      { text: '성장 지원', count: '210명', bg: '#e8f0fe', color: C.blue  },
+      { text: '핵심인재',  count: '177명', bg: '#e8f0fe', color: C.blue  },
     ],
   },
 ];
 
-const cardStyle = {
-  background: '#fff',
-  borderRadius: 12,
-  padding: 24,
-  boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+/* ── shared styles ── */
+const cardS = {
+  background: 'var(--card,#fff)',
+  borderRadius: 12, padding: 20,
+  border: '1px solid var(--border,#eee)',
+  boxShadow: '0 1px 4px rgba(0,0,0,.06)',
 };
+const secTitle = (icon, text) => (
+  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+    <span style={{ color: C.red }}>{icon}</span> {text}
+  </div>
+);
+/* ── radar legend colours ── */
+const RADAR_COLORS = [C.red, C.blue, C.orange, C.purple];
 
 function RiskFactors() {
   return (
-    <div style={{ padding: '24px 32px', background: '#f5f6fa', minHeight: '100vh' }}>
-      {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 28 }}>
-        {kpiData.map((k) => (
-          <div key={k.label} style={{
-            ...cardStyle,
-            padding: '18px 20px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-          }}>
-            <span style={{ fontSize: 13, color: '#888' }}>{k.label}</span>
-            <span style={{ fontSize: 26, fontWeight: 700, color: k.color }}>{k.value}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Section Title */}
+    <div>
+      {/* ── Section title ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <span style={{
-          display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
-          background: '#d93954',
-        }} />
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#222' }}>
-          퇴사 위험 요인 분석 (SHAP 기반)
-        </h2>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: C.red, display: 'inline-block' }} />
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>퇴사 위험 요인 분석 (SHAP 기반)</h2>
       </div>
 
-      {/* First two-column grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-        {/* Left: Top 10 */}
-        <div style={cardStyle}>
-          <h3 style={{ margin: '0 0 18px', fontSize: 16, fontWeight: 700, color: '#333' }}>
-            전사 Top 10 위험 요인
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* ── Row 1: Top 10 요인 + Agent 레이더 ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+
+        {/* Left: Top 10 위험 요인 */}
+        <div style={cardS}>
+          {secTitle('☰', '전사 Top 10 위험 요인')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             {topFactors.map((f, i) => (
               <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ width: 18, fontSize: 13, color: '#999', textAlign: 'right', flexShrink: 0 }}>
+                <span style={{ width: 18, fontSize: 12, color: 'var(--sub,#999)', textAlign: 'right', flexShrink: 0 }}>
                   {i + 1}
                 </span>
-                <span style={{ width: 110, fontSize: 13, color: '#444', flexShrink: 0 }}>{f.name}</span>
-                <div style={{
-                  flex: 1, height: 22, background: '#f0f0f0', borderRadius: 6, position: 'relative',
-                  overflow: 'hidden',
-                }}>
+                <span style={{ width: 114, fontSize: 12, color: 'var(--text,#444)', flexShrink: 0 }}>{f.name}</span>
+                <div style={{ flex: 1, height: 22, background: 'var(--border,#f0f0f0)', borderRadius: 6, overflow: 'hidden' }}>
                   <div style={{
                     width: `${f.value * 100}%`, height: '100%', background: f.color,
-                    borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-                    paddingRight: 8, boxSizing: 'border-box',
+                    borderRadius: 6, display: 'flex', alignItems: 'center',
+                    justifyContent: 'flex-end', paddingRight: 8,
                   }}>
-                    <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>{f.value.toFixed(2)}</span>
+                    <span style={{ fontSize: 11, color: '#fff', fontWeight: 600 }}>{f.value.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -153,37 +154,81 @@ function RiskFactors() {
           </div>
         </div>
 
-        {/* Right: Persona profiles */}
-        <div style={cardStyle}>
-          <h3 style={{ margin: '0 0 18px', fontSize: 16, fontWeight: 700, color: '#333' }}>
-            Persona별 위험 프로필
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Right: Agent별 위험 요인 기여도 (Radar) */}
+        <div style={cardS}>
+          {secTitle('◉', 'Agent별 위험 요인 기여도')}
+          <ResponsiveContainer width="100%" height={300}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="var(--border,#e5e7eb)" />
+              <PolarAngleAxis
+                dataKey="factor"
+                tick={{ fontSize: 11, fontFamily: 'inherit', fill: 'var(--text,#555)' }}
+              />
+              <PolarRadiusAxis
+                angle={90} domain={[0, 100]}
+                tick={{ fontSize: 9, fill: 'var(--sub,#999)' }}
+                tickCount={4}
+              />
+              <Tooltip
+                formatter={(v, name) => [`${v}점`, name]}
+                contentStyle={{ fontSize: 12, borderRadius: 8 }}
+              />
+              {['P01', 'P02', 'P03', 'P04'].map((p, i) => (
+                <Radar
+                  key={p} name={p} dataKey={p}
+                  stroke={RADAR_COLORS[i]}
+                  fill={RADAR_COLORS[i]}
+                  fillOpacity={0.12}
+                  strokeWidth={2}
+                />
+              ))}
+              <Legend
+                wrapperStyle={{ fontSize: 11, fontFamily: 'inherit', paddingTop: 8 }}
+                formatter={(value) => {
+                  const labels = { P01: 'P01 번아웃', P02: 'P02 보상실망', P03: 'P03 성장정체', P04: 'P04 보상체감' };
+                  return labels[value] || value;
+                }}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Row 2: Persona별 위험 프로필 + 성과-위험 매트릭스 ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+        {/* Left: Persona별 위험 프로필 */}
+        <div style={cardS}>
+          {secTitle('★', 'Persona별 위험 프로필')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {personas.map((p) => (
               <div key={p.id}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   <span style={{
-                    display: 'inline-block', padding: '3px 10px', borderRadius: 12,
-                    fontSize: 13, fontWeight: 700, background: p.tagBg, color: p.tagColor,
+                    padding: '3px 12px', borderRadius: 12, fontSize: 12, fontWeight: 700,
+                    background: p.tagBg, color: p.tagColor,
                   }}>
                     {p.id} {p.title}
                   </span>
-                  <span style={{ fontSize: 12, color: '#888' }}>{p.count}, 평균 {p.avg}</span>
+                  <span style={{ fontSize: 12, color: 'var(--sub,#888)' }}>
+                    {p.count} | 평균 {p.avg}
+                  </span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 4 }}>
                   {p.factors.map((f) => (
-                    <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 100, fontSize: 12, color: '#555', flexShrink: 0 }}>{f.name}</span>
-                      <div style={{
-                        flex: 1, height: 18, background: '#f0f0f0', borderRadius: 5,
-                        overflow: 'hidden',
-                      }}>
+                    <div key={f.name}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 12 }}>
+                        <span style={{ color: 'var(--text,#444)' }}>{f.name}</span>
+                        <span style={{ fontWeight: 700, color: f.color }}>{f.pct}%</span>
+                      </div>
+                      <div style={{ height: 20, background: 'var(--border,#f0f0f0)', borderRadius: 5, overflow: 'hidden' }}>
                         <div style={{
-                          width: `${f.pct}%`, height: '100%', background: f.color,
-                          borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-                          paddingRight: 6, boxSizing: 'border-box',
+                          width: `${f.pct}%`, height: '100%', background: f.color, borderRadius: 5,
+                          display: 'flex', alignItems: 'center', paddingLeft: 8,
+                          fontSize: 10, color: '#fff', fontWeight: 600,
+                          transition: 'width 0.8s ease',
                         }}>
-                          <span style={{ fontSize: 11, color: '#fff', fontWeight: 600 }}>{f.pct}%</span>
+                          {f.pct}%
                         </div>
                       </div>
                     </div>
@@ -193,67 +238,63 @@ function RiskFactors() {
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Second row: Performance-Risk Matrix */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
-        <div style={cardStyle}>
-          <h3 style={{ margin: '0 0 18px', fontSize: 16, fontWeight: 700, color: '#333' }}>
-            성과 - 위험 매트릭스
-          </h3>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '80px 1fr 1fr 1fr 1fr',
-            gap: 6,
-          }}>
-            {/* Header row */}
-            <div />
-            {['C', 'B', 'A', 'S'].map((h) => (
-              <div key={h} style={{
-                textAlign: 'center', fontWeight: 700, fontSize: 14, color: '#555',
-                padding: '6px 0',
-              }}>
-                {h}
-              </div>
-            ))}
-
-            {/* Data rows */}
-            {matrixData.map((row) => (
-              <React.Fragment key={row.label}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 700, fontSize: 13, color: '#444',
-                }}>
-                  {row.label}
+        {/* Right: 성과-위험 매트릭스 */}
+        <div style={cardS}>
+          {secTitle('▣', '성과 - 위험 매트릭스')}
+          <div style={{ fontSize: 12, color: 'var(--sub,#666)', marginBottom: 10 }}>
+            퇴사 위험과 성과를 결합하여 전략적 선별
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '72px 1fr 1fr 1fr 1fr',
+              gap: 5, minWidth: 360,
+            }}>
+              {/* Header */}
+              <div />
+              {['C', 'B', 'A', 'S'].map(h => (
+                <div key={h} style={{ textAlign: 'center', fontWeight: 700, fontSize: 14, color: 'var(--sub,#555)', padding: '6px 0' }}>
+                  {h}
                 </div>
-                {row.cells.map((cell, ci) => (
-                  <div key={ci} style={{
-                    background: cell.bg, color: cell.color, borderRadius: 8,
-                    padding: '14px 8px', textAlign: 'center',
+              ))}
+
+              {/* Data rows */}
+              {matrixData.map((row) => (
+                <React.Fragment key={row.label}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontWeight: 700, fontSize: 12, color: 'var(--text,#444)',
+                    padding: '4px 0',
                   }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{cell.text}</div>
-                    <div style={{ fontSize: 15, fontWeight: 800, marginTop: 2 }}>{cell.count}</div>
+                    {row.label}
                   </div>
-                ))}
-              </React.Fragment>
-            ))}
+                  {row.cells.map((cell, ci) => (
+                    <div key={ci} style={{
+                      background: cell.bg, color: cell.color, borderRadius: 8,
+                      padding: '12px 6px', textAlign: 'center',
+                    }}>
+                      <div style={{ fontWeight: 600, fontSize: 11 }}>{cell.text}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, marginTop: 3 }}>{cell.count}</div>
+                    </div>
+                  ))}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
 
-          {/* Bottom axis label */}
-          <div style={{
-            textAlign: 'center', fontSize: 13, color: '#999', marginTop: 12,
-          }}>
-            &larr; 성과 낮음 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 성과 높음 &rarr;
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 11, color: 'var(--sub,#999)', padding: '0 72px' }}>
+            <span>← 성과 낮음</span>
+            <span>성과 높음 →</span>
           </div>
 
-          {/* Highlight box */}
           <div style={{
-            marginTop: 16, padding: '12px 16px', background: '#fde8ec',
-            borderRadius: 8, borderLeft: '4px solid #d93954',
-            fontSize: 14, color: '#d93954', fontWeight: 600,
+            marginTop: 14, padding: '10px 14px',
+            background: '#fef7f8', borderRadius: 8,
+            borderLeft: `4px solid ${C.red}`,
+            fontSize: 13, color: C.red, fontWeight: 600,
           }}>
-            핵심: S등급 고위험군 11명은 최우선 개입 필요.
+            핵심: S등급 고위험군 11명은 최우선 개입 필요. A등급 잠재위험 38명은 역량 강화 우선 권장.
           </div>
         </div>
       </div>
