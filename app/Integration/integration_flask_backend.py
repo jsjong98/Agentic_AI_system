@@ -104,15 +104,8 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# CORS 설정 (React 연동)
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
-        "supports_credentials": True
-    }
-})
+# CORS 설정
+CORS(app)
 
 # Flask 설정
 app.config['JSON_AS_ASCII'] = False

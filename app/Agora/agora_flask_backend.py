@@ -52,13 +52,7 @@ logger = logging.getLogger(__name__)
 
 # Flask 앱 초기화
 app = Flask(__name__)
-CORS(app, resources={
-    r"/*": {  # 모든 경로에 CORS 적용
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+CORS(app)
 
 # 전역 변수
 market_processor = None

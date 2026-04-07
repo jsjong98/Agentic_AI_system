@@ -1050,14 +1050,8 @@ def create_app():
     
     app = Flask(__name__)
     
-    # CORS 설정 (React 연동을 위해 중요)
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],  # React 개발 서버
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-    })
+    # CORS 설정
+    CORS(app)
     
     # 설정
     app.config['JSON_AS_ASCII'] = False  # 한글 지원
