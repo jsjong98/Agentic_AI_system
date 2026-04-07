@@ -42,17 +42,16 @@ RUN mkdir -p logs cache temp uploads results
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Worker URLs → set in Railway dashboard using internal networking
-# e.g. STRUCTURA_URL=http://structura.railway.internal:5001
-ENV STRUCTURA_URL=http://structura.railway.internal:5001
-ENV COGNITA_URL=http://cognita.railway.internal:5002
-ENV CHRONOS_URL=http://chronos.railway.internal:5003
-ENV SENTIO_URL=http://sentio.railway.internal:5004
-ENV AGORA_URL=http://agora.railway.internal:5005
-ENV INTEGRATION_URL=http://integration.railway.internal:5007
+# Worker URLs → Railway internal networking (port 8080 = Railway default)
+ENV STRUCTURA_URL=http://structura.railway.internal:8080
+ENV COGNITA_URL=http://cognita.railway.internal:8080
+ENV CHRONOS_URL=http://chronos.railway.internal:8080
+ENV SENTIO_URL=http://sentio.railway.internal:8080
+ENV AGORA_URL=http://agora.railway.internal:8080
+ENV INTEGRATION_URL=http://integration.railway.internal:8080
 
 # OPENAI_API_KEY → set in Railway dashboard
 
-EXPOSE 5006
+EXPOSE 8080
 
 CMD ["python", "run_supervisor_server.py"]
