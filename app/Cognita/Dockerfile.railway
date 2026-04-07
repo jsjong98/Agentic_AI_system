@@ -40,6 +40,7 @@ ENV PYTHONUNBUFFERED=1
 # NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD → set in Railway dashboard
 # NEO4J_INIT_XML → path to XML file on Railway Volume (default: /app/data/employee_relationships.xml)
 
+ENV PORT=5002
 EXPOSE 5002
 
 CMD ["/app/start.sh"]

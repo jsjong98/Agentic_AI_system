@@ -47,6 +47,7 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 # OPENAI_API_KEY → set in Railway dashboard
 
+ENV PORT=5004
 EXPOSE 5004
 
 CMD ["python", "run_sentio_server.py"]

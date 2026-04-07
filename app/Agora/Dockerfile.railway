@@ -45,6 +45,7 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 # OPENAI_API_KEY → set in Railway dashboard
 
+ENV PORT=5005
 EXPOSE 5005
 
 CMD ["python", "run_agora_server.py"]

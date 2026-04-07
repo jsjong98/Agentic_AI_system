@@ -41,6 +41,7 @@ RUN mkdir -p models cache logs temp uploads results /uploads/Structura/batch /up
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
+ENV PORT=5001
 EXPOSE 5001
 
 CMD ["python", "run_structura_server.py"]
