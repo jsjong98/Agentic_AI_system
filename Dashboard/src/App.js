@@ -199,12 +199,7 @@ const App = () => {
   const [dataLoaded] = useState(true); // 데이터 로딩 상태를 기본적으로 활성화
   const isInitializedRef = useRef(false); // 초기화 중복 방지
 
-  // 로그인 전이면 로그인 화면 표시
-  if (!user) {
-    return <Login onLogin={setUser} />;
-  }
-
-  const isAdmin = user.role === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   // 전역 에러 핸들러
   useEffect(() => {
@@ -748,6 +743,11 @@ const App = () => {
         );
     }
   };
+
+  // 로그인 전이면 로그인 화면 표시
+  if (!user) {
+    return <Login onLogin={setUser} />;
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
