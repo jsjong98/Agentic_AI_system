@@ -528,53 +528,84 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
         </div>
       </div>
 
-      {/* 에이전트 아키텍처 플로우 다이어그램 */}
-      <Card style={{ marginBottom: 20, border: '1px solid #eee' }} bodyStyle={{ padding: 20 }}>
+      {/* KPI 카드 행 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: '전사 인원 현황', value: predictionHistory[0]?.totalEmployees || '1,470', unit: '명', color: '#2d2d2d', top: '#d93954' },
+          { label: '퇴사 고위험군', value: predictionHistory[0]?.highRiskCount || '77', unit: '명', color: '#d93954', top: '#d93954' },
+          { label: '잠재적 위험군', value: predictionHistory[0]?.mediumRiskCount || '202', unit: '명', color: '#e8721a', top: '#e8721a' },
+          { label: '안정/양호군', value: predictionHistory[0]?.lowRiskCount || '1,191', unit: '명', color: '#2ea44f', top: '#2ea44f' },
+          { label: '평균 위험 점수', value: '0.28', unit: '', color: '#2563eb', top: '#2563eb' },
+        ].map((kpi, i) => (
+          <div key={i} style={{
+            background: 'var(--card, #fff)', borderRadius: 12, padding: 16,
+            border: '1px solid var(--border, #eee)', textAlign: 'center',
+            position: 'relative', overflow: 'hidden',
+            boxShadow: '0 1px 4px rgba(0,0,0,.06)',
+          }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: kpi.top }} />
+            <div style={{ fontSize: 11, color: 'var(--sub, #888)', marginBottom: 6, fontWeight: 500 }}>{kpi.label}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: kpi.color }}>
+              {kpi.value}<span style={{ fontSize: 13, color: 'var(--sub, #888)' }}>{kpi.unit}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 에이전트 워크플로우 — 세로 구조 */}
+      <Card style={{ marginBottom: 20 }} bodyStyle={{ padding: 20 }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#d93954', display: 'inline-block' }} />
           에이전트 워크플로우
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, flexWrap: 'wrap', padding: '10px 0' }}>
-          {/* Supervisor */}
-          <div style={{ textAlign: 'center', minWidth: 100 }}>
-            <div style={{ background: '#2d2d2d', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
-              Supervisor Agent
-            </div>
-            <div style={{ fontSize: 18, color: '#d93954' }}>↓</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, padding: '10px 0' }}>
+          {/* Supervisor Agent — 맨 위 */}
+          <div style={{
+            background: '#2d2d2d', color: '#fff', padding: '10px 32px',
+            borderRadius: 8, fontSize: 13, fontWeight: 700, textAlign: 'center',
+          }}>Supervisor Agent</div>
+
+          {/* 화살표 아래로 */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
+            <div style={{ width: 2, height: 16, background: '#d93954' }} />
+            <div style={{ width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '8px solid #d93954' }} />
           </div>
-          <div style={{ fontSize: 18, color: '#ccc', margin: '0 8px' }}>→</div>
-          {/* Workers */}
-          {[
-            { name: 'Structura', color: '#d93954', icon: '📊' },
-            { name: 'Cognita', color: '#2563eb', icon: '🔗' },
-            { name: 'Chronos', color: '#e8721a', icon: '📈' },
-            { name: 'Sentio', color: '#7c3aed', icon: '💬' },
-            { name: 'Agora', color: '#2ea44f', icon: '🎯' },
-          ].map((w, i) => (
-            <React.Fragment key={w.name}>
-              <div style={{ textAlign: 'center', minWidth: 80 }}>
-                <div style={{
-                  border: `2px solid ${w.color}`, borderRadius: 8,
-                  padding: '8px 12px', fontSize: 11, fontWeight: 600,
-                  background: `${w.color}10`,
-                }}>
-                  <div style={{ fontSize: 16 }}>{w.icon}</div>
-                  {w.name}
-                </div>
+
+          {/* 5 Worker Agents — 가운데 한 줄 */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {[
+              { name: 'Structura', color: '#d93954', icon: '📊' },
+              { name: 'Cognita', color: '#2563eb', icon: '🔗' },
+              { name: 'Chronos', color: '#e8721a', icon: '📈' },
+              { name: 'Sentio', color: '#7c3aed', icon: '💬' },
+              { name: 'Agora', color: '#2ea44f', icon: '🎯' },
+            ].map(w => (
+              <div key={w.name} style={{
+                border: `2px solid ${w.color}`, borderRadius: 10,
+                padding: '10px 16px', fontSize: 12, fontWeight: 600,
+                textAlign: 'center', background: `${w.color}10`, minWidth: 90,
+              }}>
+                <div style={{ fontSize: 20, marginBottom: 2 }}>{w.icon}</div>
+                {w.name}
               </div>
-              {i < 4 && <div style={{ fontSize: 14, color: '#ccc', margin: '0 4px' }}>→</div>}
-            </React.Fragment>
-          ))}
-          <div style={{ fontSize: 18, color: '#ccc', margin: '0 8px' }}>→</div>
-          {/* Synthesize */}
-          <div style={{ textAlign: 'center', minWidth: 100 }}>
-            <div style={{ fontSize: 18, color: '#d93954' }}>↑</div>
-            <div style={{ background: '#d93954', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
-              Synthesize Agent
-            </div>
+            ))}
           </div>
+
+          {/* 화살표 아래로 */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
+            <div style={{ width: 2, height: 16, background: '#d93954' }} />
+            <div style={{ width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '8px solid #d93954' }} />
+          </div>
+
+          {/* Synthesize Agent (Integration) — 맨 아래 */}
+          <div style={{
+            background: '#d93954', color: '#fff', padding: '10px 32px',
+            borderRadius: 8, fontSize: 13, fontWeight: 700, textAlign: 'center',
+          }}>Synthesize Agent</div>
         </div>
-        <div style={{ textAlign: 'center', fontSize: 11, color: '#888', marginTop: 8 }}>
+
+        <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--sub, #888)', marginTop: 10 }}>
           데이터 수집 → 개별 분석 → 종합 평가 → 위험도 산출
         </div>
       </Card>

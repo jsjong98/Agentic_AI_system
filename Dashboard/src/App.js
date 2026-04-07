@@ -1,17 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { notification } from 'antd';
-import {
-  HomeOutlined,
-  ApiOutlined,
-  RobotOutlined,
-  TeamOutlined,
-  FileTextOutlined,
-  BulbOutlined,
-  WarningOutlined,
-  AimOutlined,
-  SettingOutlined,
-  ExperimentOutlined,
-} from '@ant-design/icons';
 
 import Home from './components/Home';
 import BatchAnalysis from './components/BatchAnalysis';
@@ -388,28 +376,26 @@ const App = () => {
     };
   }, []);
 
-  // 공통 메뉴 (전체 사용자)
-  const commonMenuItems = [
-    { key: 'home', icon: <HomeOutlined />, label: '인원현황' },
-    { key: 'insights', icon: <BulbOutlined />, label: '인사이트' },
-    { key: 'risk-factors', icon: <WarningOutlined />, label: '위험 요인' },
-    { key: 'intervention', icon: <AimOutlined />, label: '개입 전략' },
-    { key: 'report-generation', icon: <FileTextOutlined />, label: '보고서 출력' },
+  // 일반 탭 메뉴
+  const tabItems = [
+    { key: 'home', label: '인원현황' },
+    { key: 'insights', label: '인사이트' },
+    { key: 'risk-factors', label: '위험 요인' },
+    { key: 'intervention', label: '개입 전략' },
+    { key: 'report-generation', label: '보고서 출력' },
   ];
 
-  // Admin 전용 메뉴
-  const adminOnlyItems = [
-    { type: 'divider' },
-    { key: 'admin-group', icon: <SettingOutlined />, label: 'Admin', type: 'group', children: [
-      { key: 'batch', icon: <RobotOutlined />, label: '배치 분석' },
-      { key: 'group-statistics', icon: <TeamOutlined />, label: '단체 통계' },
-      { key: 'cognita', icon: <ApiOutlined />, label: '개별 관계분석' },
-      { key: 'post-analysis', icon: <ExperimentOutlined />, label: '사후 분석' },
-      { key: 'admin-settings', icon: <SettingOutlined />, label: '관리자 설정' },
-    ]},
+  // Admin 서브 메뉴
+  const adminSubItems = [
+    { key: 'batch', label: '배치 분석' },
+    { key: 'group-statistics', label: '단체 통계' },
+    { key: 'cognita', label: '개별 관계분석' },
+    { key: 'post-analysis', label: '사후 분석' },
+    { key: 'admin-settings', label: '관리자 설정' },
   ];
 
-  const menuItems = isAdmin ? [...commonMenuItems, ...adminOnlyItems] : commonMenuItems;
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const isAdminPage = adminSubItems.some(i => i.key === selectedKey);
 
   // 서버 상태 확인 및 IndexedDB/localStorage에서 배치 결과 복원
   useEffect(() => {
@@ -870,14 +856,58 @@ const App = () => {
     return <Login onLogin={setUser} />;
   }
 
-  // 다크모드 CSS 변수
+  // 다크모드 CSS 변수 — Railway 스타일 다크 테마
   const themeVars = isDark ? {
-    '--bg': '#1a1a2e', '--card': '#16213e', '--border': '#333',
-    '--text': '#e0e0e0', '--sub': '#888', '--header-bg': '#0f3460',
+    '--bg': '#0e1525', '--card': '#151c2c', '--border': '#1e2a3a',
+    '--text': '#c9d1d9', '--sub': '#6b7280', '--header-bg': '#0d1117',
+    '--card-hover': '#1c2536', '--accent': '#d93954',
   } : {
     '--bg': '#f3f4f6', '--card': '#fff', '--border': '#eee',
     '--text': '#2d2d2d', '--sub': '#888', '--header-bg': '#fff',
+    '--card-hover': '#fef7f8', '--accent': '#d93954',
   };
+
+  // 다크모드 글로벌 CSS 주입 (Ant Design 컴포넌트 오버라이드)
+  useEffect(() => {
+    const styleId = 'pwc-dark-theme';
+    let style = document.getElementById(styleId);
+    if (!style) {
+      style = document.createElement('style');
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
+    if (isDark) {
+      style.textContent = `
+        body { background: #0e1525 !important; color: #c9d1d9 !important; }
+        .ant-card { background: #151c2c !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
+        .ant-card-head { color: #c9d1d9 !important; border-color: #1e2a3a !important; }
+        .ant-card-head-title { color: #c9d1d9 !important; }
+        .ant-table { background: #151c2c !important; color: #c9d1d9 !important; }
+        .ant-table-thead > tr > th { background: #1c2536 !important; color: #c9d1d9 !important; border-color: #1e2a3a !important; }
+        .ant-table-tbody > tr > td { border-color: #1e2a3a !important; color: #c9d1d9 !important; }
+        .ant-table-tbody > tr:hover > td { background: #1c2536 !important; }
+        .ant-select-selector { background: #151c2c !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
+        .ant-select-dropdown { background: #151c2c !important; }
+        .ant-select-item { color: #c9d1d9 !important; }
+        .ant-select-item-option-active { background: #1c2536 !important; }
+        .ant-input, .ant-input-affix-wrapper { background: #0e1525 !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
+        .ant-btn-default { background: #151c2c !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
+        .ant-modal-content { background: #151c2c !important; color: #c9d1d9 !important; }
+        .ant-modal-header { background: #151c2c !important; border-color: #1e2a3a !important; }
+        .ant-modal-title { color: #c9d1d9 !important; }
+        .ant-descriptions-item-label { background: #1c2536 !important; color: #8b949e !important; }
+        .ant-descriptions-item-content { color: #c9d1d9 !important; }
+        .ant-statistic-title { color: #8b949e !important; }
+        .ant-pagination-item a { color: #c9d1d9 !important; }
+        .ant-pagination-item { background: #151c2c !important; border-color: #1e2a3a !important; }
+        .ant-spin-text { color: #c9d1d9 !important; }
+        .ant-empty-description { color: #6b7280 !important; }
+        .ant-tag { border-color: #1e2a3a !important; }
+      `;
+    } else {
+      style.textContent = '';
+    }
+  }, [isDark]);
 
   return (
     <div style={{
@@ -897,7 +927,7 @@ const App = () => {
         boxShadow: '0 1px 4px rgba(0,0,0,.08)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <img src={PWC_LOGO} alt="PwC" style={{ height: 28 }} />
+          <img src={PWC_LOGO} alt="PwC" style={{ height: 28, filter: isDark ? 'brightness(0) invert(1)' : 'none' }} />
           <span style={{ fontSize: 17, fontWeight: 700, color: themeVars['--text'] }}>
             조직 퇴사위험 대시보드
           </span>
@@ -905,54 +935,29 @@ const App = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>
           {/* 전사/조직 View 토글 */}
           <div style={{ display: 'flex', border: `1px solid ${isDark ? '#444' : '#ddd'}`, borderRadius: 8, overflow: 'hidden', fontSize: 12 }}>
-            <button
-              onClick={() => setViewMode('all')}
-              style={{
-                padding: '5px 14px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
-                background: viewMode === 'all' ? '#d93954' : themeVars['--card'],
-                color: viewMode === 'all' ? '#fff' : themeVars['--text'],
-              }}
-            >전사 View</button>
-            {departments.map(d => (
-              <button
-                key={d}
-                onClick={() => setViewMode(d)}
-                style={{
-                  padding: '5px 10px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
-                  borderLeft: `1px solid ${isDark ? '#444' : '#ddd'}`,
-                  background: viewMode === d ? '#d93954' : themeVars['--card'],
-                  color: viewMode === d ? '#fff' : themeVars['--text'],
-                  fontSize: 11,
-                }}
-              >{d.replace('Research & Development', 'R&D').replace('Human Resources', 'HR')}</button>
+            {[{ key: 'all', label: '전사 View' }, ...departments.map(d => ({
+              key: d, label: d.replace('Research & Development', 'R&D').replace('Human Resources', 'HR'),
+            }))].map((v, i) => (
+              <button key={v.key} onClick={() => setViewMode(v.key)} style={{
+                padding: '5px 12px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
+                borderLeft: i > 0 ? `1px solid ${isDark ? '#444' : '#ddd'}` : 'none',
+                background: viewMode === v.key ? '#d93954' : themeVars['--card'],
+                color: viewMode === v.key ? '#fff' : themeVars['--text'], fontSize: 11,
+              }}>{v.label}</button>
             ))}
           </div>
-
-          {/* 다크모드 토글 */}
           <button onClick={cycleTheme} style={{
             border: `1px solid ${isDark ? '#444' : '#ddd'}`, borderRadius: 6,
             padding: '4px 10px', cursor: 'pointer', fontSize: 14,
             background: themeVars['--card'], color: themeVars['--text'],
-          }}>
-            {themeMode === 'light' ? '☀️' : themeMode === 'dark' ? '🌙' : '💻'}
-          </button>
-
-          {/* 유저 */}
+          }}>{themeMode === 'light' ? '☀️' : themeMode === 'dark' ? '🌙' : '💻'}</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: '50%',
-              background: '#d93954', color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 600,
+              width: 32, height: 32, borderRadius: '50%', background: '#d93954', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600,
             }}>{user.initials}</div>
             <span style={{ fontWeight: 500, color: themeVars['--sub'] }}>{user.name}</span>
-            <span style={{
-              fontSize: 11, padding: '2px 8px', borderRadius: 4,
-              background: isAdmin ? '#fde8ec' : '#e8f0fe',
-              color: isAdmin ? '#d93954' : '#2563eb', fontWeight: 600,
-            }}>{isAdmin ? 'ADMIN' : 'HR'}</span>
           </div>
-
           <button onClick={() => { logout(); setUser(null); }} style={{
             border: `1px solid ${isDark ? '#444' : '#ddd'}`, background: themeVars['--card'],
             borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
@@ -964,25 +969,58 @@ const App = () => {
       {/* ── TAB NAV ── */}
       <nav style={{
         background: themeVars['--card'],
-        display: 'flex', padding: '0 24px',
+        display: 'flex', alignItems: 'center', padding: '0 24px',
         borderBottom: `1px solid ${themeVars['--border']}`,
         boxShadow: '0 1px 3px rgba(0,0,0,.04)',
         overflowX: 'auto', position: 'sticky', top: 56, zIndex: 190,
       }}>
-        {menuItems.filter(i => i.key).map(item => (
-          <button
-            key={item.key}
-            onClick={() => setSelectedKey(item.key)}
+        {tabItems.map(item => (
+          <button key={item.key} onClick={() => { setSelectedKey(item.key); setShowAdminMenu(false); }}
             style={{
-              padding: '12px 22px', fontSize: 14, fontWeight: selectedKey === item.key ? 700 : 500,
-              color: selectedKey === item.key ? '#d93954' : themeVars['--sub'],
+              padding: '12px 22px', fontSize: 14,
+              fontWeight: selectedKey === item.key && !isAdminPage ? 700 : 500,
+              color: selectedKey === item.key && !isAdminPage ? '#d93954' : themeVars['--sub'],
               cursor: 'pointer', border: 'none', background: 'none',
-              borderBottom: selectedKey === item.key ? '3px solid #d93954' : '3px solid transparent',
-              whiteSpace: 'nowrap', fontFamily: 'inherit',
-              transition: 'all .2s',
+              borderBottom: selectedKey === item.key && !isAdminPage ? '3px solid #d93954' : '3px solid transparent',
+              whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'all .2s',
             }}
           >{item.label}</button>
         ))}
+
+        {/* Admin 드롭다운 (Admin 유저만) */}
+        {isAdmin && (
+          <div style={{ position: 'relative', marginLeft: 'auto' }}>
+            <button onClick={() => setShowAdminMenu(!showAdminMenu)} style={{
+              padding: '12px 22px', fontSize: 14,
+              fontWeight: isAdminPage || showAdminMenu ? 700 : 500,
+              color: isAdminPage || showAdminMenu ? '#d93954' : themeVars['--sub'],
+              cursor: 'pointer', border: 'none', background: 'none',
+              borderBottom: isAdminPage ? '3px solid #d93954' : '3px solid transparent',
+              whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'all .2s',
+            }}>⚙️ Admin ▾</button>
+
+            {showAdminMenu && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, zIndex: 300,
+                background: themeVars['--card'], border: `1px solid ${themeVars['--border']}`,
+                borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
+                padding: '4px 0', minWidth: 180,
+              }}>
+                {adminSubItems.map(item => (
+                  <button key={item.key} onClick={() => { setSelectedKey(item.key); setShowAdminMenu(false); }}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '10px 16px', border: 'none', cursor: 'pointer',
+                      background: selectedKey === item.key ? (isDark ? '#1e3a5f' : '#fef7f8') : 'transparent',
+                      color: selectedKey === item.key ? '#d93954' : themeVars['--text'],
+                      fontSize: 13, fontFamily: 'inherit', fontWeight: selectedKey === item.key ? 600 : 400,
+                    }}
+                  >{item.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* 조직 View 표시 */}
@@ -992,7 +1030,7 @@ const App = () => {
           padding: '8px 24px', fontSize: 13, fontWeight: 600,
           color: '#d93954', borderBottom: `1px solid ${themeVars['--border']}`,
         }}>
-          📂 조직 View: {viewMode} | 해당 조직의 데이터만 필터링됩니다
+          📂 {viewMode} 조직 View | 해당 조직의 데이터만 필터링됩니다
         </div>
       )}
 
