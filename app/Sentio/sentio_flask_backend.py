@@ -68,17 +68,29 @@ text_generator = None
 # 데이터 경로 설정 - uploads 디렉토리에서 찾기
 def get_sentio_data_paths(analysis_type='batch'):
     """uploads 디렉토리에서 Sentio 데이터 파일 찾기"""
-    _base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads', 'Sentio')
-    uploads_dir = os.path.normpath(os.path.join(_base, analysis_type))
+    _base = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads', 'Sentio'))
+    uploads_dir = os.path.join(_base, analysis_type)
     data_paths = {
         'hr_data': None,
         'text_data': None,
         'sample_texts': None
     }
-    
-    print(f"Sentio 데이터 경로 확인: {uploads_dir}")
-    
-    if os.path.exists(uploads_dir):
+
+    # Check subdirectory first, then root upload dir
+    search_dirs = [uploads_dir, _base]
+    print(f"Sentio 데이터 경로 확인: {search_dirs}")
+
+    found_dir = None
+    for d in search_dirs:
+        if os.path.exists(d):
+            files = [f for f in os.listdir(d) if f.endswith('.csv')]
+            if files:
+                found_dir = d
+                break
+
+    uploads_dir = found_dir if found_dir else uploads_dir
+
+    if found_dir:
         files = [f for f in os.listdir(uploads_dir) if f.endswith('.csv')]
         if files:
             # 가장 최근 파일 사용 (수정 시간 기준)
@@ -337,11 +349,20 @@ def upload_text_data():
                 "text_types": df['text_type'].value_counts().to_dict() if 'text_type' in df.columns else {}
             }
             
-            # 기존 시스템 초기화 (새 데이터로 재처리 필요)
-            global text_processor, keyword_analyzer
+            # DATA_PATH 갱신 후 시스템 재초기화
+            global DATA_PATH, text_processor, keyword_analyzer
+            DATA_PATH = {
+                'hr_data': file_path,
+                'text_data': file_path,
+                'sample_texts': file_path
+            }
             text_processor = None
             keyword_analyzer = None
-            
+            try:
+                initialize_system()
+            except Exception as init_err:
+                logger.warning(f"자동 초기화 실패 (무시): {init_err}")
+
             return jsonify({
                 "success": True,
                 "message": "텍스트 데이터가 성공적으로 업로드되었습니다.",
