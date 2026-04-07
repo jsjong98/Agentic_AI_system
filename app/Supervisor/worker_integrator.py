@@ -6,6 +6,7 @@ Worker Integrator - 워커 에이전트 통합 모듈
 import asyncio
 import aiohttp
 import logging
+import os
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 import json
@@ -391,26 +392,26 @@ class WorkerIntegrator:
         }
 
 
-# 기본 워커 설정
+# 기본 워커 설정 (Railway 환경변수 우선, 없으면 localhost fallback)
 DEFAULT_WORKER_CONFIGS = {
     "structura": {
-        "base_url": "http://localhost:5001",
+        "base_url": os.environ.get("STRUCTURA_URL", "http://localhost:5001"),
         "timeout": 300
     },
     "cognita": {
-        "base_url": "http://localhost:5002", 
+        "base_url": os.environ.get("COGNITA_URL", "http://localhost:5002"),
         "timeout": 300
     },
     "chronos": {
-        "base_url": "http://localhost:5003",
+        "base_url": os.environ.get("CHRONOS_URL", "http://localhost:5003"),
         "timeout": 300
     },
     "sentio": {
-        "base_url": "http://localhost:5004",
+        "base_url": os.environ.get("SENTIO_URL", "http://localhost:5004"),
         "timeout": 300
     },
     "agora": {
-        "base_url": "http://localhost:5005",
+        "base_url": os.environ.get("AGORA_URL", "http://localhost:5005"),
         "timeout": 300
     }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Card,
   Button,
@@ -26,7 +26,6 @@ import {
   BarChartOutlined,
   UserOutlined,
   ClusterOutlined,
-  DatabaseOutlined,
   PlusOutlined,
   MinusOutlined
 } from '@ant-design/icons';
@@ -45,15 +44,14 @@ const RelationshipAnalysis = ({
   const [analysisType, setAnalysisType] = useState('department');
   const [searchTerm, setSearchTerm] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [neo4jConnected, setNeo4jConnected] = useState(false);
+  const [neo4jConnected, setNeo4jConnected] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [availableDepartments, setAvailableDepartments] = useState([]);
-  const [neo4jConfig, setNeo4jConfig] = useState({
-    uri: 'bolt://44.212.67.74:7687',
-    username: 'neo4j',
-    password: 'legs-augmentations-cradle'
-  });
   const svgRef = useRef();
+
+  useEffect(() => {
+    fetchAvailableDepartments();
+  }, []);
 
   // Neo4j 연결 테스트
   const testNeo4jConnection = async () => {
@@ -213,11 +211,6 @@ const RelationshipAnalysis = ({
 
   // Neo4j에서 직접 네트워크 분석 실행
   const analyzeRelationships = async () => {
-    if (!neo4jConnected) {
-      message.error('먼저 Neo4j 연결을 확인해주세요.');
-      return;
-    }
-
     setIsAnalyzing(true);
     try {
       // 분석 유형에 따라 다른 접근 방식 사용
@@ -1120,64 +1113,6 @@ const RelationshipAnalysis = ({
         배치 분석 없이도 독립적으로 실행 가능하며, 실시간 관계 데이터를 기반으로 분석합니다.
       </Paragraph>
 
-      {/* Neo4j 연결 설정 */}
-      <Row gutter={24} style={{ marginBottom: 24 }}>
-        <Col span={24}>
-          <Card title="Neo4j 데이터베이스 연결" extra={<DatabaseOutlined />}>
-            <Row gutter={16} align="middle">
-              <Col span={6}>
-                <Text strong>Neo4j URI:</Text>
-                <Input
-                  value={neo4jConfig.uri}
-                  onChange={(e) => setNeo4jConfig({...neo4jConfig, uri: e.target.value})}
-                  placeholder="bolt://localhost:7687"
-                  style={{ marginTop: 8 }}
-                />
-              </Col>
-              <Col span={4}>
-                <Text strong>사용자명:</Text>
-                <Input
-                  value={neo4jConfig.username}
-                  onChange={(e) => setNeo4jConfig({...neo4jConfig, username: e.target.value})}
-                  placeholder="neo4j"
-                  style={{ marginTop: 8 }}
-                />
-              </Col>
-              <Col span={4}>
-                <Text strong>비밀번호:</Text>
-                <Input.Password
-                  value={neo4jConfig.password}
-                  onChange={(e) => setNeo4jConfig({...neo4jConfig, password: e.target.value})}
-                  placeholder="password"
-                  style={{ marginTop: 8 }}
-                />
-              </Col>
-              <Col span={4}>
-                <Button 
-                  type={neo4jConnected ? "default" : "primary"}
-                  icon={<DatabaseOutlined />}
-                  onClick={testNeo4jConnection}
-                  loading={isAnalyzing}
-                  style={{ marginTop: 24 }}
-                >
-                  {neo4jConnected ? '연결됨' : '연결 테스트'}
-                </Button>
-              </Col>
-              <Col span={6}>
-                {neo4jConnected && (
-                  <Alert
-                    message="✅ Neo4j 연결 성공"
-                    type="success"
-                    showIcon
-                    style={{ marginTop: 8 }}
-                  />
-                )}
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-      </Row>
-
       {/* 분석 설정 및 실행 */}
       <Row gutter={24} style={{ marginBottom: 24 }}>
         <Col span={24}>
@@ -1251,17 +1186,15 @@ const RelationshipAnalysis = ({
                   icon={<ShareAltOutlined />}
                   onClick={analyzeRelationships}
                   loading={isAnalyzing}
-                  disabled={!neo4jConnected}
                   style={{ marginTop: 24 }}
                 >
                   관계 분석 시작
                 </Button>
               </Col>
               <Col span={6}>
-                <Button 
+                <Button
                   icon={<UserOutlined />}
                   onClick={checkSampleEmployees}
-                  disabled={!neo4jConnected}
                   style={{ marginTop: 24 }}
                 >
                   직원 번호 확인
@@ -1302,16 +1235,6 @@ const RelationshipAnalysis = ({
           </Card>
         </Col>
       </Row>
-
-      {!neo4jConnected && (
-        <Alert
-          message="Neo4j 연결 필요"
-          description="관계 분석을 위해서는 먼저 Neo4j 그래프 데이터베이스에 연결해주세요. 연결 정보를 입력하고 '연결 테스트' 버튼을 클릭하세요."
-          type="info"
-          showIcon
-          style={{ marginBottom: 24 }}
-        />
-      )}
 
       {batchResults && (
         <Alert
