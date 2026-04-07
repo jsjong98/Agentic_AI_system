@@ -468,7 +468,7 @@ def get_status():
         status = {
             'system_initialized': processor is not None,
             'model_loaded': model is not None,
-            'data_available': processor is not None and processor.ts_data is not None,
+            'data_available': processor is not None and getattr(processor, 'ts_data', None) is not None,
             'device': str(device),
             'timestamp': datetime.now().isoformat(),
             'data_paths': DATA_PATH,
@@ -502,7 +502,7 @@ def health_check():
             'timestamp': datetime.now().isoformat(),
             'system_initialized': processor is not None,
             'model_loaded': model is not None,
-            'data_available': processor is not None and processor.ts_data is not None,
+            'data_available': processor is not None and getattr(processor, 'ts_data', None) is not None,
             'device': str(device)
         }
         
