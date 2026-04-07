@@ -909,6 +909,40 @@ def post_analysis():
         }), 500
 
 
+# ── Authentication ──────────────────────────────────
+AUTH_USERS = {
+    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Admin User 1', 'initials': 'JO'},
+    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Admin User 2', 'initials': 'CC'},
+    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Admin User 3', 'initials': 'JK'},
+    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Developer', 'initials': 'DV'},
+    '***@redacted': {'password': '***REDACTED***', 'role': 'hr', 'name': 'HR Manager', 'initials': 'HR'},
+}
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    """로그인 API - 프론트엔드에 자격증명을 노출하지 않음"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': '요청 데이터가 없습니다.'}), 400
+
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '')
+
+    user = AUTH_USERS.get(email)
+    if not user or user['password'] != password:
+        return jsonify({'success': False, 'error': '이메일 또는 비밀번호가 올바르지 않습니다.'}), 401
+
+    return jsonify({
+        'success': True,
+        'user': {
+            'email': email,
+            'role': user['role'],
+            'name': user['name'],
+            'initials': user['initials'],
+        }
+    })
+
+
 @app.route('/api/chat', methods=['POST'])
 def chat_with_llm():
     """

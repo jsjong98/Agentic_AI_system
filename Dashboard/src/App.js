@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Menu, Typography, notification } from 'antd';
+import { notification } from 'antd';
 import {
   HomeOutlined,
   ApiOutlined,
   RobotOutlined,
-  BarChartOutlined,
   TeamOutlined,
   FileTextOutlined,
   BulbOutlined,
@@ -23,9 +22,6 @@ import GroupStatistics from './components/GroupStatistics';
 import Login, { getStoredUser, logout, PWC_LOGO } from './components/Login';
 import { apiService } from './services/apiService';
 import './styles/typography.css'; // 통일된 폰트 크기 체계
-
-const { Header, Sider, Content } = Layout;
-const { Title } = Typography;
 
 // ── 새 탭 Placeholder 컴포넌트들 ──
 const PlaceholderPage = ({ title, icon, description, items }) => (
@@ -318,7 +314,6 @@ const AdminSettingsPlaceholder = () => (
 
 const App = () => {
   const [user, setUser] = useState(getStoredUser());
-  const [collapsed, setCollapsed] = useState(false);
   const [selectedKey, setSelectedKey] = useState('home');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
@@ -854,139 +849,165 @@ const App = () => {
     }
   };
 
+  // 다크모드 상태
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem('pwc_theme') || 'system');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const isDark = themeMode === 'dark' || (themeMode === 'system' && prefersDark);
+
+  // 조직 View 상태
+  const [viewMode, setViewMode] = useState('all'); // 'all' | department name
+  const departments = ['Research & Development', 'Sales', 'Human Resources'];
+
+  // 테마 변경 시 localStorage 저장
+  const cycleTheme = () => {
+    const next = themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
+    setThemeMode(next);
+    localStorage.setItem('pwc_theme', next);
+  };
+
   // 로그인 전이면 로그인 화면 표시
   if (!user) {
     return <Login onLogin={setUser} />;
   }
 
+  // 다크모드 CSS 변수
+  const themeVars = isDark ? {
+    '--bg': '#1a1a2e', '--card': '#16213e', '--border': '#333',
+    '--text': '#e0e0e0', '--sub': '#888', '--header-bg': '#0f3460',
+  } : {
+    '--bg': '#f3f4f6', '--card': '#fff', '--border': '#eee',
+    '--text': '#2d2d2d', '--sub': '#888', '--header-bg': '#fff',
+  };
+
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      {/* 사이드바 */}
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        theme="light"
-        width={280}
-        style={{
-          boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
-        }}
-      >
-        <div style={{
-          padding: '16px',
-          textAlign: 'center',
-          borderBottom: '3px solid #d93954',
-          background: '#fff',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 8,
-        }}>
+    <div style={{
+      minHeight: '100vh',
+      background: themeVars['--bg'],
+      color: themeVars['--text'],
+      fontFamily: "'Noto Sans KR', system-ui, -apple-system, sans-serif",
+      transition: 'background 0.3s, color 0.3s',
+    }}>
+      {/* ── HEADER ── */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 200,
+        background: themeVars['--header-bg'],
+        borderBottom: '3px solid #d93954',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 24px', height: 56,
+        boxShadow: '0 1px 4px rgba(0,0,0,.08)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <img src={PWC_LOGO} alt="PwC" style={{ height: 28 }} />
-          {!collapsed && (
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#2d2d2d' }}>
-              퇴사위험 대시보드
-            </div>
-          )}
+          <span style={{ fontSize: 17, fontWeight: 700, color: themeVars['--text'] }}>
+            조직 퇴사위험 대시보드
+          </span>
         </div>
-        
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          onClick={({ key }) => setSelectedKey(key)}
-          items={menuItems}
-          style={{ 
-            border: 'none',
-            fontSize: 'var(--font-base)',
-            paddingTop: '8px'
-          }}
-        />
-      </Sider>
-
-      {/* 메인 콘텐츠 */}
-      <Layout>
-        <Header style={{ 
-          background: '#fff', 
-          padding: '0 24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: '64px',
-          lineHeight: '64px'
-        }}>
-          <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-            {{ 'home': '인원현황', 'insights': '인사이트', 'risk-factors': '위험 요인',
-               'intervention': '개입 전략', 'report-generation': '보고서 출력',
-               'batch': '배치 분석', 'group-statistics': '단체 통계',
-               'cognita': '개별 관계분석', 'post-analysis': '사후 분석',
-               'admin-settings': '관리자 설정' }[selectedKey] || '대시보드'}
-          </Title>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {/* 서버 상태 표시 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: serverStatus ? '#52c41a' : '#ff4d4f'
-              }} />
-              <span style={{ fontSize: 'var(--font-base)', color: '#666' }}>
-                {serverStatus ? '서버 연결됨' : '서버 연결 실패'}
-              </span>
-            </div>
-            
-            {/* 유저 정보 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: '#d93954', color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 600,
-              }}>
-                {user.initials}
-              </div>
-              <span style={{ fontSize: 13, color: '#555', fontWeight: 500 }}>
-                {user.name}
-              </span>
-              <span style={{
-                fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                background: isAdmin ? '#fde8ec' : '#e8f0fe',
-                color: isAdmin ? '#d93954' : '#2563eb',
-                fontWeight: 600,
-              }}>
-                {isAdmin ? 'ADMIN' : 'HR'}
-              </span>
-            </div>
-
-            {/* 로그아웃 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>
+          {/* 전사/조직 View 토글 */}
+          <div style={{ display: 'flex', border: `1px solid ${isDark ? '#444' : '#ddd'}`, borderRadius: 8, overflow: 'hidden', fontSize: 12 }}>
             <button
-              onClick={() => { logout(); setUser(null); }}
+              onClick={() => setViewMode('all')}
               style={{
-                border: '1px solid #ddd', background: '#fff',
-                borderRadius: 6, padding: '5px 12px',
-                cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
-                color: '#666', fontWeight: 500,
+                padding: '5px 14px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
+                background: viewMode === 'all' ? '#d93954' : themeVars['--card'],
+                color: viewMode === 'all' ? '#fff' : themeVars['--text'],
               }}
-            >
-              로그아웃
-            </button>
+            >전사 View</button>
+            {departments.map(d => (
+              <button
+                key={d}
+                onClick={() => setViewMode(d)}
+                style={{
+                  padding: '5px 10px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
+                  borderLeft: `1px solid ${isDark ? '#444' : '#ddd'}`,
+                  background: viewMode === d ? '#d93954' : themeVars['--card'],
+                  color: viewMode === d ? '#fff' : themeVars['--text'],
+                  fontSize: 11,
+                }}
+              >{d.replace('Research & Development', 'R&D').replace('Human Resources', 'HR')}</button>
+            ))}
           </div>
-        </Header>
-        
-        <Content style={{ 
-          margin: '16px 24px',
-          padding: '24px',
-          background: '#fff',
-          borderRadius: '8px',
-          overflow: 'auto',
-          minHeight: 'calc(100vh - 64px - 32px)'
+
+          {/* 다크모드 토글 */}
+          <button onClick={cycleTheme} style={{
+            border: `1px solid ${isDark ? '#444' : '#ddd'}`, borderRadius: 6,
+            padding: '4px 10px', cursor: 'pointer', fontSize: 14,
+            background: themeVars['--card'], color: themeVars['--text'],
+          }}>
+            {themeMode === 'light' ? '☀️' : themeMode === 'dark' ? '🌙' : '💻'}
+          </button>
+
+          {/* 유저 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: '#d93954', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 600,
+            }}>{user.initials}</div>
+            <span style={{ fontWeight: 500, color: themeVars['--sub'] }}>{user.name}</span>
+            <span style={{
+              fontSize: 11, padding: '2px 8px', borderRadius: 4,
+              background: isAdmin ? '#fde8ec' : '#e8f0fe',
+              color: isAdmin ? '#d93954' : '#2563eb', fontWeight: 600,
+            }}>{isAdmin ? 'ADMIN' : 'HR'}</span>
+          </div>
+
+          <button onClick={() => { logout(); setUser(null); }} style={{
+            border: `1px solid ${isDark ? '#444' : '#ddd'}`, background: themeVars['--card'],
+            borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
+            fontSize: 12, fontFamily: 'inherit', color: themeVars['--sub'], fontWeight: 500,
+          }}>로그아웃</button>
+        </div>
+      </header>
+
+      {/* ── TAB NAV ── */}
+      <nav style={{
+        background: themeVars['--card'],
+        display: 'flex', padding: '0 24px',
+        borderBottom: `1px solid ${themeVars['--border']}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,.04)',
+        overflowX: 'auto', position: 'sticky', top: 56, zIndex: 190,
+      }}>
+        {menuItems.filter(i => i.key).map(item => (
+          <button
+            key={item.key}
+            onClick={() => setSelectedKey(item.key)}
+            style={{
+              padding: '12px 22px', fontSize: 14, fontWeight: selectedKey === item.key ? 700 : 500,
+              color: selectedKey === item.key ? '#d93954' : themeVars['--sub'],
+              cursor: 'pointer', border: 'none', background: 'none',
+              borderBottom: selectedKey === item.key ? '3px solid #d93954' : '3px solid transparent',
+              whiteSpace: 'nowrap', fontFamily: 'inherit',
+              transition: 'all .2s',
+            }}
+          >{item.label}</button>
+        ))}
+      </nav>
+
+      {/* 조직 View 표시 */}
+      {viewMode !== 'all' && (
+        <div style={{
+          background: isDark ? '#1e3a5f' : '#fef7f8',
+          padding: '8px 24px', fontSize: 13, fontWeight: 600,
+          color: '#d93954', borderBottom: `1px solid ${themeVars['--border']}`,
         }}>
-          {renderContent()}
-        </Content>
-      </Layout>
-    </Layout>
+          📂 조직 View: {viewMode} | 해당 조직의 데이터만 필터링됩니다
+        </div>
+      )}
+
+      {/* ── MAIN CONTENT ── */}
+      <main style={{
+        padding: '20px 24px 32px',
+        maxWidth: 1600, margin: '0 auto',
+      }}>
+        {renderContent()}
+      </main>
+
+      <footer style={{ textAlign: 'center', padding: 20, fontSize: 11, color: themeVars['--sub'] }}>
+        &copy; 2025 PwC Consulting. Agentic AI 기반 선제적 퇴사위험 예측 및 관리시스템.
+      </footer>
+    </div>
   );
 };
 
