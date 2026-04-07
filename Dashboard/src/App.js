@@ -216,7 +216,6 @@ const App = () => {
   const [dataLoaded] = useState(true); // 데이터 로딩 상태를 기본적으로 활성화
   const isInitializedRef = useRef(false); // 초기화 중복 방지
 
-  const isAdmin = user?.role === 'admin';
 
   // 전역 에러 핸들러
   useEffect(() => {
@@ -290,17 +289,14 @@ const App = () => {
     { key: 'report-generation', label: '보고서 출력' },
   ];
 
-  // Admin 서브 메뉴
-  const adminSubItems = [
-    { key: 'batch', label: '배치 분석' },
+  // Admin 탭 — nav에 직접 표시 (드롭다운 제거)
+  const adminTabs = [
+    { key: 'admin-settings',   label: '관리자 설정' },
+    { key: 'batch',            label: '배치 분석' },
+    { key: 'cognita',          label: '개별 관계분석' },
+    { key: 'post-analysis',    label: '사후 분석' },
     { key: 'group-statistics', label: '단체 통계' },
-    { key: 'cognita', label: '개별 관계분석' },
-    { key: 'post-analysis', label: '사후 분석' },
-    { key: 'admin-settings', label: '관리자 설정' },
   ];
-
-  const [showAdminMenu, setShowAdminMenu] = useState(false);
-  const isAdminPage = adminSubItems.some(i => i.key === selectedKey);
 
   // 서버 상태 확인 및 IndexedDB/localStorage에서 배치 결과 복원
   useEffect(() => {
@@ -860,62 +856,63 @@ const App = () => {
         </div>
       </header>
 
-      {/* ── TAB NAV ── */}
-      <nav style={{
+      {/* ── TAB NAV (두 행: 일반 | Admin) ── */}
+      <div style={{
         background: themeVars['--card'],
-        display: 'flex', alignItems: 'center', padding: '0 24px',
         borderBottom: `1px solid ${themeVars['--border']}`,
         boxShadow: '0 1px 3px rgba(0,0,0,.04)',
-        overflowX: 'auto', position: 'sticky', top: 56, zIndex: 190,
+        position: 'sticky', top: 56, zIndex: 190,
       }}>
-        {tabItems.map(item => (
-          <button key={item.key} onClick={() => { setSelectedKey(item.key); setShowAdminMenu(false); }}
-            style={{
-              padding: '12px 22px', fontSize: 14,
-              fontWeight: selectedKey === item.key && !isAdminPage ? 700 : 500,
-              color: selectedKey === item.key && !isAdminPage ? '#d93954' : themeVars['--sub'],
-              cursor: 'pointer', border: 'none', background: 'none',
-              borderBottom: selectedKey === item.key && !isAdminPage ? '3px solid #d93954' : '3px solid transparent',
-              whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'all .2s',
-            }}
-          >{item.label}</button>
-        ))}
+        {/* 첫 행: 일반 탭 */}
+        <nav style={{
+          display: 'flex', alignItems: 'center', padding: '0 24px',
+          overflowX: 'auto', scrollbarWidth: 'none',
+        }}>
+          {tabItems.map(item => (
+            <button key={item.key} onClick={() => setSelectedKey(item.key)}
+              style={{
+                padding: '11px 20px', fontSize: 14,
+                fontWeight: selectedKey === item.key ? 700 : 500,
+                color: selectedKey === item.key ? '#d93954' : themeVars['--sub'],
+                cursor: 'pointer', border: 'none', background: 'none',
+                borderBottom: selectedKey === item.key ? '3px solid #d93954' : '3px solid transparent',
+                whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'all .2s',
+              }}
+            >{item.label}</button>
+          ))}
+        </nav>
 
-        {/* Admin 드롭다운 (Admin 유저만) */}
-        {isAdmin && (
-          <div style={{ position: 'relative', marginLeft: 'auto' }}>
-            <button onClick={() => setShowAdminMenu(!showAdminMenu)} style={{
-              padding: '12px 22px', fontSize: 14,
-              fontWeight: isAdminPage || showAdminMenu ? 700 : 500,
-              color: isAdminPage || showAdminMenu ? '#d93954' : themeVars['--sub'],
-              cursor: 'pointer', border: 'none', background: 'none',
-              borderBottom: isAdminPage ? '3px solid #d93954' : '3px solid transparent',
-              whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'all .2s',
-            }}>⚙️ Admin ▾</button>
+        {/* 둘째 행: Admin 탭 */}
+        <nav style={{
+          display: 'flex', alignItems: 'center', padding: '0 24px',
+          overflowX: 'auto', scrollbarWidth: 'none',
+          borderTop: `1px solid ${themeVars['--border']}`,
+          background: isDark ? '#0d1117' : '#fafafa',
+        }}>
+          {/* Admin 레이블 */}
+          <span style={{
+            fontSize: 11, fontWeight: 700, color: '#d93954',
+            padding: '8px 10px 8px 0', marginRight: 4,
+            whiteSpace: 'nowrap', letterSpacing: '0.5px',
+            borderRight: `1px solid ${themeVars['--border']}`,
+          }}>
+            ⚙ Admin
+          </span>
 
-            {showAdminMenu && (
-              <div style={{
-                position: 'absolute', top: '100%', right: 0, zIndex: 300,
-                background: themeVars['--card'], border: `1px solid ${themeVars['--border']}`,
-                borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
-                padding: '4px 0', minWidth: 180,
-              }}>
-                {adminSubItems.map(item => (
-                  <button key={item.key} onClick={() => { setSelectedKey(item.key); setShowAdminMenu(false); }}
-                    style={{
-                      display: 'block', width: '100%', textAlign: 'left',
-                      padding: '10px 16px', border: 'none', cursor: 'pointer',
-                      background: selectedKey === item.key ? (isDark ? '#1e3a5f' : '#fef7f8') : 'transparent',
-                      color: selectedKey === item.key ? '#d93954' : themeVars['--text'],
-                      fontSize: 13, fontFamily: 'inherit', fontWeight: selectedKey === item.key ? 600 : 400,
-                    }}
-                  >{item.label}</button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </nav>
+          {adminTabs.map(item => (
+            <button key={item.key} onClick={() => setSelectedKey(item.key)}
+              style={{
+                padding: '8px 18px', fontSize: 13,
+                fontWeight: selectedKey === item.key ? 700 : 500,
+                color: selectedKey === item.key ? '#d93954' : themeVars['--sub'],
+                cursor: 'pointer', border: 'none', background: 'none',
+                borderBottom: selectedKey === item.key ? '2px solid #d93954' : '2px solid transparent',
+                whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'all .2s',
+              }}
+            >{item.label}</button>
+          ))}
+        </nav>
+      </div>
 
       {/* 조직 View 표시 */}
       {viewMode !== 'all' && (
