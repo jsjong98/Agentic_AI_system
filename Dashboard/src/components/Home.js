@@ -6,35 +6,24 @@ import {
   Typography,
   Button,
   Input,
-  List,
   Avatar,
   Spin,
   message,
-  Divider,
   Tag,
   Space,
   Modal,
   Descriptions,
   Badge,
-  Timeline,
   Statistic,
-  Progress
 } from 'antd';
 import {
   SendOutlined,
   RobotOutlined,
   UserOutlined,
-  HistoryOutlined,
-  EyeOutlined,
-  TrophyOutlined,
-  TeamOutlined,
-  BarChartOutlined,
-  ClockCircleOutlined,
   CheckCircleOutlined,
   DownloadOutlined,
   UploadOutlined,
   DeleteOutlined,
-  SettingOutlined,
   VerticalAlignBottomOutlined
 } from '@ant-design/icons';
 import { predictionService } from '../services/predictionService';
@@ -43,7 +32,7 @@ import { predictionService } from '../services/predictionService';
 const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
 const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 // 타이핑 커서 애니메이션을 위한 스타일
@@ -505,44 +494,90 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
 
   return (
     <div style={{ padding: '0 8px' }}>
-      {/* 헤더 섹션 */}
-      <Row gutter={[24, 24]} style={{ marginBottom: '32px' }}>
-        <Col span={24}>
-          <Card
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              border: 'none',
-              color: 'white'
-            }}
-          >
-            <Row align="middle" justify="space-between">
-              <Col>
-                <Title level={2} style={{ color: 'white', margin: 0 }}>
-                  🏠 Retain Sentinel 360 홈
-                </Title>
-                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 'var(--font-medium)' }}>
-                  AI 기반 이직 예측 및 분석 시스템에 오신 것을 환영합니다
-                </Text>
-              </Col>
-              <Col>
-                <Space>
-                  <Badge count={predictionHistory.length} showZero={false}>
-                    <Button 
-                      type="primary" 
-                      ghost 
-                      icon={<HistoryOutlined />}
-                      size="large"
-                      onClick={() => onNavigate('batch')}
-                    >
-                      분석 시작하기
-                    </Button>
-                  </Badge>
-                </Space>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-      </Row>
+      {/* Agentic AI 아키텍처 배너 */}
+      <div style={{
+        background: 'linear-gradient(135deg, #2d2d2d, #4a4a4a)',
+        borderRadius: 12, padding: '20px 24px', color: '#fff',
+        marginBottom: 20, display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+      }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
+            Agentic AI 기반 선제적 퇴사위험 예측 시스템
+          </div>
+          <div style={{ fontSize: 12, color: '#ccc' }}>
+            5개 전문 Worker Agent의 분석 결과를 Supervisor가 종합하여 360도 관점의 퇴사 위험 진단 제공
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { name: 'Structura', desc: '정형 데이터', bg: 'rgba(217,57,84,.2)', border: 'rgba(217,57,84,.5)' },
+            { name: 'Cognita', desc: '관계망', bg: 'rgba(37,99,235,.2)', border: 'rgba(37,99,235,.5)' },
+            { name: 'Chronos', desc: '시계열', bg: 'rgba(232,114,26,.2)', border: 'rgba(232,114,26,.5)' },
+            { name: 'Sentio', desc: '자연어', bg: 'rgba(124,58,237,.2)', border: 'rgba(124,58,237,.5)' },
+            { name: 'Agora', desc: '외부시장', bg: 'rgba(46,164,79,.2)', border: 'rgba(46,164,79,.5)' },
+          ].map(a => (
+            <div key={a.name} style={{
+              padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+              textAlign: 'center', whiteSpace: 'nowrap',
+              background: a.bg, border: `1px solid ${a.border}`,
+            }}>
+              {a.name}<br/><span style={{ fontSize: 10 }}>{a.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 에이전트 아키텍처 플로우 다이어그램 */}
+      <Card style={{ marginBottom: 20, border: '1px solid #eee' }} bodyStyle={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#d93954', display: 'inline-block' }} />
+          에이전트 워크플로우
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, flexWrap: 'wrap', padding: '10px 0' }}>
+          {/* Supervisor */}
+          <div style={{ textAlign: 'center', minWidth: 100 }}>
+            <div style={{ background: '#2d2d2d', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+              Supervisor Agent
+            </div>
+            <div style={{ fontSize: 18, color: '#d93954' }}>↓</div>
+          </div>
+          <div style={{ fontSize: 18, color: '#ccc', margin: '0 8px' }}>→</div>
+          {/* Workers */}
+          {[
+            { name: 'Structura', color: '#d93954', icon: '📊' },
+            { name: 'Cognita', color: '#2563eb', icon: '🔗' },
+            { name: 'Chronos', color: '#e8721a', icon: '📈' },
+            { name: 'Sentio', color: '#7c3aed', icon: '💬' },
+            { name: 'Agora', color: '#2ea44f', icon: '🎯' },
+          ].map((w, i) => (
+            <React.Fragment key={w.name}>
+              <div style={{ textAlign: 'center', minWidth: 80 }}>
+                <div style={{
+                  border: `2px solid ${w.color}`, borderRadius: 8,
+                  padding: '8px 12px', fontSize: 11, fontWeight: 600,
+                  background: `${w.color}10`,
+                }}>
+                  <div style={{ fontSize: 16 }}>{w.icon}</div>
+                  {w.name}
+                </div>
+              </div>
+              {i < 4 && <div style={{ fontSize: 14, color: '#ccc', margin: '0 4px' }}>→</div>}
+            </React.Fragment>
+          ))}
+          <div style={{ fontSize: 18, color: '#ccc', margin: '0 8px' }}>→</div>
+          {/* Synthesize */}
+          <div style={{ textAlign: 'center', minWidth: 100 }}>
+            <div style={{ fontSize: 18, color: '#d93954' }}>↑</div>
+            <div style={{ background: '#d93954', color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+              Synthesize Agent
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 11, color: '#888', marginTop: 8 }}>
+          데이터 수집 → 개별 분석 → 종합 평가 → 위험도 산출
+        </div>
+      </Card>
 
       <Row gutter={[24, 24]}>
         {/* LLM 채팅 섹션 */}
@@ -705,207 +740,88 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
           </Card>
         </Col>
 
-        {/* 최근 예측 결과 및 기능 안내 */}
+        {/* 에이전트 상태 & 빠른 질문 */}
         <Col xs={24} lg={10}>
           <Space direction="vertical" style={{ width: '100%' }} size="large">
-            {/* 최근 분석 결과 요약 */}
+            {/* 에이전트 연결 상태 */}
             <Card
               title={
                 <Space>
-                  <TrophyOutlined style={{ color: '#52c41a' }} />
-                  <span>최신 분석 결과</span>
+                  <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                  <span>에이전트 연결 상태</span>
                 </Space>
               }
+              bodyStyle={{ padding: '12px 16px' }}
             >
-              {predictionHistory.length > 0 ? (
-                <div>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Statistic
-                        title="전체 직원"
-                        value={predictionHistory[0].totalEmployees}
-                        suffix="명"
-                        valueStyle={{ color: '#1890ff' }}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        title="고위험군"
-                        value={predictionHistory[0].highRiskCount}
-                        suffix="명"
-                        valueStyle={{ color: '#ff4d4f' }}
-                      />
-                    </Col>
-                  </Row>
-                  <Divider />
-                  <Progress
-                    percent={predictionHistory[0].accuracy}
-                    status="active"
-                    strokeColor="#52c41a"
-                    format={percent => `정확도 ${percent}%`}
-                  />
-                  <Paragraph style={{ marginTop: '16px', marginBottom: 0 }}>
-                    {predictionHistory[0].summary}
-                  </Paragraph>
+              {[
+                { name: 'Supervisor', desc: '워크플로우 오케스트레이션', color: '#2d2d2d', port: 'supervisor' },
+                { name: 'Structura', desc: 'XGBoost 정형 데이터 분석', color: '#d93954', port: 'structura' },
+                { name: 'Cognita', desc: 'Neo4j 관계망 분석', color: '#2563eb', port: 'cognita' },
+                { name: 'Chronos', desc: 'LSTM 시계열 패턴 분석', color: '#e8721a', port: 'chronos' },
+                { name: 'Sentio', desc: 'NLP 감성/심리 분석', color: '#7c3aed', port: 'sentio' },
+                { name: 'Agora', desc: '외부 시장 데이터 분석', color: '#2ea44f', port: 'agora' },
+                { name: 'Integration', desc: '결과 통합 및 보고서', color: '#666', port: 'integration' },
+              ].map(agent => (
+                <div key={agent.name} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '8px 0', borderBottom: '1px solid #f5f5f5',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: '#52c41a',
+                    }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: agent.color }}>{agent.name}</div>
+                      <div style={{ fontSize: 11, color: '#999' }}>{agent.desc}</div>
+                    </div>
+                  </div>
+                  <Tag color="green" style={{ margin: 0, fontSize: 10 }}>연결됨</Tag>
                 </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                  <BarChartOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#d9d9d9', marginBottom: '16px' }} />
-                  <Title level={4} style={{ color: '#999' }}>
-                    아직 분석 결과가 없습니다
-                  </Title>
-                  <Paragraph style={{ color: '#666', marginBottom: '24px' }}>
-                    배치 분석을 실행하면 여기에 최신 결과가 표시됩니다.
-                  </Paragraph>
-                  <Button 
-                    type="primary" 
-                    onClick={() => onNavigate('batch')}
-                    size="large"
-                  >
-                    배치 분석 시작하기
-                  </Button>
-                </div>
-              )}
+              ))}
             </Card>
 
-            {/* 예측 결과 히스토리 */}
+            {/* 빠른 질문 카드 */}
             <Card
               title={
                 <Space>
-                  <HistoryOutlined style={{ color: '#722ed1' }} />
-                  <span>분석 히스토리</span>
-                  <Badge count={predictionHistory.length} showZero={false} />
+                  <RobotOutlined style={{ color: '#d93954' }} />
+                  <span>빠른 질문</span>
                 </Space>
               }
-              extra={
-                predictionHistory.length > 0 && (
-                  <Space>
-                    <Button 
-                      type="text" 
-                      icon={<DownloadOutlined />} 
-                      onClick={handleExportHistory}
-                      title="히스토리 내보내기"
-                    />
-                    <Button 
-                      type="text" 
-                      icon={<UploadOutlined />} 
-                      onClick={() => fileInputRef.current?.click()}
-                      title="히스토리 가져오기"
-                    />
-                    <Button 
-                      type="text" 
-                      icon={<SettingOutlined />} 
-                      onClick={() => setHistoryManageVisible(true)}
-                      title="히스토리 관리"
-                    />
-                  </Space>
-                )
-              }
+              bodyStyle={{ padding: '12px 16px' }}
             >
-              {predictionHistory.length > 0 ? (
-                <List
-                  dataSource={predictionHistory}
-                  renderItem={(item) => (
-                    <List.Item
-                      actions={[
-                        <Button
-                          type="link"
-                          icon={<EyeOutlined />}
-                          onClick={() => showPredictionDetail(item)}
-                        >
-                          상세보기
-                        </Button>
-                      ]}
-                    >
-                      <List.Item.Meta
-                        avatar={
-                          <Badge status={item.status === 'completed' ? 'success' : 'processing'} />
-                        }
-                        title={item.title}
-                        description={
-                          <Space direction="vertical" size="small">
-                            <Text type="secondary">
-                              <ClockCircleOutlined /> {new Date(item.timestamp).toLocaleDateString('ko-KR')}
-                            </Text>
-                            <Space>
-                              <Tag color="red">고위험 {item.highRiskCount}명</Tag>
-                              <Tag color="orange">중위험 {item.mediumRiskCount}명</Tag>
-                              <Tag color="green">저위험 {item.lowRiskCount}명</Tag>
-                            </Space>
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
-              ) : (
-                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                  <HistoryOutlined style={{ fontSize: 'var(--icon-xlarge)', color: '#d9d9d9', marginBottom: '16px' }} />
-                  <Title level={4} style={{ color: '#999' }}>
-                    분석 히스토리가 없습니다
-                  </Title>
-                  <Paragraph style={{ color: '#666' }}>
-                    배치 분석을 실행하면 히스토리가 자동으로 저장됩니다.
-                  </Paragraph>
+              <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
+                아래 질문을 클릭하면 AI 어시스턴트가 실제 데이터를 기반으로 답변합니다.
+              </div>
+              {[
+                '전체 고위험군 현황을 알려줘',
+                '사번 1인 직원의 퇴사 위험도는?',
+                'Sales 부서의 위험 분석 결과는?',
+                '가장 위험도가 높은 직원 5명은?',
+                'R&D 부서 고위험군 현황을 알려줘',
+              ].map((q) => (
+                <div
+                  key={q}
+                  onClick={() => {
+                    setCurrentMessage(q);
+                    setTimeout(() => {
+                      handleSendMessage();
+                    }, 100);
+                  }}
+                  style={{
+                    padding: '10px 14px', marginBottom: 8,
+                    background: '#f8f8f9', borderRadius: 8,
+                    fontSize: 13, cursor: 'pointer',
+                    border: '1px solid #eee',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => { e.target.style.background = '#fef7f8'; e.target.style.borderColor = '#d93954'; }}
+                  onMouseLeave={(e) => { e.target.style.background = '#f8f8f9'; e.target.style.borderColor = '#eee'; }}
+                >
+                  💬 {q}
                 </div>
-              )}
-            </Card>
-
-            {/* 주요 기능 안내 */}
-            <Card
-              title={
-                <Space>
-                  <BarChartOutlined style={{ color: '#fa8c16' }} />
-                  <span>주요 기능</span>
-                </Space>
-              }
-            >
-              <Timeline
-                items={[
-                  {
-                    dot: <TeamOutlined style={{ fontSize: 'var(--icon-small)' }} />,
-                    children: (
-                      <div>
-                        <Text strong>배치 분석</Text>
-                        <br />
-                        <Text type="secondary">전체 직원의 이직 위험도를 일괄 분석</Text>
-                        <br />
-                        <Button type="link" size="small" onClick={() => onNavigate('batch')}>
-                          바로가기 →
-                        </Button>
-                      </div>
-                    )
-                  },
-                  {
-                    dot: <BarChartOutlined style={{ fontSize: 'var(--icon-small)' }} />,
-                    children: (
-                      <div>
-                        <Text strong>단체 통계</Text>
-                        <br />
-                        <Text type="secondary">부서별, 팀별 이직 위험 통계 분석</Text>
-                        <br />
-                        <Button type="link" size="small" onClick={() => onNavigate('group-statistics')}>
-                          바로가기 →
-                        </Button>
-                      </div>
-                    )
-                  },
-                  {
-                    dot: <CheckCircleOutlined style={{ fontSize: 'var(--icon-small)' }} />,
-                    children: (
-                      <div>
-                        <Text strong>사후 분석</Text>
-                        <br />
-                        <Text type="secondary">예측 결과의 정확도 검증 및 개선</Text>
-                        <br />
-                        <Button type="link" size="small" onClick={() => onNavigate('post-analysis')}>
-                          바로가기 →
-                        </Button>
-                      </div>
-                    )
-                  }
-                ]}
-              />
+              ))}
             </Card>
           </Space>
         </Col>
