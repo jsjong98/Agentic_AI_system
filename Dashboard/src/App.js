@@ -6,7 +6,12 @@ import {
   RobotOutlined,
   BarChartOutlined,
   TeamOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  BulbOutlined,
+  WarningOutlined,
+  AimOutlined,
+  SettingOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 
 import Home from './components/Home';
@@ -21,6 +26,131 @@ import './styles/typography.css'; // 통일된 폰트 크기 체계
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
+
+// ── 새 탭 Placeholder 컴포넌트들 ──
+const PlaceholderPage = ({ title, icon, description, items }) => (
+  <div style={{ padding: '0 8px' }}>
+    <div style={{
+      background: 'linear-gradient(135deg, #2d2d2d, #4a4a4a)',
+      borderRadius: 12, padding: '24px', color: '#fff', marginBottom: 20,
+    }}>
+      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{icon} {title}</div>
+      <div style={{ fontSize: 13, color: '#ccc' }}>{description}</div>
+    </div>
+    {items && items.map((item, i) => (
+      <div key={i} style={{
+        background: '#fff', borderRadius: 12, padding: 20, marginBottom: 16,
+        borderLeft: `4px solid ${item.color || '#d93954'}`,
+        boxShadow: '0 1px 4px rgba(0,0,0,.06)',
+      }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{item.title}</div>
+        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>{item.desc}</div>
+        {item.chips && (
+          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {item.chips.map((c, j) => (
+              <span key={j} style={{
+                padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                background: c.bg, color: c.color,
+              }}>{c.label}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+);
+
+const agentChips = {
+  str: { label: 'Structura', bg: '#fde8ec', color: '#d93954' },
+  cog: { label: 'Cognita', bg: '#e8f0fe', color: '#2563eb' },
+  chr: { label: 'Chronos', bg: '#fef3e2', color: '#e8721a' },
+  sen: { label: 'Sentio', bg: '#f3e8fd', color: '#7c3aed' },
+  ago: { label: 'Agora', bg: '#e6f6ec', color: '#2ea44f' },
+};
+
+const InsightsPlaceholder = () => (
+  <PlaceholderPage
+    title="AI 핵심 인사이트" icon="💡"
+    description="5개 전문 Worker Agent의 분석 결과를 종합하여 360도 관점의 퇴사 위험 진단 제공"
+    items={[
+      { title: '🚨 번아웃 직전 그룹의 급속 확산', color: '#d93954',
+        desc: '고위험군 중 상당수가 번아웃 직전 상태. 평균 초과근무시간 전사 대비 2.3배, 직무만족도 하위 15%.',
+        chips: [agentChips.str, agentChips.sen, agentChips.chr] },
+      { title: '🔗 관계망 단절 패턴 감지', color: '#2563eb',
+        desc: '최근 6개월간 신규 협업 관계 미형성 직원이 고위험군에서 72%. 사회적 고립 지수 지속 상승.',
+        chips: [agentChips.cog, agentChips.chr] },
+      { title: '📈 행동 패턴 이상 징후 증가', color: '#e8721a',
+        desc: '최근 3주간 로그인 시간 불규칙성 전분기 대비 38% 증가. 이직 준비 행동 패턴 관찰.',
+        chips: [agentChips.chr, agentChips.ago] },
+      { title: '💬 감성 분석: 부정 감정 키워드 급증', color: '#7c3aed',
+        desc: '코칭 면담 및 자기평가 텍스트에서 "소진", "불확실", "답답함" 등 부정 키워드 45% 증가.',
+        chips: [agentChips.sen] },
+      { title: '🎯 외부 시장 Pull Factor 강화', color: '#2ea44f',
+        desc: 'Technology, R&D 부서 LinkedIn 접속 빈도 전분기 대비 62% 증가. 시장 보상 15~25% 높음.',
+        chips: [agentChips.ago, agentChips.str] },
+    ]}
+  />
+);
+
+const RiskFactorsPlaceholder = () => (
+  <PlaceholderPage
+    title="퇴사 위험 요인 분석" icon="⚠️"
+    description="SHAP 기반 위험 요인 분석 및 Persona별 위험 프로필"
+    items={[
+      { title: '📊 전사 Top 위험 요인 (SHAP 기반)', color: '#d93954',
+        desc: '1. 초과근무시간 (0.82)\n2. 직무만족도 (0.74)\n3. 연봉 동료대비 (0.68)\n4. 승진 후 경과기간 (0.62)\n5. 사회적 고립지수 (0.58)' },
+      { title: '🧩 Persona별 위험 프로필', color: '#e8721a',
+        desc: 'P01 번아웃 직전 — 초과근무 78%, 직무만족도 45%\nP02 보상 실망 — 보상 격차 72%, 외부 비교 65%\nP03 성장 정체 — 승진 경과 68%, PM 경험 부족 55%\nP04 보상체감 낮음 — 인센티브 미수령 58%' },
+    ]}
+  />
+);
+
+const InterventionPlaceholder = () => (
+  <PlaceholderPage
+    title="맞춤 개입 전략 프레임워크" icon="🎯"
+    description="각 Agent의 분석 결과를 기반으로 Persona별 맞춤형 개입 전략을 제시합니다."
+    items={[
+      { title: '구조적 불만족 (Structura)', color: '#d93954',
+        desc: '• 총체적 보상 검토 및 시장 대비 경쟁력 확보\n• 투명한 경력 경로 제시 및 승진 기준 명확화\n• 업무량 분배 재검토 및 초과근무 관리',
+        chips: [agentChips.str] },
+      { title: '관계적 단절 (Cognita)', color: '#2563eb',
+        desc: '• 관리자 주도 1:1 Communication 체계 강화\n• 프로젝트 페어링을 통한 협업 기회 확대\n• 멘토링 프로그램 연계 및 네트워크 복원',
+        chips: [agentChips.cog] },
+      { title: '행동적 이탈 (Chronos)', color: '#e8721a',
+        desc: '• 자율성 부여 및 유의미한 업무 재할당\n• 업무량 및 기대 수준 재조정\n• 시의적절한 인정과 격려 제공',
+        chips: [agentChips.chr] },
+      { title: '심리적 소진 (Sentio)', color: '#7c3aed',
+        desc: '• JD-R 모델 기반 관리적 개입\n• Job Crafting 기법 도입\n• 웰니스 프로그램 지원 및 EAP 연계',
+        chips: [agentChips.sen] },
+      { title: '외부 시장 요인 (Agora)', color: '#2ea44f',
+        desc: '• 내부 탤런트 마켓플레이스 관점의 관리\n• 전략적 보상 조정 (시장 벤치마크 기반)\n• 경쟁 우위 EVP 강화',
+        chips: [agentChips.ago] },
+    ]}
+  />
+);
+
+const AdminSettingsPlaceholder = () => (
+  <div style={{ padding: '0 8px' }}>
+    <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#d93954', display: 'inline-block' }} />
+      시스템 설정
+    </div>
+    {[
+      { title: '위험 임계값 설정', desc: '고위험 임계값: 0.70 | 잠재적 위험 임계값: 0.40' },
+      { title: 'Agent별 가중치', desc: 'Structura: 30% | Cognita: 20% | Chronos: 20% | Sentio: 15% | Agora: 15%' },
+      { title: '알림 설정', desc: '고위험 신규 감지 알림: ON | 위험 등급 변동 알림: ON | 주간 요약 리포트: ON' },
+      { title: '데이터 수집 주기', desc: 'HRIS (Structura): 매주 | 관계망 (Cognita): 매주 | 행동 로그 (Chronos): 매일 | 텍스트 (Sentio): 매월 | 외부 시장 (Agora): 매주' },
+    ].map((item, i) => (
+      <div key={i} style={{
+        background: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
+        border: '1px solid #eee', boxShadow: '0 1px 4px rgba(0,0,0,.06)',
+      }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>⚙️ {item.title}</div>
+        <div style={{ fontSize: 13, color: '#555' }}>{item.desc}</div>
+      </div>
+    ))}
+  </div>
+);
 
 // IndexedDB 헬퍼 함수들
   const initializeIndexedDB = () => {
@@ -263,24 +393,28 @@ const App = () => {
     };
   }, []);
 
-  // HR 메뉴
-  const hrMenuItems = [
+  // 공통 메뉴 (전체 사용자)
+  const commonMenuItems = [
     { key: 'home', icon: <HomeOutlined />, label: '인원현황' },
-    { key: 'group-statistics', icon: <TeamOutlined />, label: '단체 통계' },
+    { key: 'insights', icon: <BulbOutlined />, label: '인사이트' },
+    { key: 'risk-factors', icon: <WarningOutlined />, label: '위험 요인' },
+    { key: 'intervention', icon: <AimOutlined />, label: '개입 전략' },
     { key: 'report-generation', icon: <FileTextOutlined />, label: '보고서 출력' },
   ];
 
-  // Admin 메뉴
-  const adminMenuItems = [
-    { key: 'home', icon: <HomeOutlined />, label: '인원현황' },
-    { key: 'batch', icon: <RobotOutlined />, label: '배치 분석' },
-    { key: 'group-statistics', icon: <TeamOutlined />, label: '단체 통계' },
-    { key: 'cognita', icon: <ApiOutlined />, label: '개별 관계분석' },
-    { key: 'post-analysis', icon: <BarChartOutlined />, label: '사후 분석' },
-    { key: 'report-generation', icon: <FileTextOutlined />, label: '보고서 출력' },
+  // Admin 전용 메뉴
+  const adminOnlyItems = [
+    { type: 'divider' },
+    { key: 'admin-group', icon: <SettingOutlined />, label: 'Admin', type: 'group', children: [
+      { key: 'batch', icon: <RobotOutlined />, label: '배치 분석' },
+      { key: 'group-statistics', icon: <TeamOutlined />, label: '단체 통계' },
+      { key: 'cognita', icon: <ApiOutlined />, label: '개별 관계분석' },
+      { key: 'post-analysis', icon: <ExperimentOutlined />, label: '사후 분석' },
+      { key: 'admin-settings', icon: <SettingOutlined />, label: '관리자 설정' },
+    ]},
   ];
 
-  const menuItems = isAdmin ? adminMenuItems : hrMenuItems;
+  const menuItems = isAdmin ? [...commonMenuItems, ...adminOnlyItems] : commonMenuItems;
 
   // 서버 상태 확인 및 IndexedDB/localStorage에서 배치 결과 복원
   useEffect(() => {
@@ -696,51 +830,27 @@ const App = () => {
 
     switch (selectedKey) {
       case 'home':
-        return (
-          <Home
-            {...commonProps}
-            onNavigate={setSelectedKey}
-          />
-        );
-      case 'batch':
-        return (
-          <BatchAnalysis
-            {...commonProps}
-            onNavigate={setSelectedKey}
-          />
-        );
-      case 'cognita':
-        return (
-          <RelationshipAnalysis
-            {...commonProps}
-            batchResults={globalBatchResults} // 전역 상태 사용
-          />
-        );
-      case 'post-analysis':
-        return (
-          <PostAnalysis 
-            {...commonProps}
-          />
-        );
+        return <Home {...commonProps} onNavigate={setSelectedKey} />;
+      case 'insights':
+        return <InsightsPlaceholder />;
+      case 'risk-factors':
+        return <RiskFactorsPlaceholder />;
+      case 'intervention':
+        return <InterventionPlaceholder />;
       case 'report-generation':
-        return (
-          <ReportGeneration 
-            {...commonProps}
-          />
-        );
+        return <ReportGeneration {...commonProps} />;
+      case 'batch':
+        return <BatchAnalysis {...commonProps} onNavigate={setSelectedKey} />;
       case 'group-statistics':
-        return (
-          <GroupStatistics
-            {...commonProps}
-          />
-        );
+        return <GroupStatistics {...commonProps} />;
+      case 'cognita':
+        return <RelationshipAnalysis {...commonProps} batchResults={globalBatchResults} />;
+      case 'post-analysis':
+        return <PostAnalysis {...commonProps} />;
+      case 'admin-settings':
+        return <AdminSettingsPlaceholder />;
       default:
-        return (
-          <Home
-            {...commonProps}
-            onNavigate={setSelectedKey}
-          />
-        );
+        return <Home {...commonProps} onNavigate={setSelectedKey} />;
     }
   };
 
@@ -806,12 +916,11 @@ const App = () => {
           lineHeight: '64px'
         }}>
           <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-            {selectedKey === 'home' ? '홈' : 
-             selectedKey === 'batch' ? '배치 분석' :
-             selectedKey === 'group-statistics' ? '단체 통계' :
-             selectedKey === 'cognita' ? '개별 관계분석' :
-             selectedKey === 'post-analysis' ? '사후 분석' :
-             selectedKey === 'report-generation' ? '보고서 출력' : '대시보드'}
+            {{ 'home': '인원현황', 'insights': '인사이트', 'risk-factors': '위험 요인',
+               'intervention': '개입 전략', 'report-generation': '보고서 출력',
+               'batch': '배치 분석', 'group-statistics': '단체 통계',
+               'cognita': '개별 관계분석', 'post-analysis': '사후 분석',
+               'admin-settings': '관리자 설정' }[selectedKey] || '대시보드'}
           </Title>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>

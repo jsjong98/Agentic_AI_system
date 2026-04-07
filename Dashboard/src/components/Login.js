@@ -4,6 +4,7 @@ const USERS = [
   { email: '***@redacted', password: '***REDACTED***', role: 'admin', name: 'Admin User 1', initials: 'JO' },
   { email: '***@redacted', password: '***REDACTED***', role: 'admin', name: 'Admin User 2', initials: 'CC' },
   { email: '***@redacted', password: '***REDACTED***', role: 'admin', name: 'Admin User 3', initials: 'JK' },
+  { email: '***@redacted', password: '***REDACTED***', role: 'admin', name: 'Developer', initials: 'DV' },
   { email: '***@redacted', password: '***REDACTED***', role: 'hr', name: 'HR Manager', initials: 'HR' },
 ];
 
