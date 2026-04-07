@@ -21,6 +21,13 @@ find /usr/share/nginx/html -name "*.js" | while read file; do
     -e "s|PLACEHOLDER_SENTIO_URL|${REACT_APP_SENTIO_URL:-http://localhost:5004}|g" \
     -e "s|PLACEHOLDER_AGORA_URL|${REACT_APP_AGORA_URL:-http://localhost:5005}|g" \
     -e "s|PLACEHOLDER_INTEGRATION_URL|${REACT_APP_INTEGRATION_URL:-http://localhost:5007}|g" \
+    -e "s|http://localhost:5001|${REACT_APP_STRUCTURA_URL:-http://localhost:5001}|g" \
+    -e "s|http://localhost:5002|${REACT_APP_COGNITA_URL:-http://localhost:5002}|g" \
+    -e "s|http://localhost:5003|${REACT_APP_CHRONOS_URL:-http://localhost:5003}|g" \
+    -e "s|http://localhost:5004|${REACT_APP_SENTIO_URL:-http://localhost:5004}|g" \
+    -e "s|http://localhost:5005|${REACT_APP_AGORA_URL:-http://localhost:5005}|g" \
+    -e "s|http://localhost:5006|${REACT_APP_SUPERVISOR_URL:-http://localhost:5006}|g" \
+    -e "s|http://localhost:5007|${REACT_APP_INTEGRATION_URL:-http://localhost:5007}|g" \
     "$file"
 done
 

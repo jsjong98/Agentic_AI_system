@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API 기본 설정 - Supervisor 포트로 변경
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5006';
+const API_BASE_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
