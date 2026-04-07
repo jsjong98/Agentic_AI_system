@@ -8,110 +8,13 @@ import ReportGeneration from './components/ReportGeneration';
 import RelationshipAnalysis from './components/RelationshipAnalysis';
 import GroupStatistics from './components/GroupStatistics';
 import Login, { getStoredUser, logout, PWC_LOGO } from './components/Login';
+import Insights from './components/Insights';
+import RiskFactors from './components/RiskFactors';
+import Intervention from './components/Intervention';
 import { apiService } from './services/apiService';
 import './styles/typography.css'; // 통일된 폰트 크기 체계
 
-// ── 새 탭 Placeholder 컴포넌트들 ──
-const PlaceholderPage = ({ title, icon, description, items }) => (
-  <div style={{ padding: '0 8px' }}>
-    <div style={{
-      background: 'linear-gradient(135deg, #2d2d2d, #4a4a4a)',
-      borderRadius: 12, padding: '24px', color: '#fff', marginBottom: 20,
-    }}>
-      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{icon} {title}</div>
-      <div style={{ fontSize: 13, color: '#ccc' }}>{description}</div>
-    </div>
-    {items && items.map((item, i) => (
-      <div key={i} style={{
-        background: '#fff', borderRadius: 12, padding: 20, marginBottom: 16,
-        borderLeft: `4px solid ${item.color || '#d93954'}`,
-        boxShadow: '0 1px 4px rgba(0,0,0,.06)',
-      }}>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{item.title}</div>
-        <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>{item.desc}</div>
-        {item.chips && (
-          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {item.chips.map((c, j) => (
-              <span key={j} style={{
-                padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                background: c.bg, color: c.color,
-              }}>{c.label}</span>
-            ))}
-          </div>
-        )}
-      </div>
-    ))}
-  </div>
-);
 
-const agentChips = {
-  str: { label: 'Structura', bg: '#fde8ec', color: '#d93954' },
-  cog: { label: 'Cognita', bg: '#e8f0fe', color: '#2563eb' },
-  chr: { label: 'Chronos', bg: '#fef3e2', color: '#e8721a' },
-  sen: { label: 'Sentio', bg: '#f3e8fd', color: '#7c3aed' },
-  ago: { label: 'Agora', bg: '#e6f6ec', color: '#2ea44f' },
-};
-
-const InsightsPlaceholder = () => (
-  <PlaceholderPage
-    title="AI 핵심 인사이트" icon="💡"
-    description="5개 전문 Worker Agent의 분석 결과를 종합하여 360도 관점의 퇴사 위험 진단 제공"
-    items={[
-      { title: '🚨 번아웃 직전 그룹의 급속 확산', color: '#d93954',
-        desc: '고위험군 중 상당수가 번아웃 직전 상태. 평균 초과근무시간 전사 대비 2.3배, 직무만족도 하위 15%.',
-        chips: [agentChips.str, agentChips.sen, agentChips.chr] },
-      { title: '🔗 관계망 단절 패턴 감지', color: '#2563eb',
-        desc: '최근 6개월간 신규 협업 관계 미형성 직원이 고위험군에서 72%. 사회적 고립 지수 지속 상승.',
-        chips: [agentChips.cog, agentChips.chr] },
-      { title: '📈 행동 패턴 이상 징후 증가', color: '#e8721a',
-        desc: '최근 3주간 로그인 시간 불규칙성 전분기 대비 38% 증가. 이직 준비 행동 패턴 관찰.',
-        chips: [agentChips.chr, agentChips.ago] },
-      { title: '💬 감성 분석: 부정 감정 키워드 급증', color: '#7c3aed',
-        desc: '코칭 면담 및 자기평가 텍스트에서 "소진", "불확실", "답답함" 등 부정 키워드 45% 증가.',
-        chips: [agentChips.sen] },
-      { title: '🎯 외부 시장 Pull Factor 강화', color: '#2ea44f',
-        desc: 'Technology, R&D 부서 LinkedIn 접속 빈도 전분기 대비 62% 증가. 시장 보상 15~25% 높음.',
-        chips: [agentChips.ago, agentChips.str] },
-    ]}
-  />
-);
-
-const RiskFactorsPlaceholder = () => (
-  <PlaceholderPage
-    title="퇴사 위험 요인 분석" icon="⚠️"
-    description="SHAP 기반 위험 요인 분석 및 Persona별 위험 프로필"
-    items={[
-      { title: '📊 전사 Top 위험 요인 (SHAP 기반)', color: '#d93954',
-        desc: '1. 초과근무시간 (0.82)\n2. 직무만족도 (0.74)\n3. 연봉 동료대비 (0.68)\n4. 승진 후 경과기간 (0.62)\n5. 사회적 고립지수 (0.58)' },
-      { title: '🧩 Persona별 위험 프로필', color: '#e8721a',
-        desc: 'P01 번아웃 직전 — 초과근무 78%, 직무만족도 45%\nP02 보상 실망 — 보상 격차 72%, 외부 비교 65%\nP03 성장 정체 — 승진 경과 68%, PM 경험 부족 55%\nP04 보상체감 낮음 — 인센티브 미수령 58%' },
-    ]}
-  />
-);
-
-const InterventionPlaceholder = () => (
-  <PlaceholderPage
-    title="맞춤 개입 전략 프레임워크" icon="🎯"
-    description="각 Agent의 분석 결과를 기반으로 Persona별 맞춤형 개입 전략을 제시합니다."
-    items={[
-      { title: '구조적 불만족 (Structura)', color: '#d93954',
-        desc: '• 총체적 보상 검토 및 시장 대비 경쟁력 확보\n• 투명한 경력 경로 제시 및 승진 기준 명확화\n• 업무량 분배 재검토 및 초과근무 관리',
-        chips: [agentChips.str] },
-      { title: '관계적 단절 (Cognita)', color: '#2563eb',
-        desc: '• 관리자 주도 1:1 Communication 체계 강화\n• 프로젝트 페어링을 통한 협업 기회 확대\n• 멘토링 프로그램 연계 및 네트워크 복원',
-        chips: [agentChips.cog] },
-      { title: '행동적 이탈 (Chronos)', color: '#e8721a',
-        desc: '• 자율성 부여 및 유의미한 업무 재할당\n• 업무량 및 기대 수준 재조정\n• 시의적절한 인정과 격려 제공',
-        chips: [agentChips.chr] },
-      { title: '심리적 소진 (Sentio)', color: '#7c3aed',
-        desc: '• JD-R 모델 기반 관리적 개입\n• Job Crafting 기법 도입\n• 웰니스 프로그램 지원 및 EAP 연계',
-        chips: [agentChips.sen] },
-      { title: '외부 시장 요인 (Agora)', color: '#2ea44f',
-        desc: '• 내부 탤런트 마켓플레이스 관점의 관리\n• 전략적 보상 조정 (시장 벤치마크 기반)\n• 경쟁 우위 EVP 강화',
-        chips: [agentChips.ago] },
-    ]}
-  />
-);
 
 const AdminSettingsPlaceholder = () => (
   <div style={{ padding: '0 8px' }}>
@@ -813,11 +716,11 @@ const App = () => {
       case 'home':
         return <Home {...commonProps} onNavigate={setSelectedKey} />;
       case 'insights':
-        return <InsightsPlaceholder />;
+        return <Insights />;
       case 'risk-factors':
-        return <RiskFactorsPlaceholder />;
+        return <RiskFactors />;
       case 'intervention':
-        return <InterventionPlaceholder />;
+        return <Intervention />;
       case 'report-generation':
         return <ReportGeneration {...commonProps} />;
       case 'batch':
@@ -852,62 +755,49 @@ const App = () => {
   };
 
   // 로그인 전이면 로그인 화면 표시
-  if (!user) {
-    return <Login onLogin={setUser} />;
-  }
-
   // 다크모드 CSS 변수 — Railway 스타일 다크 테마
   const themeVars = isDark ? {
     '--bg': '#0e1525', '--card': '#151c2c', '--border': '#1e2a3a',
     '--text': '#c9d1d9', '--sub': '#6b7280', '--header-bg': '#0d1117',
-    '--card-hover': '#1c2536', '--accent': '#d93954',
   } : {
     '--bg': '#f3f4f6', '--card': '#fff', '--border': '#eee',
     '--text': '#2d2d2d', '--sub': '#888', '--header-bg': '#fff',
-    '--card-hover': '#fef7f8', '--accent': '#d93954',
   };
 
-  // 다크모드 글로벌 CSS 주입 (Ant Design 컴포넌트 오버라이드)
+  // 다크모드 글로벌 CSS 주입 (Ant Design 컴포넌트 오버라이드) — 반드시 조건부 return 전
   useEffect(() => {
     const styleId = 'pwc-dark-theme';
-    let style = document.getElementById(styleId);
-    if (!style) {
-      style = document.createElement('style');
-      style.id = styleId;
-      document.head.appendChild(style);
-    }
-    if (isDark) {
-      style.textContent = `
-        body { background: #0e1525 !important; color: #c9d1d9 !important; }
-        .ant-card { background: #151c2c !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
-        .ant-card-head { color: #c9d1d9 !important; border-color: #1e2a3a !important; }
-        .ant-card-head-title { color: #c9d1d9 !important; }
-        .ant-table { background: #151c2c !important; color: #c9d1d9 !important; }
-        .ant-table-thead > tr > th { background: #1c2536 !important; color: #c9d1d9 !important; border-color: #1e2a3a !important; }
-        .ant-table-tbody > tr > td { border-color: #1e2a3a !important; color: #c9d1d9 !important; }
-        .ant-table-tbody > tr:hover > td { background: #1c2536 !important; }
-        .ant-select-selector { background: #151c2c !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
-        .ant-select-dropdown { background: #151c2c !important; }
-        .ant-select-item { color: #c9d1d9 !important; }
-        .ant-select-item-option-active { background: #1c2536 !important; }
-        .ant-input, .ant-input-affix-wrapper { background: #0e1525 !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
-        .ant-btn-default { background: #151c2c !important; border-color: #1e2a3a !important; color: #c9d1d9 !important; }
-        .ant-modal-content { background: #151c2c !important; color: #c9d1d9 !important; }
-        .ant-modal-header { background: #151c2c !important; border-color: #1e2a3a !important; }
-        .ant-modal-title { color: #c9d1d9 !important; }
-        .ant-descriptions-item-label { background: #1c2536 !important; color: #8b949e !important; }
-        .ant-descriptions-item-content { color: #c9d1d9 !important; }
-        .ant-statistic-title { color: #8b949e !important; }
-        .ant-pagination-item a { color: #c9d1d9 !important; }
-        .ant-pagination-item { background: #151c2c !important; border-color: #1e2a3a !important; }
-        .ant-spin-text { color: #c9d1d9 !important; }
-        .ant-empty-description { color: #6b7280 !important; }
-        .ant-tag { border-color: #1e2a3a !important; }
-      `;
-    } else {
-      style.textContent = '';
-    }
+    let el = document.getElementById(styleId);
+    if (!el) { el = document.createElement('style'); el.id = styleId; document.head.appendChild(el); }
+    el.textContent = isDark ? `
+      body{background:#0e1525!important;color:#c9d1d9!important}
+      .ant-card{background:#151c2c!important;border-color:#1e2a3a!important;color:#c9d1d9!important}
+      .ant-card-head,.ant-card-head-title{color:#c9d1d9!important;border-color:#1e2a3a!important}
+      .ant-table{background:#151c2c!important;color:#c9d1d9!important}
+      .ant-table-thead>tr>th{background:#1c2536!important;color:#c9d1d9!important;border-color:#1e2a3a!important}
+      .ant-table-tbody>tr>td{border-color:#1e2a3a!important;color:#c9d1d9!important}
+      .ant-table-tbody>tr:hover>td{background:#1c2536!important}
+      .ant-select-selector{background:#151c2c!important;border-color:#1e2a3a!important;color:#c9d1d9!important}
+      .ant-select-dropdown{background:#151c2c!important}.ant-select-item{color:#c9d1d9!important}
+      .ant-select-item-option-active{background:#1c2536!important}
+      .ant-input,.ant-input-affix-wrapper{background:#0e1525!important;border-color:#1e2a3a!important;color:#c9d1d9!important}
+      .ant-btn-default{background:#151c2c!important;border-color:#1e2a3a!important;color:#c9d1d9!important}
+      .ant-modal-content,.ant-modal-header{background:#151c2c!important;color:#c9d1d9!important;border-color:#1e2a3a!important}
+      .ant-modal-title{color:#c9d1d9!important}
+      .ant-descriptions-item-label{background:#1c2536!important;color:#8b949e!important}
+      .ant-descriptions-item-content{color:#c9d1d9!important}
+      .ant-statistic-title{color:#8b949e!important}
+      .ant-pagination-item{background:#151c2c!important;border-color:#1e2a3a!important}
+      .ant-pagination-item a{color:#c9d1d9!important}
+      .ant-spin-text{color:#c9d1d9!important}.ant-empty-description{color:#6b7280!important}
+      .ant-tag{border-color:#1e2a3a!important}
+    ` : '';
   }, [isDark]);
+
+  // 로그인 전이면 로그인 화면 표시
+  if (!user) {
+    return <Login onLogin={setUser} />;
+  }
 
   return (
     <div style={{
