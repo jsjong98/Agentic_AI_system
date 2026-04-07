@@ -150,9 +150,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # 데이터 경로 설정 - uploads 디렉토리에서 찾기
 def get_chronos_data_paths(analysis_type='batch'):
     """uploads 디렉토리에서 Chronos 데이터 파일 찾기"""
-    uploads_dir = "app/uploads/Chronos"
-    post_dir = "app/uploads/Chronos/post"
-    batch_dir = "app/uploads/Chronos/batch"
+    _base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads', 'Chronos')
+    uploads_dir = os.path.normpath(_base)
+    post_dir = os.path.join(uploads_dir, 'post')
+    batch_dir = os.path.join(uploads_dir, 'batch')
     
     data_paths = {
         'timeseries': None,

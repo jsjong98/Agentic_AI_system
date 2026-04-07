@@ -36,7 +36,7 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-RUN mkdir -p models cache logs temp uploads results
+RUN mkdir -p models cache logs temp uploads results /uploads/Structura/batch /uploads/Structura/post
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

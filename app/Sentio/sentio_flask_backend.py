@@ -68,7 +68,8 @@ text_generator = None
 # 데이터 경로 설정 - uploads 디렉토리에서 찾기
 def get_sentio_data_paths(analysis_type='batch'):
     """uploads 디렉토리에서 Sentio 데이터 파일 찾기"""
-    uploads_dir = f"app/uploads/Sentio/{analysis_type}"
+    _base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads', 'Sentio')
+    uploads_dir = os.path.normpath(os.path.join(_base, analysis_type))
     data_paths = {
         'hr_data': None,
         'text_data': None,

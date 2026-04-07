@@ -43,7 +43,7 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-RUN mkdir -p models cache logs temp uploads results
+RUN mkdir -p models cache logs temp uploads results /uploads/Chronos /uploads/Chronos/post /uploads/Chronos/batch
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

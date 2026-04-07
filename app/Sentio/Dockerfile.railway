@@ -41,7 +41,7 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-RUN mkdir -p cache logs temp models uploads results
+RUN mkdir -p cache logs temp models uploads results /uploads/Sentio/batch /uploads/Sentio/post
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

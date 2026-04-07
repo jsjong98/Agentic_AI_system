@@ -1126,11 +1126,13 @@ class StructuraHRPredictor:
 def get_data_path_by_analysis_type(analysis_type='batch'):
     """분석 타입에 따른 데이터 경로 반환"""
     # 여러 가능한 경로 시도
+    _base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads', 'Structura')
+    _base = os.path.normpath(_base)
     possible_paths = [
-        f"../uploads/Structura/{analysis_type}",  # 대문자 S
-        f"../uploads/structura/{analysis_type}",  # 소문자 s
-        f"app/uploads/Structura/{analysis_type}",  # 절대 경로 스타일
-        f"app/uploads/structura/{analysis_type}"   # 절대 경로 스타일 소문자
+        os.path.join(_base, analysis_type),
+        _base,  # root upload dir (where latest file is saved)
+        f"../uploads/Structura/{analysis_type}",
+        f"../uploads/Structura",
     ]
     
     for uploads_dir in possible_paths:
