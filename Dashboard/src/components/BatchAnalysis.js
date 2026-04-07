@@ -4081,13 +4081,12 @@ const BatchAnalysis = ({
       </Title>
       
       <Paragraph>
-        HR 데이터 파일을 업로드하여 전체 직원에 대한 종합적인 이직 위험도 분석을 수행합니다.
-        Supervisor가 각 에이전트를 순차적으로 실행하여 정확한 분석 결과를 제공합니다.
+        HR 데이터 파일을 업로드하고 분석 상태를 확인하면서 전체 직원에 대한 종합적인 이직 위험도 분석을 수행합니다.
       </Paragraph>
 
       <Alert
-        message="순차적 에이전트 실행 순서"
-        description="Structura (HR 분석) → Cognita (관계 분석) → Chronos (시계열 분석) → Sentio (감정 분석) → Agora (시장 분석)"
+        message="분석 에이전트 구성"
+        description="Structura (HR 분석) · Cognita (관계 분석) · Chronos (시계열 분석) · Sentio (감정 분석) · Agora (시장 분석)"
         type="info"
         showIcon
         style={{ marginBottom: 16 }}

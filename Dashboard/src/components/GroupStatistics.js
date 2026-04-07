@@ -53,7 +53,8 @@ const GroupStatistics = ({
     setIsLoading(true);
     try {
       console.log('📂 /api/results/list-all-employees 호출 중...');
-      const response = await fetch('http://localhost:5007/api/results/list-all-employees');
+      const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+      const response = await fetch(`${INTEGRATION_URL}/api/results/list-all-employees`);
       
       if (!response.ok) {
         throw new Error('API 호출 실패');
@@ -510,13 +511,15 @@ const GroupStatistics = ({
       }
 
       // 먼저 저장된 파일에서 로드 시도 (Integration 서버 5007)
+      const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+      const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
       console.log('📁 저장된 파일에서 통계 로드 시도...');
-      let response = await fetch(`http://localhost:5007/api/statistics/load-from-files?${params}`);
-      
+      let response = await fetch(`${INTEGRATION_URL}/api/statistics/load-from-files?${params}`);
+
       if (!response.ok) {
         console.log('📁 저장된 파일 로드 실패, 기존 API 시도...');
         // 저장된 파일 로드 실패 시 기존 API 사용 (Supervisor 5006)
-        response = await fetch(`http://localhost:5006/api/statistics/group?${params}`);
+        response = await fetch(`${SUPERVISOR_URL}/api/statistics/group?${params}`);
         
         if (!response.ok) {
           throw new Error('통계 로드 실패');

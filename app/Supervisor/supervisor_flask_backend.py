@@ -1897,14 +1897,21 @@ def cognita_analyze_employee(employee_id):
 @app.route('/api/workers/cognita/departments', methods=['GET'])
 def cognita_get_departments():
     """Cognita 부서 목록 API 프록시"""
+    fallback_departments = [
+        {"department_name": "Human_Resources", "employee_count": 0},
+        {"department_name": "Research_&_Development", "employee_count": 0},
+        {"department_name": "Sales", "employee_count": 0},
+        {"department_name": "Manufacturing", "employee_count": 0},
+        {"department_name": "Information_Technology", "employee_count": 0},
+    ]
     try:
         # Cognita API 호출
         import requests
         response = requests.get(
             COGNITA_URL + '/api/departments',
-            timeout=30
+            timeout=10
         )
-        
+
         if response.status_code == 200:
             return jsonify({
                 'success': True,
@@ -1912,18 +1919,20 @@ def cognita_get_departments():
                 'source': 'cognita'
             })
         else:
+            logger.warning(f"Cognita departments returned {response.status_code}, using fallback")
             return jsonify({
-                'success': False,
-                'error': f'Cognita API error: {response.status_code}',
-                'details': response.text
-            }), response.status_code
-            
+                'success': True,
+                'data': {'departments': fallback_departments},
+                'source': 'fallback'
+            })
+
     except Exception as e:
-        logger.error(f"Cognita departments error: {e}")
+        logger.warning(f"Cognita departments unavailable: {e}, using fallback")
         return jsonify({
-            'success': False,
-            'error': f'Cognita departments failed: {str(e)}'
-        }), 500
+            'success': True,
+            'data': {'departments': fallback_departments},
+            'source': 'fallback'
+        })
 
 
 @app.route('/api/workers/cognita/employees', methods=['GET'])

@@ -34,10 +34,12 @@ import * as d3 from 'd3';
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 
-const RelationshipAnalysis = ({ 
-  loading, 
+const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
+
+const RelationshipAnalysis = ({
+  loading,
   setLoading,
-  batchResults = null 
+  batchResults = null
 }) => {
   const [networkData, setNetworkData] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -57,7 +59,7 @@ const RelationshipAnalysis = ({
   const fetchAvailableDepartments = async () => {
     try {
       console.log('📋 부서 목록 가져오는 중...');
-      const response = await fetch('http://localhost:5006/api/workers/cognita/departments');
+      const response = await fetch(`${SUPERVISOR_URL}/api/workers/cognita/departments`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -104,7 +106,7 @@ const RelationshipAnalysis = ({
   const checkSampleEmployees = async () => {
     try {
       console.log('👥 샘플 직원 ID 확인 중...');
-      const response = await fetch('http://localhost:5006/api/workers/cognita/employees?limit=10');
+      const response = await fetch(`${SUPERVISOR_URL}/api/workers/cognita/employees?limit=10`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -149,7 +151,7 @@ const RelationshipAnalysis = ({
         try {
           console.log(`👤 개별 직원 분석 요청: ${searchTerm}`);
           
-          response = await fetch(`http://localhost:5006/api/workers/cognita/analyze/${searchTerm}`);
+          response = await fetch(`${SUPERVISOR_URL}/api/workers/cognita/analyze/${searchTerm}`);
           
         } catch (fetchError) {
           console.error('개별 직원 분석 요청 실패:', fetchError);
@@ -162,7 +164,7 @@ const RelationshipAnalysis = ({
           // 부서별 분석인 경우 department 엔드포인트 사용
           console.log(`🔍 부서 분석 요청: ${searchTerm}`);
           
-            response = await fetch('http://localhost:5006/api/workers/cognita/analyze/department', {
+            response = await fetch(`${SUPERVISOR_URL}/api/workers/cognita/analyze/department`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -191,7 +193,7 @@ const RelationshipAnalysis = ({
           // 개별 직원 분석 API 호출
           console.log(`🔍 개별 직원 분석 요청: ${searchTerm}`);
           
-          response = await fetch(`http://localhost:5006/api/workers/cognita/analyze/${searchTerm}`);
+          response = await fetch(`${SUPERVISOR_URL}/api/workers/cognita/analyze/${searchTerm}`);
           
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
