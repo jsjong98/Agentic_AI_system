@@ -188,12 +188,10 @@ def main():
         print(f"pip install -r {req_file}")
         return
     
-    # 2. 데이터 파일 확인
+    # 2. 데이터 파일 확인 (Railway 환경에서는 API로 데이터를 수신하므로 non-fatal)
     if not check_data_files():
-        print("\n필수 데이터 파일이 누락되어 서버를 시작할 수 없습니다.")
-        print("데이터 파일을 준비한 후 다시 실행하세요.")
-        return
-    
+        print("\n⚠️ 데이터 파일이 없습니다. API를 통해 데이터를 수신합니다.")
+
     print("\n✅ 모든 사전 조건이 충족되었습니다.")
     
     # 3. 서버 실행
