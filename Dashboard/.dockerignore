@@ -135,10 +135,10 @@ storybook-static/
 *.csv
 *.xlsx
 *.xls
-*.json
 *.parquet
 *.pkl
 *.joblib
+# *.json은 제외하지 않음 (package.json, package-lock.json 필요)
 
 # 모델 파일들
 *.pt
