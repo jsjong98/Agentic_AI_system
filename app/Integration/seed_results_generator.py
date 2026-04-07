@@ -30,8 +30,8 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 # Railway Integration 컨테이너 내부 경로
 RESULTS_DIR = os.environ.get('RESULTS_DIR', '/app/results')
-HR_CSV = os.path.join(SCRIPT_DIR, 'data', 'IBM_HR.csv')
-SCORE_CSV = os.path.join(SCRIPT_DIR, 'data', 'Total_score.csv')
+HR_JSON = os.path.join(SCRIPT_DIR, 'data', 'IBM_HR.json')
+SCORE_JSON = os.path.join(SCRIPT_DIR, 'data', 'Total_score.json')
 
 TIMESTAMP = datetime.now().isoformat()
 
@@ -46,15 +46,15 @@ def classify_risk(score):
 
 
 def load_data():
-    """CSV 데이터 로드 및 병합"""
+    """JSON 데이터 로드 및 병합"""
     # IBM HR 데이터
-    with open(HR_CSV, 'r', encoding='utf-8-sig') as f:
-        hr_rows = list(csv.DictReader(f))
+    with open(HR_JSON, 'r', encoding='utf-8') as f:
+        hr_rows = json.load(f)
     hr_map = {r['EmployeeNumber']: r for r in hr_rows}
 
     # Total score 데이터
-    with open(SCORE_CSV, 'r', encoding='utf-8-sig') as f:
-        score_rows = list(csv.DictReader(f))
+    with open(SCORE_JSON, 'r', encoding='utf-8') as f:
+        score_rows = json.load(f)
 
     print(f"📊 HR 데이터: {len(hr_rows)}명, Score 데이터: {len(score_rows)}명")
     return hr_map, score_rows
