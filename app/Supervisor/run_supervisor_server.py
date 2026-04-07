@@ -8,11 +8,8 @@ import sys
 import logging
 from pathlib import Path
 
-# 프로젝트 루트를 Python 경로에 추가
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
-from app.Supervisor.supervisor_flask_backend import create_app
+# Railway: PYTHONPATH=/app, so supervisor_flask_backend is importable directly
+from supervisor_flask_backend import create_app
 
 def setup_environment():
     """환경 변수 설정"""

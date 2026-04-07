@@ -415,7 +415,16 @@ def create_project_colleague_relationships(driver):
 def main():
     logger.info("=== Neo4j 초기화 스크립트 시작 ===")
 
-    driver = wait_for_neo4j()
+    try:
+        driver = wait_for_neo4j()
+    except RuntimeError as e:
+        logger.warning(
+            f"{e}\n"
+            "NEO4J_URI 환경변수가 설정되지 않았거나 Neo4j에 연결할 수 없습니다.\n"
+            "Railway 대시보드에서 NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD를 설정하세요.\n"
+            "초기화 없이 Flask 서버를 시작합니다."
+        )
+        return
 
     if is_db_populated(driver):
         logger.info("Neo4j에 이미 데이터가 있습니다. 초기화를 건너뜁니다.")
