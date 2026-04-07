@@ -20,11 +20,6 @@ def main():
     print("🚀 Cognita 관계형 위험도 분석 Flask 백엔드 서버 시작")
     print("=" * 60)
     
-    # 환경 변수 설정 (최적화된 연결 정보)
-    os.environ.setdefault("NEO4J_URI", "bolt://13.220.63.109:7687")
-    os.environ.setdefault("NEO4J_USERNAME", "neo4j")
-    os.environ.setdefault("NEO4J_PASSWORD", "coughs-laboratories-knife")
-    
     # 서버 설정
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 5002))  # Cognita 전용 포트

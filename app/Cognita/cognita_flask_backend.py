@@ -2123,6 +2123,57 @@ def create_app():
 
 
     
+    # --------------------------------------------------
+    # XML 업로드 및 Neo4j 초기화 트리거 엔드포인트
+    # --------------------------------------------------
+
+    @app.route('/api/admin/upload-xml', methods=['POST'])
+    def upload_xml():
+        """
+        Railway Volume에 employee_relationships.xml 업로드.
+        X-Upload-Token 헤더로 인증.
+        curl 예시:
+          curl -X POST -H "X-Upload-Token: <token>" \
+               -F "file=@employee_relationships.xml" \
+               https://<cognita-url>/api/admin/upload-xml
+        """
+        token = request.headers.get('X-Upload-Token', '')
+        expected = os.environ.get('UPLOAD_TOKEN', '')
+        if not expected or token != expected:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        if 'file' not in request.files:
+            return jsonify({'error': 'file field required'}), 400
+
+        f = request.files['file']
+        dest = '/app/data/employee_relationships.xml'
+        os.makedirs('/app/data', exist_ok=True)
+        f.save(dest)
+        size_mb = round(os.path.getsize(dest) / 1024 / 1024, 1)
+        return jsonify({'status': 'ok', 'path': dest, 'size_mb': size_mb})
+
+    @app.route('/api/admin/init-neo4j', methods=['POST'])
+    def trigger_init_neo4j():
+        """
+        XML → Neo4j 초기화를 수동으로 실행.
+        XML 업로드 후 이 엔드포인트를 호출하면 그래프 구축 시작.
+        """
+        token = request.headers.get('X-Upload-Token', '')
+        expected = os.environ.get('UPLOAD_TOKEN', '')
+        if not expected or token != expected:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        import subprocess, sys
+        result = subprocess.run(
+            [sys.executable, '/app/init_neo4j.py'],
+            capture_output=True, text=True
+        )
+        return jsonify({
+            'status': 'done' if result.returncode == 0 else 'error',
+            'stdout': result.stdout[-3000:],
+            'stderr': result.stderr[-1000:]
+        })
+
     return app
 
 # ------------------------------------------------------
