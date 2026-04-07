@@ -25,10 +25,10 @@ import openai
 # 환경변수 로드
 load_dotenv()
 
-from .langgraph_workflow import SupervisorWorkflow
-from .worker_integrator import DEFAULT_WORKER_CONFIGS
-from .agent_state import AgentState
-from .hierarchical_result_manager import hierarchical_result_manager
+from langgraph_workflow import SupervisorWorkflow
+from worker_integrator import DEFAULT_WORKER_CONFIGS
+from agent_state import AgentState
+from hierarchical_result_manager import hierarchical_result_manager
 
 # Flask 앱 생성
 app = Flask(__name__)
