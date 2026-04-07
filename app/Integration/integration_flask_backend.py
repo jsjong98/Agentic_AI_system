@@ -123,8 +123,11 @@ current_results = {}
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data')
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'outputs')
 
-# 출력 디렉토리 생성
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# 필요한 디렉토리 생성 (Dockerfile RUN mkdir 대신 코드로 처리)
+_app_dir = os.path.dirname(__file__)
+for _d in ['outputs', 'cache', 'logs', 'temp', 'uploads',
+           'results', 'results/models', 'outputs/reports']:
+    os.makedirs(os.path.join(_app_dir, _d), exist_ok=True)
 
 
 @app.route('/health', methods=['GET'])
