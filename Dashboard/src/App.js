@@ -819,7 +819,7 @@ const App = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <img src={PWC_LOGO} alt="PwC" style={{ height: 28, filter: isDark ? 'brightness(0) invert(1)' : 'none' }} />
           <span style={{ fontSize: 17, fontWeight: 700, color: themeVars['--text'] }}>
-            조직 퇴사위험 대시보드
+            Retain Sentinel 360
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>

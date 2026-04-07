@@ -60,7 +60,7 @@ const Login = ({ onLogin }) => {
         <div style={styles.logoSection}>
           <img src={PWC_LOGO} alt="PwC" style={{ height: 40 }} />
           <div style={styles.divider} />
-          <h1 style={styles.title}>조직 퇴사위험 대시보드</h1>
+          <h1 style={styles.title}>Retain Sentinel 360</h1>
           <p style={styles.subtitle}>Agentic AI 기반 선제적 퇴사위험 예측 및 관리시스템</p>
         </div>
 

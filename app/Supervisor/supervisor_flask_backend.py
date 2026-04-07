@@ -910,12 +910,14 @@ def post_analysis():
 
 
 # ── Authentication ──────────────────────────────────
+# 비밀번호는 환경변수 AUTH_PASSWORD에서 읽음 (Railway dashboard에서 설정)
+_AUTH_PW = os.environ.get('AUTH_PASSWORD', '')
 AUTH_USERS = {
-    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Admin User 1', 'initials': 'JO'},
-    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Admin User 2', 'initials': 'CC'},
-    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Admin User 3', 'initials': 'JK'},
-    '***@redacted': {'password': '***REDACTED***', 'role': 'admin', 'name': 'Developer', 'initials': 'DV'},
-    '***@redacted': {'password': '***REDACTED***', 'role': 'hr', 'name': 'HR Manager', 'initials': 'HR'},
+    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Admin User 1', 'initials': 'JO'},
+    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Admin User 2', 'initials': 'CC'},
+    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Admin User 3', 'initials': 'JK'},
+    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Developer', 'initials': 'DV'},
+    '***@redacted': {'password': _AUTH_PW, 'role': 'hr', 'name': 'HR Manager', 'initials': 'HR'},
 }
 
 @app.route('/api/auth/login', methods=['POST'])
