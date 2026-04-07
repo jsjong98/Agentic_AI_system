@@ -5,6 +5,4 @@ dockerfilePath = "Dockerfile.railway"
 [deploy]
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
-
-[[deploy.healthcheckPath]]
-path = "/"
+healthcheckPath = "/health"
