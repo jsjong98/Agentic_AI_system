@@ -31,12 +31,14 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-RUN mkdir -p cache logs temp uploads results
+RUN mkdir -p cache logs temp uploads results data \
+ && chmod +x /app/start.sh
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 # NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD → set in Railway dashboard
+# NEO4J_INIT_XML → path to XML file on Railway Volume (default: /app/data/employee_relationships.xml)
 
 EXPOSE 5002
 
-CMD ["python", "run_cognita_server.py"]
+CMD ["/app/start.sh"]
