@@ -1,0 +1,50 @@
+# Agora Agent - Railway Deployment
+# Build context: app/Agora/
+FROM python:3.9-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+
+WORKDIR /app
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      tzdata build-essential curl wget \
+      chromium chromium-driver \
+ && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+ && dpkg-reconfigure -f noninteractive tzdata \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir \
+    numpy==1.24.3 \
+    pandas==2.1.1 \
+    yfinance>=0.2.0 \
+    beautifulsoup4>=4.12.0 \
+    lxml>=4.9.0 \
+    selenium>=4.15.0 \
+    openai>=1.0.0 \
+    langchain>=0.1.0 \
+    langchain-openai>=0.0.5 \
+    flask>=2.3.0 \
+    flask-cors>=4.0.0 \
+    python-dotenv>=1.0.0 \
+    requests>=2.31.0 \
+    matplotlib>=3.5.0 \
+    plotly>=5.15.0
+
+COPY . .
+
+RUN mkdir -p data cache logs temp uploads results
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+# OPENAI_API_KEY → set in Railway dashboard
+
+EXPOSE 5005
+
+CMD ["python", "run_agora_server.py"]

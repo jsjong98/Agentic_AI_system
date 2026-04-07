@@ -1,0 +1,42 @@
+# Cognita Agent - Railway Deployment
+# Build context: app/Cognita/
+FROM python:3.9-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+
+WORKDIR /app
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      tzdata build-essential curl \
+ && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+ && dpkg-reconfigure -f noninteractive tzdata \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir \
+    numpy==1.24.3 \
+    pandas==2.1.1 \
+    neo4j>=5.13.0 \
+    flask>=2.3.0 \
+    flask-cors>=4.0.0 \
+    python-dotenv>=1.0.0 \
+    requests>=2.31.0 \
+    matplotlib>=3.5.0 \
+    seaborn>=0.11.0 \
+    networkx>=3.0.0 \
+    plotly>=5.15.0
+
+COPY . .
+
+RUN mkdir -p cache logs temp uploads results
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+# NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD → set in Railway dashboard
+
+EXPOSE 5002
+
+CMD ["python", "run_cognita_server.py"]

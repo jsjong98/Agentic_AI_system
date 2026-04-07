@@ -1,0 +1,55 @@
+# Supervisor Agent - Railway Deployment
+# Build context: app/Supervisor/
+FROM python:3.9-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+
+WORKDIR /app
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      tzdata build-essential curl \
+ && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+ && dpkg-reconfigure -f noninteractive tzdata \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir \
+    numpy==1.24.3 \
+    pandas==2.1.1 \
+    openai>=1.0.0 \
+    langchain>=0.1.0 \
+    langchain-openai>=0.0.5 \
+    langchain-core>=0.1.0 \
+    langgraph>=0.0.26 \
+    flask>=2.3.0 \
+    flask-cors>=4.0.0 \
+    python-dotenv>=1.0.0 \
+    requests>=2.31.0 \
+    aiohttp>=3.8.0 \
+    pydantic>=2.0.0 \
+    matplotlib>=3.5.0
+
+COPY . .
+
+RUN mkdir -p logs cache temp uploads results
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Worker URLs → set in Railway dashboard using internal networking
+# e.g. STRUCTURA_URL=http://structura.railway.internal:5001
+ENV STRUCTURA_URL=http://structura.railway.internal:5001
+ENV COGNITA_URL=http://cognita.railway.internal:5002
+ENV CHRONOS_URL=http://chronos.railway.internal:5003
+ENV SENTIO_URL=http://sentio.railway.internal:5004
+ENV AGORA_URL=http://agora.railway.internal:5005
+ENV INTEGRATION_URL=http://integration.railway.internal:5007
+
+# OPENAI_API_KEY → set in Railway dashboard
+
+EXPOSE 5006
+
+CMD ["python", "run_supervisor_server.py"]
