@@ -126,13 +126,13 @@ Railway 서비스 생성 → **Settings → Source → Root Directory** 설정 �
 - Root Directory: `Dashboard`
 - Environment Variables (Supervisor/Integration 배포 후 URL 확인하여 입력):
   ```
-  REACT_APP_SUPERVISOR_URL=https://supervisor-production.up.railway.app
+  REACT_APP_SUPERVISOR_URL=https://supervisor-production-e7c6.up.railway.app
   REACT_APP_STRUCTURA_URL=https://structura-production.up.railway.app
   REACT_APP_COGNITA_URL=https://cognita-production.up.railway.app
-  REACT_APP_CHRONOS_URL=https://chronos-production.up.railway.app
-  REACT_APP_SENTIO_URL=https://sentio-production.up.railway.app
-  REACT_APP_AGORA_URL=https://agora-production.up.railway.app
-  REACT_APP_INTEGRATION_URL=https://integration-production.up.railway.app
+  REACT_APP_CHRONOS_URL=https://chronos-production-7ccc.up.railway.app
+  REACT_APP_SENTIO_URL=https://sentio-production-937f.up.railway.app
+  REACT_APP_AGORA_URL=https://agora-production-6df7.up.railway.app
+  REACT_APP_INTEGRATION_URL=https://integration-production-1d5e.up.railway.app
   ```
 
 > **참고**: Dashboard는 런타임 env 주입 방식을 사용하므로 변수 변경 시 재배포 없이 재시작만으로 반영됩니다.
@@ -165,11 +165,12 @@ Railway 서비스 → **Settings → Volumes** 에서 마운트 경로 추가.
 # 각 서비스 헬스체크
 curl https://structura-production.up.railway.app/health
 curl https://cognita-production.up.railway.app/health
-curl https://chronos-production.up.railway.app/api/status
-curl https://sentio-production.up.railway.app/health
-curl https://agora-production.up.railway.app/health
-curl https://supervisor-production.up.railway.app/health
-curl https://integration-production.up.railway.app/health
+curl https://chronos-production-7ccc.up.railway.app/api/status
+curl https://sentio-production-937f.up.railway.app/health
+curl https://agora-production-6df7.up.railway.app/health
+curl https://supervisor-production-e7c6.up.railway.app/health
+curl https://integration-production-1d5e.up.railway.app/health
+curl https://retain-sentinel.up.railway.app/health
 ```
 
 ---

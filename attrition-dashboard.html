@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#d93954">
+<meta name="description" content="PwC 조직 퇴사위험 대시보드 - Agentic AI 기반 선제적 퇴사위험 예측 및 관리시스템">
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiUHdDIO2HtOyCrOychO2XmCDrjIDsi5zrs7Trk5wiLCJzaG9ydF9uYW1lIjoi7YeA7IKs7JyE7ZeYIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2YzZjRmNiIsInRoZW1lX2NvbG9yIjoiI2Q5Mzk1NCJ9">
+<title>PwC 조직 퇴사위험 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --red: #d93954; --orange: #e8721a; --yellow: #e5a100;
+  --green: #2ea44f; --blue: #2563eb; --purple: #7c3aed;
+  --bg: #f3f4f6; --card: #fff; --border: #eee; --text: #2d2d2d; --sub: #888;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --header-h: 56px;
+  --tab-h: 48px;
+  --bottom-h: 64px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { scroll-behavior: smooth; }
+body {
+  font-family:'Noto Sans KR',system-ui,-apple-system,sans-serif;
+  background:var(--bg); color:var(--text);
+  padding-top: calc(var(--safe-top));
+  padding-bottom: calc(var(--safe-bottom));
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+}
+
+/* ===== HEADER ===== */
+.header {
+  position:sticky; top:0; z-index:200;
+  background:var(--card); border-bottom:3px solid var(--red);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 24px; height:var(--header-h);
+  padding-top:var(--safe-top);
+}
+.header-left { display:flex; align-items:center; gap:14px; }
+.hamburger {
+  display:none; background:none; border:none; cursor:pointer;
+  width:36px; height:36px; flex-shrink:0;
+  align-items:center; justify-content:center;
+}
+.hamburger svg { width:22px; height:22px; color:var(--text); }
+.pwc-logo { height:30px; flex-shrink:0; }
+.header-title { font-size:17px; font-weight:700; white-space:nowrap; }
+.header-right { display:flex; align-items:center; gap:12px; font-size:13px; color:#666; }
+.header-right .date { background:#f8f8f8; padding:5px 12px; border-radius:6px; font-weight:500; white-space:nowrap; }
+.header-right .user-info { display:flex; align-items:center; gap:6px; }
+.user-avatar {
+  width:32px; height:32px; border-radius:50%; background:var(--red); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; flex-shrink:0;
+}
+.view-toggle { display:flex; border:1px solid #ddd; border-radius:8px; overflow:hidden; font-size:12px; }
+.view-toggle button { padding:5px 14px; border:none; background:#fff; cursor:pointer; font-family:inherit; font-weight:500; white-space:nowrap; }
+.view-toggle button.active { background:var(--red); color:#fff; }
+
+/* ===== DESKTOP TAB NAV ===== */
+.tab-nav {
+  background:var(--card); display:flex; padding:0 24px;
+  border-bottom:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.04);
+  overflow-x:auto; -webkit-overflow-scrolling:touch;
+  scrollbar-width:none; position:sticky; top:var(--header-h); z-index:190;
+}
+.tab-nav::-webkit-scrollbar { display:none; }
+.tab-btn {
+  padding:12px 22px; font-size:14px; font-weight:500; color:var(--sub);
+  cursor:pointer; border:none; background:none; border-bottom:3px solid transparent;
+  transition:all .2s; white-space:nowrap; flex-shrink:0;
+}
+.tab-btn:hover { color:var(--red); }
+.tab-btn.active { color:var(--red); border-bottom-color:var(--red); font-weight:700; }
+
+/* ===== MOBILE BOTTOM NAV ===== */
+.bottom-nav {
+  display:none; position:fixed; bottom:0; left:0; right:0; z-index:200;
+  background:var(--card); border-top:1px solid #e0e0e0;
+  padding-bottom:var(--safe-bottom);
+  box-shadow:0 -2px 12px rgba(0,0,0,.08);
+}
+.bottom-nav-inner {
+  display:flex; justify-content:space-around; align-items:center; height:var(--bottom-h);
+}
+.bnav-btn {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  background:none; border:none; cursor:pointer; color:var(--sub);
+  font-size:10px; font-weight:500; padding:4px 8px; transition:.2s;
+  font-family:inherit;
+}
+.bnav-btn svg { width:22px; height:22px; }
+.bnav-btn.active { color:var(--red); }
+.bnav-btn.active svg { stroke:var(--red); }
+
+/* ===== MAIN ===== */
+.main { padding:20px 24px 32px; max-width:1600px; margin:0 auto; }
+.tab-content { display:none; animation:fadeIn .3s ease; }
+.tab-content.active { display:block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+/* ===== CARDS ===== */
+.card {
+  background:var(--card); border-radius:12px; padding:20px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06); border:1px solid var(--border);
+}
+.card-title { font-size:15px; font-weight:700; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.card-title .icon { color:var(--red); font-size:18px; }
+
+/* ===== GRIDS ===== */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+.grid-3-2 { display:grid; grid-template-columns:3fr 2fr; gap:16px; }
+.mb-20 { margin-bottom:20px; }
+
+/* ===== KPI ROW ===== */
+.kpi-row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+.kpi-card {
+  background:var(--card); border-radius:12px; padding:16px;
+  border:1px solid var(--border); box-shadow:0 1px 4px rgba(0,0,0,.06);
+  text-align:center; position:relative; overflow:hidden;
+}
+.kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; }
+.kpi-card.red::before { background:var(--red); }
+.kpi-card.orange::before { background:var(--orange); }
+.kpi-card.green::before { background:var(--green); }
+.kpi-card.blue::before { background:var(--blue); }
+.kpi-label { font-size:11px; color:var(--sub); margin-bottom:6px; font-weight:500; }
+.kpi-value { font-size:28px; font-weight:700; }
+.kpi-value.red { color:var(--red); }
+.kpi-value.orange { color:var(--orange); }
+.kpi-value.green { color:var(--green); }
+.kpi-value.blue { color:var(--blue); }
+.kpi-sub { font-size:10px; color:#aaa; margin-top:3px; }
+.kpi-change { font-size:11px; margin-top:4px; }
+.kpi-change.up { color:var(--red); }
+.kpi-change.down { color:var(--green); }
+
+/* ===== TABLE ===== */
+.table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.dept-table { width:100%; border-collapse:collapse; font-size:13px; min-width:500px; }
+.dept-table th {
+  text-align:left; padding:10px 12px; background:#f8f8f9;
+  border-bottom:2px solid #e5e7eb; font-weight:600; color:#555; font-size:12px;
+  position:sticky; top:0; z-index:1;
+}
+.dept-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; }
+.dept-table tr:hover { background:#fef7f8; }
+.dept-bar-wrap { display:flex; align-items:center; gap:8px; }
+.dept-bar { height:8px; border-radius:4px; min-width:4px; }
+.dept-bar.low { background:var(--green); } .dept-bar.mid { background:var(--yellow); }
+.dept-bar.high { background:var(--orange); } .dept-bar.critical { background:var(--red); }
+
+/* ===== BADGES ===== */
+.badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; }
+.badge.high { background:#fde8ec; color:var(--red); }
+.badge.medium { background:#fef3e2; color:var(--orange); }
+.badge.low { background:#e6f6ec; color:var(--green); }
+
+/* ===== PERSONA ===== */
+.persona-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+.persona-tag.p1 { background:#fde8ec; color:var(--red); }
+.persona-tag.p2 { background:#e8f0fe; color:var(--blue); }
+.persona-tag.p3 { background:#fef3e2; color:var(--orange); }
+.persona-tag.p4 { background:#f3e8fd; color:var(--purple); }
+
+/* ===== AGENT CHIPS ===== */
+.agent-chip { padding:3px 8px; border-radius:4px; font-size:10px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+.agent-chip.structura { background:#fde8ec; color:var(--red); }
+.agent-chip.cognita { background:#e8f0fe; color:var(--blue); }
+.agent-chip.chronos { background:#fef3e2; color:var(--orange); }
+.agent-chip.sentio { background:#f3e8fd; color:var(--purple); }
+.agent-chip.agora { background:#e6f6ec; color:var(--green); }
+
+/* ===== CHARTS ===== */
+.chart-container { position:relative; width:100%; }
+.chart-sm { height:200px; } .chart-md { height:260px; } .chart-lg { height:320px; }
+
+/* ===== SCROLLABLE ===== */
+.scrollable { max-height:400px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.scrollable::-webkit-scrollbar { width:4px; } .scrollable::-webkit-scrollbar-thumb { background:#ddd; border-radius:2px; }
+
+/* ===== DONUT CENTER ===== */
+.donut-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
+.donut-center .big { font-size:24px; font-weight:700; color:var(--red); }
+.donut-center .small { font-size:10px; color:var(--sub); }
+
+/* ===== PERSONA FLEX ===== */
+.persona-flex { display:flex; gap:20px; align-items:flex-start; }
+.persona-chart-wrap { width:200px; height:200px; position:relative; flex-shrink:0; }
+.persona-table-wrap { flex:1; min-width:0; }
+
+/* ===== ARCH BANNER ===== */
+.arch-banner {
+  background:linear-gradient(135deg,#2d2d2d,#4a4a4a); border-radius:12px;
+  padding:20px 24px; color:#fff; margin-bottom:20px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  flex-wrap:wrap;
+}
+.arch-banner h2 { font-size:15px; font-weight:700; margin-bottom:4px; }
+.arch-banner p { font-size:11px; color:#ccc; }
+.arch-agents { display:flex; gap:8px; flex-wrap:wrap; }
+.arch-agent { padding:6px 12px; border-radius:8px; font-size:11px; font-weight:600; text-align:center; white-space:nowrap; }
+.arch-agent.str { background:rgba(217,57,84,.2); border:1px solid rgba(217,57,84,.5); }
+.arch-agent.cog { background:rgba(37,99,235,.2); border:1px solid rgba(37,99,235,.5); }
+.arch-agent.chr { background:rgba(232,114,26,.2); border:1px solid rgba(232,114,26,.5); }
+.arch-agent.sen { background:rgba(124,58,237,.2); border:1px solid rgba(124,58,237,.5); }
+.arch-agent.ago { background:rgba(46,164,79,.2); border:1px solid rgba(46,164,79,.5); }
+
+/* ===== SECTION ===== */
+.section-title { font-size:16px; font-weight:700; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.section-title .dot { width:8px; height:8px; border-radius:50%; background:var(--red); flex-shrink:0; }
+
+/* ===== INSIGHT CARDS ===== */
+.insight-card {
+  background:var(--card); border-radius:12px; padding:16px; border-left:4px solid var(--red);
+  box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:14px;
+}
+.insight-card .title { font-weight:700; font-size:14px; margin-bottom:6px; }
+.insight-card .desc { font-size:13px; color:#555; line-height:1.6; }
+.insight-card .agent-source { font-size:11px; color:#999; margin-top:8px; display:flex; flex-wrap:wrap; gap:4px; }
+
+/* ===== RISK FACTOR BARS ===== */
+.risk-factor-item { margin-bottom:14px; }
+.risk-factor-label { display:flex; justify-content:space-between; margin-bottom:5px; font-size:13px; }
+.risk-factor-bar { height:22px; background:#f0f0f0; border-radius:6px; overflow:hidden; }
+.risk-factor-fill { height:100%; border-radius:6px; display:flex; align-items:center; padding-left:10px; font-size:11px; color:#fff; font-weight:600; }
+
+/* ===== MATRIX ===== */
+.matrix-grid {
+  display:grid; grid-template-columns:36px repeat(4,1fr); grid-template-rows:auto repeat(3,72px);
+  gap:4px; margin-top:12px;
+}
+.matrix-cell { display:flex; align-items:center; justify-content:center; border-radius:8px; font-size:11px; font-weight:600; text-align:center; padding:4px; }
+.matrix-label { font-size:10px; color:#666; font-weight:600; display:flex; align-items:center; justify-content:center; writing-mode:vertical-lr; transform:rotate(180deg); }
+.matrix-header { font-size:11px; font-weight:700; color:#555; display:flex; align-items:center; justify-content:center; }
+.m-red { background:#fde8ec; color:var(--red); } .m-orange { background:#fef3e2; color:var(--orange); }
+.m-yellow { background:#fff9e6; color:#b8860b; } .m-green { background:#e6f6ec; color:var(--green); }
+.m-blue { background:#e8f0fe; color:var(--blue); }
+
+/* ===== STRATEGY ===== */
+.strategy-card { border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; transition:box-shadow .2s; }
+.strategy-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); }
+.strategy-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.strategy-icon { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.strategy-title { font-weight:700; font-size:14px; }
+.strategy-items { font-size:12px; color:#555; line-height:1.8; }
+.strategy-items li { list-style:none; padding-left:14px; position:relative; }
+.strategy-items li::before { content:''; position:absolute; left:0; top:9px; width:5px; height:5px; border-radius:50%; }
+.s-structura .strategy-icon { background:#fde8ec; color:var(--red); } .s-structura li::before { background:var(--red); }
+.s-cognita .strategy-icon { background:#e8f0fe; color:var(--blue); } .s-cognita li::before { background:var(--blue); }
+.s-chronos .strategy-icon { background:#fef3e2; color:var(--orange); } .s-chronos li::before { background:var(--orange); }
+.s-sentio .strategy-icon { background:#f3e8fd; color:var(--purple); } .s-sentio li::before { background:var(--purple); }
+.s-agora .strategy-icon { background:#e6f6ec; color:var(--green); } .s-agora li::before { background:var(--green); }
+
+/* ===== SETTINGS ===== */
+.setting-group { margin-bottom:20px; }
+.setting-group h3 { font-size:14px; font-weight:700; margin-bottom:10px; }
+.setting-row {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:12px 14px; background:#f8f8f9; border-radius:8px; margin-bottom:8px;
+  flex-wrap:wrap;
+}
+.setting-label { font-size:13px; font-weight:500; }
+.setting-desc { font-size:11px; color:#999; }
+.toggle { width:44px; height:24px; background:#ddd; border-radius:12px; position:relative; cursor:pointer; transition:.3s; flex-shrink:0; }
+.toggle.on { background:var(--red); }
+.toggle::after { content:''; position:absolute; top:2px; left:2px; width:20px; height:20px; background:#fff; border-radius:50%; transition:.3s; }
+.toggle.on::after { left:22px; }
+select,input[type="number"] { padding:6px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; font-family:inherit; }
+input[type="range"] { accent-color:var(--red); }
+
+/* ===== FILTER BAR ===== */
+.filter-bar { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.filter-bar select { padding:7px 10px; border:1px solid #ddd; border-radius:8px; font-size:12px; font-family:inherit; background:#fff; }
+.filter-bar .filter-label { font-size:12px; color:var(--sub); font-weight:600; }
+
+/* ===== PRIORITY BADGES ===== */
+.priority-badge { display:inline-block; padding:2px 10px; border-radius:4px; font-size:11px; font-weight:700; color:#fff; }
+
+/* ===== FOOTER ===== */
+.footer { text-align:center; padding:20px; font-size:11px; color:#aaa; }
+
+/* =============================================
+   TABLET (max-width: 1024px)
+   ============================================= */
+@media(max-width:1024px) {
+  .kpi-row { grid-template-columns:repeat(3,1fr); }
+  .grid-3-2 { grid-template-columns:1fr; }
+  .grid-2 { grid-template-columns:1fr; }
+  .grid-3 { grid-template-columns:1fr 1fr; }
+  .header { padding:0 16px; }
+  .main { padding:16px; }
+  .tab-nav { padding:0 16px; }
+}
+
+/* =============================================
+   MOBILE (max-width: 768px)
+   ============================================= */
+@media(max-width:768px) {
+  :root { --header-h:50px; --bottom-h:58px; }
+
+  .header { padding:0 12px; }
+  .header-title { font-size:14px; }
+  .header-right .date { display:none; }
+  .header-right .view-toggle { display:none; }
+  .hamburger { display:flex; }
+
+  /* Hide desktop tabs, show bottom nav */
+  .tab-nav { display:none; }
+  .bottom-nav { display:block; }
+
+  .main {
+    padding:12px 12px calc(var(--bottom-h) + var(--safe-bottom) + 12px);
+  }
+
+  .kpi-row { grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:14px; }
+  .kpi-card { padding:12px; }
+  .kpi-value { font-size:22px; }
+  .kpi-label { font-size:10px; }
+
+  .card { padding:14px; border-radius:10px; }
+  .card-title { font-size:14px; margin-bottom:10px; }
+
+  .grid-2,.grid-3,.grid-3-2 { grid-template-columns:1fr; gap:12px; }
+
+  .persona-flex { flex-direction:column; align-items:center; }
+  .persona-chart-wrap { width:180px; height:180px; }
+
+  .arch-banner { flex-direction:column; padding:16px; }
+  .arch-banner h2 { font-size:14px; }
+  .arch-agents { justify-content:center; }
+
+  .filter-bar { gap:6px; }
+  .filter-bar select { font-size:11px; padding:6px 8px; flex:1; min-width:0; }
+
+  .matrix-grid { grid-template-columns:28px repeat(4,1fr); grid-template-rows:auto repeat(3,64px); gap:3px; }
+  .matrix-cell { font-size:9px; padding:2px; }
+
+  .insight-card { padding:12px; }
+  .insight-card .title { font-size:13px; }
+  .insight-card .desc { font-size:12px; }
+
+  .chart-md { height:220px; }
+  .chart-lg { height:260px; }
+
+  .setting-row { flex-direction:column; align-items:flex-start; gap:8px; }
+
+  .scrollable { max-height:300px; }
+
+  .footer { padding-bottom:calc(var(--bottom-h) + var(--safe-bottom) + 20px); }
+}
+
+/* =============================================
+   SMALL PHONE (max-width: 480px)
+   ============================================= */
+@media(max-width:480px) {
+  .kpi-row { grid-template-columns:1fr 1fr; }
+  .kpi-row .kpi-card:last-child { grid-column:1/-1; }
+  .kpi-value { font-size:20px; }
+  .header-title { font-size:13px; }
+  .arch-agent { font-size:10px; padding:4px 8px; }
+  .matrix-grid { grid-template-columns:24px repeat(4,1fr); grid-template-rows:auto repeat(3,56px); }
+  .matrix-cell { font-size:8px; }
+  .strategy-card { padding:10px; }
+}
+
+/* ===== MOBILE SIDEBAR OVERLAY ===== */
+.sidebar-overlay {
+  display:none; position:fixed; inset:0; z-index:300;
+  background:rgba(0,0,0,.4); opacity:0; transition:opacity .3s;
+}
+.sidebar-overlay.open { display:block; opacity:1; }
+.sidebar-panel {
+  position:fixed; top:0; left:-280px; bottom:0; z-index:310;
+  width:260px; background:var(--card); transition:left .3s ease;
+  padding:60px 20px 20px; overflow-y:auto;
+  box-shadow:4px 0 20px rgba(0,0,0,.1);
+}
+.sidebar-panel.open { left:0; }
+.sidebar-panel .close-btn {
+  position:absolute; top:12px; right:12px; background:none; border:none;
+  font-size:22px; cursor:pointer; color:var(--sub);
+}
+.sidebar-panel .sb-section { margin-bottom:24px; }
+.sidebar-panel .sb-title { font-size:11px; color:var(--sub); font-weight:700; margin-bottom:10px; text-transform:uppercase; letter-spacing:1px; }
+.sidebar-panel .sb-item {
+  padding:10px 12px; border-radius:8px; font-size:13px; font-weight:500;
+  cursor:pointer; transition:.2s; display:flex; align-items:center; gap:8px;
+}
+.sidebar-panel .sb-item:hover,.sidebar-panel .sb-item.active { background:#fef7f8; color:var(--red); }
+
+/* ===== PULL TO REFRESH INDICATOR ===== */
+.ptr-indicator {
+  display:none; text-align:center; padding:12px; font-size:12px; color:var(--sub);
+}
+
+/* ===== SWIPE HINT (mobile) ===== */
+.swipe-hint {
+  display:none; text-align:center; font-size:11px; color:#bbb; padding:4px 0 8px;
+}
+@media(max-width:768px) { .swipe-hint { display:block; } }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR (Mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="sidebar-panel" id="sidebarPanel">
+  <button class="close-btn" onclick="closeSidebar()">&times;</button>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
+    <img src="PwC_logo.png" alt="PwC" style="height:24px;">
+    <span style="font-size:13px;font-weight:600;">퇴사위험 대시보드</span>
+  </div>
+  <div class="sb-section">
+    <div class="sb-title">메뉴</div>
+    <div class="sb-item active" onclick="switchTabMobile('tab1')">&#128202; 인원현황</div>
+    <div class="sb-item" onclick="switchTabMobile('tab2')">&#128161; 인사이트</div>
+    <div class="sb-item" onclick="switchTabMobile('tab3')">&#9888;&#65039; 위험 요인</div>
+    <div class="sb-item" onclick="switchTabMobile('tab4')">&#127919; 개입 전략</div>
+    <div class="sb-item" onclick="switchTabMobile('tab5')">&#9881;&#65039; 관리자 설정</div>
+  </div>
+  <div class="sb-section">
+    <div class="sb-title">설정</div>
+    <div class="sb-item">&#128197; 2026년 4월 7일</div>
+    <div class="sb-item">&#128100; ADMIN</div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button style="flex:1;padding:8px;border:1px solid var(--red);border-radius:8px;background:#fff;color:var(--red);font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">전사 View</button>
+      <button style="flex:1;padding:8px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#666;font-weight:500;font-size:12px;cursor:pointer;font-family:inherit;">조직 View</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="openSidebar()" aria-label="메뉴">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <img class="pwc-logo" src="PwC_logo.png" alt="PwC">
+    <span class="header-title">조직 퇴사위험 대시보드</span>
+  </div>
+  <div class="header-right">
+    <div class="date">2026년 4월 7일</div>
+    <div class="view-toggle">
+      <button class="active">전사 View</button>
+      <button>조직 View</button>
+    </div>
+    <div class="user-info">
+      <div class="user-avatar">AD</div>
+      <span>ADMIN</span>
+    </div>
+  </div>
+</header>
+
+<!-- DESKTOP TAB NAV -->
+<nav class="tab-nav" id="tabNav">
+  <button class="tab-btn active" data-tab="tab1">인원현황</button>
+  <button class="tab-btn" data-tab="tab2">인사이트</button>
+  <button class="tab-btn" data-tab="tab3">위험 요인</button>
+  <button class="tab-btn" data-tab="tab4">개입 전략</button>
+  <button class="tab-btn" data-tab="tab5">관리자 설정</button>
+</nav>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bnav-btn active" data-tab="tab1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      현황
+    </button>
+    <button class="bnav-btn" data-tab="tab2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="8"/></svg>
+      인사이트
+    </button>
+    <button class="bnav-btn" data-tab="tab3">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      위험요인
+    </button>
+    <button class="bnav-btn" data-tab="tab4">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      개입전략
+    </button>
+    <button class="bnav-btn" data-tab="tab5">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      설정
+    </button>
+  </div>
+</nav>
+
+<main class="main">
+
+<!-- ========== TAB 1: 인원현황 ========== -->
+<section class="tab-content active" id="tab1">
+
+  <div class="kpi-row">
+    <div class="kpi-card red">
+      <div class="kpi-label">전사 인원 현황</div>
+      <div class="kpi-value" style="color:var(--text);">1,174<span style="font-size:13px;color:var(--sub);">명</span></div>
+      <div class="kpi-sub">전년 대비 +32명</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">퇴사 고위험군</div>
+      <div class="kpi-value red">155<span style="font-size:13px;">명</span></div>
+      <div class="kpi-change up">&#9650; 12%</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">잠재적 위험군</div>
+      <div class="kpi-value orange">387<span style="font-size:13px;">명</span></div>
+      <div class="kpi-change up">&#9650; 30%</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">안정/양호군</div>
+      <div class="kpi-value green">752<span style="font-size:13px;">명</span></div>
+      <div class="kpi-sub">58%</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-label">평균 위험 점수</div>
+      <div class="kpi-value blue">0.42</div>
+      <div class="kpi-change up">&#9650; 0.05 vs 전분기</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <span class="filter-label">필터:</span>
+    <select><option>전체 부서</option><option>Consulting LT</option><option>Strategy&amp;</option><option>Fin. Transformation</option><option>Operation</option><option>Industry Solution</option><option>Customer</option><option>Technology</option><option>D&amp;AII</option><option>Financial Services</option><option>Risk &amp; Cyber</option></select>
+    <select><option>전체 직급</option><option>EP</option><option>HP</option><option>ME</option><option>IP</option><option>BE</option></select>
+    <select><option>전체 위험등급</option><option>고위험</option><option>잠재적 위험</option><option>저위험</option></select>
+    <select><option>전체 Persona</option><option>P01</option><option>P02</option><option>P03</option><option>P04</option></select>
+  </div>
+
+  <div class="grid-3-2 mb-20">
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9783;</span> 전사 인원 현황 (부서별)</div>
+      <div class="scrollable table-wrap">
+        <table class="dept-table">
+          <thead><tr><th>Department</th><th>인원</th><th style="width:140px;">위험 분포</th><th>고위험</th><th>위험률</th></tr></thead>
+          <tbody id="deptTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9673;</span> Persona 분포</div>
+      <div class="persona-flex">
+        <div class="persona-chart-wrap">
+          <canvas id="personaChart"></canvas>
+          <div class="donut-center"><div class="big">12%</div><div class="small">고위험 비율</div></div>
+        </div>
+        <div class="persona-table-wrap table-wrap">
+          <table class="dept-table" style="font-size:12px;min-width:260px;">
+            <thead><tr><th>유형</th><th>상세</th><th>분포</th><th>비율</th></tr></thead>
+            <tbody>
+              <tr><td><span class="persona-tag p1">P01</span></td><td>번아웃 직전</td><td>77명</td><td>50%</td></tr>
+              <tr><td><span class="persona-tag p2">P02</span></td><td>보상 실망</td><td>12명</td><td>8%</td></tr>
+              <tr><td><span class="persona-tag p3">P03</span></td><td>성장 정체</td><td>40명</td><td>26%</td></tr>
+              <tr><td><span class="persona-tag p4">P04</span></td><td>보상체감 낮음</td><td>26명</td><td>16%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2 mb-20">
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9638;</span> 성과등급별 퇴사위험자 분포</div>
+      <div class="chart-container chart-md"><canvas id="perfRiskChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9888;</span> 성과등급별 퇴사위험자 상세</div>
+      <div class="scrollable table-wrap">
+        <table class="dept-table" style="font-size:12px;min-width:480px;">
+          <thead><tr><th>부서</th><th>직급</th><th>예상 사유</th><th>위험점수</th><th>상태</th></tr></thead>
+          <tbody>
+            <tr><td>Strategy&amp;</td><td>S&amp;</td><td>업무 소진, 경력 정체</td><td><strong style="color:var(--red);">0.91</strong></td><td><span class="badge high">고위험</span></td></tr>
+            <tr><td>Operation</td><td>Manager</td><td>관계 단절, 동기저하</td><td><strong style="color:var(--red);">0.88</strong></td><td><span class="badge high">고위험</span></td></tr>
+            <tr><td>Customer</td><td>Director</td><td>외부 시장 보상비교</td><td><strong style="color:var(--red);">0.85</strong></td><td><span class="badge high">고위험</span></td></tr>
+            <tr><td>Technology</td><td>S&amp;</td><td>번아웃, 직무불만족</td><td><strong style="color:var(--orange);">0.79</strong></td><td><span class="badge medium">잠재위험</span></td></tr>
+            <tr><td>D&amp;AI</td><td>Manager</td><td>성장기회 부족</td><td><strong style="color:var(--orange);">0.76</strong></td><td><span class="badge medium">잠재위험</span></td></tr>
+            <tr><td>Consulting LT</td><td>S&amp;</td><td>보상 불만, 이직준비</td><td><strong style="color:var(--orange);">0.74</strong></td><td><span class="badge medium">잠재위험</span></td></tr>
+            <tr><td>Fin. Transformation</td><td>Director</td><td>관리구조 불안정</td><td><strong style="color:var(--orange);">0.71</strong></td><td><span class="badge medium">잠재위험</span></td></tr>
+            <tr><td>Risk &amp; Cyber</td><td>Manager</td><td>행동패턴 이상</td><td><strong style="color:var(--orange);">0.68</strong></td><td><span class="badge medium">잠재위험</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9636;</span> 월별 퇴사위험 추이</div>
+      <div class="chart-container chart-md"><canvas id="riskTrendChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9881;</span> Agent별 위험 탐지 기여도</div>
+      <div class="chart-container chart-md"><canvas id="agentContribChart"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TAB 2: 인사이트 ========== -->
+<section class="tab-content" id="tab2">
+  <div class="arch-banner">
+    <div style="flex:1;min-width:200px;">
+      <h2>Agentic AI 기반 선제적 퇴사위험 예측 시스템</h2>
+      <p>5개 전문 Worker Agent의 분석 결과를 종합하여 360도 관점의 퇴사 위험 진단 제공</p>
+    </div>
+    <div class="arch-agents">
+      <div class="arch-agent str">Structura<br><span style="font-size:10px;">정형 데이터</span></div>
+      <div class="arch-agent cog">Cognita<br><span style="font-size:10px;">관계망</span></div>
+      <div class="arch-agent chr">Chronos<br><span style="font-size:10px;">시계열</span></div>
+      <div class="arch-agent sen">Sentio<br><span style="font-size:10px;">자연어</span></div>
+      <div class="arch-agent ago">Agora<br><span style="font-size:10px;">외부시장</span></div>
+    </div>
+  </div>
+
+  <div class="section-title"><span class="dot"></span> AI 핵심 인사이트 (Synthesize Agent)</div>
+
+  <div class="grid-2 mb-20">
+    <div>
+      <div class="insight-card" style="border-left-color:var(--red);">
+        <div class="title">&#128680; 번아웃 직전 그룹(P01)의 급속 확산</div>
+        <div class="desc">고위험군 155명 중 <strong>50%(77명)</strong>이 번아웃 직전 상태. Strategy&amp;와 Operation 부서에서 집중 발생. 평균 초과근무시간 전사 대비 <strong>2.3배</strong>, 직무만족도 <strong>하위 15%</strong>.</div>
+        <div class="agent-source"><span class="agent-chip structura">Structura: 0.87</span><span class="agent-chip sentio">Sentio: 0.82</span><span class="agent-chip chronos">Chronos: 0.76</span></div>
+      </div>
+      <div class="insight-card" style="border-left-color:var(--blue);">
+        <div class="title">&#128279; 관계망 단절 패턴 감지</div>
+        <div class="desc">최근 6개월간 <strong>신규 협업 관계</strong> 미형성 직원이 고위험군에서 <strong>72%</strong>. 프로젝트 참여 다양성 감소, 사회적 고립 지수 지속 상승.</div>
+        <div class="agent-source"><span class="agent-chip cognita">Cognita: 0.80</span><span class="agent-chip chronos">Chronos: 0.65</span></div>
+      </div>
+      <div class="insight-card" style="border-left-color:var(--orange);">
+        <div class="title">&#128200; 행동 패턴 이상 징후 증가</div>
+        <div class="desc">최근 3주간 <strong>로그인 시간 불규칙성</strong> 전분기 대비 38% 증가. 이메일 발송량 감소, 시스템 접속 빈도 저하 등 <strong>이직 준비 행동</strong> 패턴 관찰.</div>
+        <div class="agent-source"><span class="agent-chip chronos">Chronos: 0.76</span><span class="agent-chip agora">Agora: 0.58</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="insight-card" style="border-left-color:var(--purple);">
+        <div class="title">&#128172; 감성 분석: 부정 감정 키워드 급증</div>
+        <div class="desc">코칭 면담 및 자기평가 텍스트에서 <strong>"소진", "불확실", "답답함"</strong> 등 부정 키워드 전년 대비 <strong>45%</strong> 증가. ME~IP 직급 집중, 성과평가 직후 급증.</div>
+        <div class="agent-source"><span class="agent-chip sentio">Sentio: 0.85</span></div>
+      </div>
+      <div class="insight-card" style="border-left-color:var(--green);">
+        <div class="title">&#127919; 외부 시장 Pull Factor 강화</div>
+        <div class="desc">Technology, D&amp;AI 부서 LinkedIn 등 접속 빈도 <strong>전분기 대비 62%</strong> 증가. AI/데이터 직군 시장 보상 현 수준 대비 <strong>15~25%</strong> 높음.</div>
+        <div class="agent-source"><span class="agent-chip agora">Agora: 0.72</span><span class="agent-chip structura">Structura: 0.55</span></div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title"><span class="icon">&#9881;</span> Agent별 평균 위험 점수 (고위험군)</div>
+        <div class="chart-container" style="height:180px;"><canvas id="agentAvgChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TAB 3: 위험 요인 ========== -->
+<section class="tab-content" id="tab3">
+  <div class="section-title"><span class="dot"></span> 퇴사 위험 요인 분석 (SHAP 기반)</div>
+
+  <div class="grid-2 mb-20">
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9776;</span> 전사 Top 10 위험 요인</div>
+      <div class="chart-container chart-lg"><canvas id="shapChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9673;</span> Agent별 위험 요인 기여도</div>
+      <div class="chart-container chart-lg"><canvas id="agentRadarChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-2 mb-20">
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9733;</span> Persona별 위험 프로필</div>
+      <div class="scrollable">
+        <!-- P01 -->
+        <div style="margin-bottom:18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <span class="persona-tag p1">P01 번아웃 직전</span>
+            <span style="font-size:12px;color:var(--sub);">77명 | 평균 0.84</span>
+          </div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>초과근무시간</span><span style="color:var(--red);font-weight:600;">78%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:78%;background:var(--red);">78%</div></div></div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>직무만족도</span><span style="color:var(--red);font-weight:600;">45%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:45%;background:var(--red);">45%</div></div></div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>감성 부정지수</span><span style="color:var(--orange);font-weight:600;">62%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:62%;background:var(--orange);">62%</div></div></div>
+        </div>
+        <!-- P02 -->
+        <div style="margin-bottom:18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <span class="persona-tag p2">P02 보상 실망</span>
+            <span style="font-size:12px;color:var(--sub);">12명 | 평균 0.79</span>
+          </div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>보상 격차 (vs 동료)</span><span style="color:var(--red);font-weight:600;">72%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:72%;background:var(--red);">72%</div></div></div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>외부 보상 비교</span><span style="color:var(--orange);font-weight:600;">65%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:65%;background:var(--orange);">65%</div></div></div>
+        </div>
+        <!-- P03 -->
+        <div style="margin-bottom:18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <span class="persona-tag p3">P03 성장 정체</span>
+            <span style="font-size:12px;color:var(--sub);">40명 | 평균 0.73</span>
+          </div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>승진 후 경과기간</span><span style="color:var(--orange);font-weight:600;">68%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:68%;background:var(--orange);">68%</div></div></div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>PM 경험 부족</span><span style="color:var(--orange);font-weight:600;">55%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:55%;background:var(--orange);">55%</div></div></div>
+        </div>
+        <!-- P04 -->
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <span class="persona-tag p4">P04 보상체감 낮음</span>
+            <span style="font-size:12px;color:var(--sub);">26명 | 평균 0.68</span>
+          </div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>인센티브 미수령</span><span style="color:var(--orange);font-weight:600;">58%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:58%;background:var(--orange);">58%</div></div></div>
+          <div class="risk-factor-item"><div class="risk-factor-label"><span>연봉 상승률 정체</span><span style="color:var(--yellow);font-weight:600;">42%</span></div><div class="risk-factor-bar"><div class="risk-factor-fill" style="width:42%;background:var(--yellow);">42%</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 성과-위험 매트릭스 -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9638;</span> 성과 - 위험 매트릭스</div>
+      <div style="font-size:12px;color:#666;margin-bottom:8px;">퇴사 위험과 성과를 결합하여 전략적 선별</div>
+      <div class="table-wrap">
+        <div class="matrix-grid" style="min-width:360px;">
+          <div></div><div class="matrix-header">C</div><div class="matrix-header">B</div><div class="matrix-header">A</div><div class="matrix-header">S</div>
+          <div class="matrix-label">고위험</div>
+          <div class="matrix-cell m-red">자연감소<br><strong>8명</strong></div>
+          <div class="matrix-cell m-orange">선별적 개입<br><strong>14명</strong></div>
+          <div class="matrix-cell m-orange">적극 개입<br><strong>22명</strong></div>
+          <div class="matrix-cell m-red">최우선 개입<br><strong>11명</strong></div>
+          <div class="matrix-label">잠재적</div>
+          <div class="matrix-cell m-yellow">성과개선<br><strong>25명</strong></div>
+          <div class="matrix-cell m-yellow">잠재력 평가<br><strong>45명</strong></div>
+          <div class="matrix-cell m-blue">역량 강화<br><strong>38명</strong></div>
+          <div class="matrix-cell m-orange">선제적 관리<br><strong>19명</strong></div>
+          <div class="matrix-label">저위험</div>
+          <div class="matrix-cell m-green">유지 관리<br><strong>120명</strong></div>
+          <div class="matrix-cell m-green">안정 유지<br><strong>245명</strong></div>
+          <div class="matrix-cell m-blue">성장 지원<br><strong>210명</strong></div>
+          <div class="matrix-cell m-blue">핵심인재<br><strong>177명</strong></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:10px;color:var(--sub);padding:0 36px;">
+        <span>&#8592; 성과 낮음</span><span>성과 높음 &#8594;</span>
+      </div>
+      <div style="margin-top:14px;padding:10px 12px;background:#fef7f8;border-radius:8px;font-size:12px;color:#555;">
+        <strong style="color:var(--red);">핵심:</strong> S등급 고위험군 11명은 최우선 개입 필요. A등급 잠재위험군 38명은 역량 강화를 통한 선제적 리텐션 전략 권장.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TAB 4: 개입 전략 ========== -->
+<section class="tab-content" id="tab4">
+  <div class="section-title"><span class="dot"></span> 맞춤 개입 전략 프레임워크</div>
+  <p style="font-size:13px;color:#666;margin-bottom:16px;">각 Agent의 분석 결과를 기반으로, Persona별 맞춤형 개입 전략을 제시합니다.</p>
+
+  <div class="grid-2 mb-20">
+    <div class="card">
+      <div class="card-title"><span class="icon">&#10067;</span> WHAT: 위험 프로필별 맞춤 개입</div>
+
+      <div class="strategy-card s-structura">
+        <div class="strategy-header"><div class="strategy-icon">&#9638;</div><div class="strategy-title">구조적 불만족 (Structura)</div></div>
+        <ul class="strategy-items"><li>총체적 보상 검토 및 시장 대비 경쟁력 확보</li><li>투명한 경력 경로 제시 및 승진 기준 명확화</li><li>업무량 분배 재검토 및 초과근무 관리</li></ul>
+      </div>
+      <div class="strategy-card s-cognita">
+        <div class="strategy-header"><div class="strategy-icon">&#128279;</div><div class="strategy-title">관계적 단절 (Cognita)</div></div>
+        <ul class="strategy-items"><li>관리자 주도 1:1 Communication 체계 강화</li><li>프로젝트 페어링을 통한 협업 기회 확대</li><li>멘토링 프로그램 연계 및 네트워크 복원</li></ul>
+      </div>
+      <div class="strategy-card s-chronos">
+        <div class="strategy-header"><div class="strategy-icon">&#128200;</div><div class="strategy-title">행동적 이탈 (Chronos)</div></div>
+        <ul class="strategy-items"><li>자율성 부여 및 유의미한 업무 재할당</li><li>업무량 및 기대 수준 재조정</li><li>시의적절한 인정과 격려 제공</li></ul>
+      </div>
+      <div class="strategy-card s-sentio">
+        <div class="strategy-header"><div class="strategy-icon">&#128172;</div><div class="strategy-title">심리적 소진 (Sentio)</div></div>
+        <ul class="strategy-items"><li>JD-R 모델 기반 관리적 개입</li><li>Job Crafting 기법 도입</li><li>웰니스 프로그램 지원 및 EAP 연계</li></ul>
+      </div>
+      <div class="strategy-card s-agora">
+        <div class="strategy-header"><div class="strategy-icon">&#127919;</div><div class="strategy-title">외부 시장 요인 (Agora)</div></div>
+        <ul class="strategy-items"><li>내부 '탤런트 마켓플레이스' 관점의 관리</li><li>전략적 보상 조정 (시장 벤치마크 기반)</li><li>경쟁 우위 EVP 강화</li></ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="card mb-20">
+        <div class="card-title"><span class="icon">&#9881;</span> HOW: 우선순위 기반 개입 실행 계획</div>
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <span class="priority-badge" style="background:var(--red);">최우선</span>
+            <span style="font-size:13px;font-weight:600;">S등급 고위험군 (11명)</span>
+          </div>
+          <div style="font-size:12px;color:#555;line-height:1.8;padding-left:14px;">
+            &#8226; 72시간 내 관리자-HR BP 공동 면담<br>&#8226; 개인별 보상 패키지 재검토<br>&#8226; 경력 개발 로드맵 수립<br>&#8226; 주간 체크인 모니터링 시작
+          </div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <span class="priority-badge" style="background:var(--orange);">적극 개입</span>
+            <span style="font-size:13px;font-weight:600;">A등급 고위험군 (22명)</span>
+          </div>
+          <div style="font-size:12px;color:#555;line-height:1.8;padding-left:14px;">
+            &#8226; 1주 내 Retention Interview<br>&#8226; Persona별 맞춤 개입 적용<br>&#8226; 프로젝트 배치 재조정<br>&#8226; 격주 모니터링
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <span class="priority-badge" style="background:var(--yellow);">선제 관리</span>
+            <span style="font-size:13px;font-weight:600;">잠재적 위험 고성과군 (57명)</span>
+          </div>
+          <div style="font-size:12px;color:#555;line-height:1.8;padding-left:14px;">
+            &#8226; 월간 1:1 코칭 면담 정기화<br>&#8226; 성장 기회 우선 배정<br>&#8226; 동료 네트워크 활성화
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span class="icon">&#128202;</span> 개입 효과 예측 시뮬레이션</div>
+        <div class="chart-container chart-md"><canvas id="interventionChart"></canvas></div>
+        <div style="font-size:11px;color:var(--sub);margin-top:6px;text-align:center;">* 개입 실행 시 예상 고위험군 감소 추이</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TAB 5: 관리자 설정 ========== -->
+<section class="tab-content" id="tab5">
+  <div class="section-title"><span class="dot"></span> 시스템 설정</div>
+  <div class="grid-2">
+    <div>
+      <div class="card mb-20">
+        <div class="card-title"><span class="icon">&#9881;</span> 위험 임계값 설정</div>
+        <div class="setting-group">
+          <h3>위험 등급 분류 기준</h3>
+          <div class="setting-row">
+            <div><div class="setting-label">고위험 임계값</div><div class="setting-desc">이 점수 이상 고위험 분류</div></div>
+            <div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0.5" max="1.0" step="0.05" value="0.7" style="width:100px;"><input type="number" value="0.70" step="0.05" min="0.5" max="1.0" style="width:65px;"></div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">잠재적 위험 임계값</div><div class="setting-desc">이 점수 이상 잠재적 위험 분류</div></div>
+            <div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0.3" max="0.7" step="0.05" value="0.4" style="width:100px;"><input type="number" value="0.40" step="0.05" min="0.3" max="0.7" style="width:65px;"></div>
+          </div>
+        </div>
+        <div class="setting-group">
+          <h3>Agent별 가중치 설정</h3>
+          <div class="setting-row"><div><span class="agent-chip structura">Structura</span></div><div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="100" value="30" style="width:100px;"><span style="font-size:13px;font-weight:600;">30%</span></div></div>
+          <div class="setting-row"><div><span class="agent-chip cognita">Cognita</span></div><div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="100" value="20" style="width:100px;"><span style="font-size:13px;font-weight:600;">20%</span></div></div>
+          <div class="setting-row"><div><span class="agent-chip chronos">Chronos</span></div><div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="100" value="20" style="width:100px;"><span style="font-size:13px;font-weight:600;">20%</span></div></div>
+          <div class="setting-row"><div><span class="agent-chip sentio">Sentio</span></div><div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="100" value="15" style="width:100px;"><span style="font-size:13px;font-weight:600;">15%</span></div></div>
+          <div class="setting-row"><div><span class="agent-chip agora">Agora</span></div><div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="100" value="15" style="width:100px;"><span style="font-size:13px;font-weight:600;">15%</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card mb-20">
+        <div class="card-title"><span class="icon">&#128276;</span> 알림 설정</div>
+        <div class="setting-group">
+          <h3>자동 알림</h3>
+          <div class="setting-row"><div><div class="setting-label">고위험 신규 감지 알림</div><div class="setting-desc">새 고위험 직원 감지 시 알림</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div><div class="setting-label">위험 등급 변동 알림</div><div class="setting-desc">등급 상승 직원 알림</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div><div class="setting-label">주간 요약 리포트</div><div class="setting-desc">매주 월요일 발송</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div><div class="setting-label">행동 이상 즉시 알림</div><div class="setting-desc">Chronos 이상 탐지 시</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+        </div>
+        <div class="setting-group">
+          <h3>알림 수신 대상</h3>
+          <div class="setting-row"><div><div class="setting-label">HR BP</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div><div class="setting-label">직속 관리자 (EL)</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="setting-row"><div><div class="setting-label">본부장</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">&#128336;</span> 데이터 수집 주기</div>
+        <div class="setting-group">
+          <div class="setting-row"><div><div class="setting-label">HRIS 데이터 (Structura)</div></div><select><option>매일</option><option selected>매주</option><option>매월</option></select></div>
+          <div class="setting-row"><div><div class="setting-label">관계망 데이터 (Cognita)</div></div><select><option>매일</option><option selected>매주</option><option>매월</option></select></div>
+          <div class="setting-row"><div><div class="setting-label">행동 로그 (Chronos)</div></div><select><option selected>매일</option><option>매주</option><option>매월</option></select></div>
+          <div class="setting-row"><div><div class="setting-label">텍스트 데이터 (Sentio)</div></div><select><option>매일</option><option>매주</option><option selected>매월</option></select></div>
+          <div class="setting-row"><div><div class="setting-label">외부 시장 (Agora)</div></div><select><option>매일</option><option selected>매주</option><option>매월</option></select></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  &copy; 2025 PwC Consulting. Agentic AI 기반 선제적 퇴사위험 예측 및 관리시스템.
+</footer>
+
+<script>
+/* ===== TAB SWITCHING ===== */
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.sidebar-panel .sb-item').forEach(b => b.classList.remove('active'));
+
+  document.getElementById(tabId).classList.add('active');
+
+  document.querySelectorAll(`[data-tab="${tabId}"]`).forEach(b => b.classList.add('active'));
+
+  // Sidebar items
+  const idx = ['tab1','tab2','tab3','tab4','tab5'].indexOf(tabId);
+  const sbItems = document.querySelectorAll('.sidebar-panel .sb-item');
+  if(sbItems[idx]) sbItems[idx].classList.add('active');
+
+  // Resize charts after tab switch
+  setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
+  // Scroll to top
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function switchTabMobile(tabId) {
+  switchTab(tabId);
+  closeSidebar();
+}
+
+// Desktop tab click
+document.querySelectorAll('.tab-nav .tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+// Bottom nav click
+document.querySelectorAll('.bnav-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+/* ===== SIDEBAR ===== */
+function openSidebar() {
+  document.getElementById('sidebarOverlay').classList.add('open');
+  document.getElementById('sidebarPanel').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  document.getElementById('sidebarOverlay').classList.remove('open');
+  document.getElementById('sidebarPanel').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+/* ===== SWIPE GESTURE (Mobile Tab Switch) ===== */
+let touchStartX = 0, touchEndX = 0;
+const tabOrder = ['tab1','tab2','tab3','tab4','tab5'];
+
+document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive:true});
+document.addEventListener('touchend', e => {
+  touchEndX = e.changedTouches[0].screenX;
+  const diff = touchStartX - touchEndX;
+  if(Math.abs(diff) < 80) return;
+  const currentIdx = tabOrder.indexOf(document.querySelector('.tab-content.active').id);
+  if(diff > 0 && currentIdx < tabOrder.length - 1) switchTab(tabOrder[currentIdx + 1]);
+  else if(diff < 0 && currentIdx > 0) switchTab(tabOrder[currentIdx - 1]);
+}, {passive:true});
+
+/* ===== CHART DEFAULTS ===== */
+Chart.defaults.font.family = "'Noto Sans KR',system-ui,sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyleWidth = 8;
+
+const C = {
+  red:'#d93954', orange:'#e8721a', yellow:'#e5a100',
+  green:'#2ea44f', blue:'#2563eb', purple:'#7c3aed'
+};
+
+/* ===== DEPARTMENT TABLE ===== */
+const depts = [
+  {n:'Consulting LT',c:35,h:6,r:17},{n:'Strategy&',c:125,h:28,r:22},
+  {n:'Fin. Transformation',c:145,h:15,r:10},{n:'Operation',c:125,h:32,r:26},
+  {n:'Industry Solution',c:126,h:14,r:11},{n:'Customer',c:110,h:18,r:16},
+  {n:'Technology',c:240,h:19,r:8},{n:'D&AI',c:130,h:12,r:9},
+  {n:'Financial Services',c:108,h:8,r:7},{n:'Risk & Cyber',c:30,h:3,r:10}
+];
+const tb = document.getElementById('deptTableBody');
+depts.forEach(d => {
+  const rc = d.r>=14?'critical':d.r>=12?'high':d.r>=10?'mid':'low';
+  const bc = d.r>=13?'high':d.r>=10?'medium':'low';
+  tb.innerHTML += `<tr><td style="font-weight:500;">${d.n}</td><td>${d.c}명</td><td><div class="dept-bar-wrap"><div class="dept-bar ${rc}" style="width:${d.r*7}px;"></div><span style="font-size:11px;color:#888;">${d.r}%</span></div></td><td><strong style="color:var(--red);">${d.h}명</strong></td><td><span class="badge ${bc}">${d.r}%</span></td></tr>`;
+});
+
+/* ===== CHARTS ===== */
+// Persona Donut
+new Chart(document.getElementById('personaChart'), {
+  type:'doughnut', data:{labels:['P01','P02','P03','P04'],datasets:[{data:[77,12,40,26],backgroundColor:[C.red,C.blue,C.orange,C.purple],borderWidth:2,borderColor:'#fff'}]},
+  options:{cutout:'65%',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}
+});
+
+// Perf Risk Stacked Bar
+new Chart(document.getElementById('perfRiskChart'), {
+  type:'bar', data:{labels:['EP','HP','ME','IP','BE'],datasets:[
+    {label:'고위험',data:[20,36,17,32,12],backgroundColor:C.red},
+    {label:'잠재적 위험',data:[15,28,22,25,18],backgroundColor:C.orange},
+    {label:'안정',data:[45,62,55,70,48],backgroundColor:'#e0e0e0'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:'#f0f0f0'}}}}
+});
+
+// Risk Trend
+new Chart(document.getElementById('riskTrendChart'), {
+  type:'line', data:{labels:['24.10','24.11','24.12','25.01','25.02','25.03','25.04','25.05','25.06','25.07','25.08','25.09'],datasets:[
+    {label:'고위험',data:[98,105,112,118,125,130,128,135,140,145,150,155],borderColor:C.red,backgroundColor:C.red+'20',fill:true,tension:.3,pointRadius:3},
+    {label:'잠재적 위험',data:[310,320,330,340,350,355,360,365,370,375,380,387],borderColor:C.orange,borderDash:[5,5],fill:false,tension:.3,pointRadius:2}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},maxRotation:45}},y:{grid:{color:'#f0f0f0'}}}}
+});
+
+// Agent Contribution
+new Chart(document.getElementById('agentContribChart'), {
+  type:'bar', data:{labels:['Structura','Cognita','Chronos','Sentio','Agora'],datasets:[{label:'기여도(%)',data:[32,22,21,15,10],backgroundColor:[C.red,C.blue,C.orange,C.purple,C.green],borderRadius:6}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'},max:40,ticks:{callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:12,weight:'600'}}}}}
+});
+
+// Agent Avg (Tab2)
+new Chart(document.getElementById('agentAvgChart'), {
+  type:'bar', data:{labels:['Structura','Cognita','Chronos','Sentio','Agora'],datasets:[{data:[0.78,0.63,0.76,0.71,0.58],backgroundColor:[C.red+'80',C.blue+'80',C.orange+'80',C.purple+'80',C.green+'80'],borderColor:[C.red,C.blue,C.orange,C.purple,C.green],borderWidth:2,borderRadius:6}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:true,anchor:'end',align:'end',font:{size:11,weight:'700'},formatter:v=>v.toFixed(2)}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f0f0'},min:0,max:1}}},
+  plugins:[ChartDataLabels]
+});
+
+// SHAP (Tab3)
+new Chart(document.getElementById('shapChart'), {
+  type:'bar', data:{labels:['초과근무시간','직무만족도','연봉(동료대비)','승진후 경과기간','사회적 고립지수','감성 부정지수','로그인 불규칙성','외부 플랫폼 접속','PM 경험 부족','연봉 상승률'],
+  datasets:[{label:'SHAP',data:[.82,.74,.68,.62,.58,.55,.51,.47,.42,.38],backgroundColor:[C.red,C.red,C.red,C.orange,C.orange,C.orange,C.yellow,C.yellow,C.yellow,C.yellow],borderRadius:4}]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0f0'},min:0,max:1},y:{grid:{display:false},ticks:{font:{size:11}}}}}
+});
+
+// Radar (Tab3)
+new Chart(document.getElementById('agentRadarChart'), {
+  type:'radar', data:{labels:['구조적 불만족','관계적 단절','행동적 이탈','심리적 소진','외부 Pull'],datasets:[
+    {label:'P01',data:[85,45,72,90,30],borderColor:C.red,backgroundColor:C.red+'20',pointBackgroundColor:C.red},
+    {label:'P02',data:[70,35,40,50,80],borderColor:C.blue,backgroundColor:C.blue+'20',pointBackgroundColor:C.blue},
+    {label:'P03',data:[55,60,50,65,45],borderColor:C.orange,backgroundColor:C.orange+'20',pointBackgroundColor:C.orange},
+    {label:'P04',data:[80,30,35,40,70],borderColor:C.purple,backgroundColor:C.purple+'20',pointBackgroundColor:C.purple}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10}}}},scales:{r:{min:0,max:100,ticks:{stepSize:20,font:{size:9}},pointLabels:{font:{size:10}}}}}
+});
+
+// Intervention (Tab4)
+new Chart(document.getElementById('interventionChart'), {
+  type:'line', data:{labels:['현재','1개월','2개월','3개월','4개월','5개월','6개월'],datasets:[
+    {label:'미실행(예상)',data:[155,162,170,180,192,205,218],borderColor:'#ccc',borderDash:[5,5],fill:false,tension:.3,pointRadius:3},
+    {label:'실행(예상)',data:[155,148,135,120,108,98,90],borderColor:C.red,backgroundColor:C.red+'15',fill:true,tension:.3,pointRadius:4}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f0f0'},title:{display:true,text:'고위험군 인원 수',font:{size:11}}}}}
+});
+</script>
+</body>
+</html>
