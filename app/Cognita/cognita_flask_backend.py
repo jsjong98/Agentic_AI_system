@@ -1065,9 +1065,9 @@ def create_app():
     
     # Neo4j 설정 (최적화된 연결 정보)
     NEO4J_CONFIG = {
-        "uri": os.getenv("NEO4J_URI", "bolt://13.220.63.109:7687"),
+        "uri": os.getenv("NEO4J_URI", "bolt://localhost:7687"),
         "username": os.getenv("NEO4J_USERNAME", "neo4j"),
-        "password": os.getenv("NEO4J_PASSWORD", "coughs-laboratories-knife")
+        "password": os.getenv("NEO4J_PASSWORD", "")
     }
     
     # 전역 변수

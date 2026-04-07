@@ -37,6 +37,7 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+.env.railway
 secrets.json
 config.json
 credentials.json

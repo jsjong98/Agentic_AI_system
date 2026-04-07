@@ -68,7 +68,7 @@ llm_generator = None
 # JobSpy 통합 설정
 JOBSPY_CONFIG = {
     'use_jobspy': True,
-    'use_selenium': True,
+    'use_selenium': os.environ.get('USE_SELENIUM', 'false').lower() == 'true',
     'jobspy_results_wanted': 50,
     'jobspy_hours_old': 72,
     'api_rate_limit': 1.0,
