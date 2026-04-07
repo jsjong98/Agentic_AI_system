@@ -25,6 +25,14 @@ import openai
 # 환경변수 로드
 load_dotenv()
 
+# 워커 서비스 URL (Railway 내부 네트워크 우선, 로컬 폴백)
+STRUCTURA_URL   = os.environ.get('STRUCTURA_URL',   'http://localhost:5001')
+COGNITA_URL     = os.environ.get('COGNITA_URL',     'http://localhost:5002')
+CHRONOS_URL     = os.environ.get('CHRONOS_URL',     'http://localhost:5003')
+SENTIO_URL      = os.environ.get('SENTIO_URL',      'http://localhost:5004')
+AGORA_URL       = os.environ.get('AGORA_URL',       'http://localhost:5005')
+INTEGRATION_URL = os.environ.get('INTEGRATION_URL', 'http://localhost:5007')
+
 from langgraph_workflow import SupervisorWorkflow
 from worker_integrator import DEFAULT_WORKER_CONFIGS
 from agent_state import AgentState
@@ -396,31 +404,31 @@ def analyze_single_agent_sync(agent_name, employee_id, request_data):
         
         if agent_name == 'structura':
             # Structura 분석 - 개별 직원 예측 엔드포인트 사용 (배치 분석 시에도)
-            url = f"{os.getenv('STRUCTURA_URL', 'http://localhost:5001')}/api/predict"
+            url = f"{STRUCTURA_URL}/api/predict"
             response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': analysis_type, **request_data})
             return response.json() if response.ok else {'error': f'Structura API error: {response.status_code}'}
             
         elif agent_name == 'cognita':
             # Cognita 분석 - employee_id로 관계 분석 (post 데이터 불필요)
-            url = f"{os.getenv('COGNITA_URL', 'http://localhost:5002')}/api/analyze/employee/{employee_id}"
+            url = f"{COGNITA_URL}/api/analyze/employee/{employee_id}"
             response = requests.get(url)
             return response.json() if response.ok else {'error': f'Cognita API error: {response.status_code}'}
             
         elif agent_name == 'chronos':
             # Chronos 분석 - 개별 직원 예측 엔드포인트 사용 (배치 분석 시에도)
-            url = f"{os.getenv('CHRONOS_URL', 'http://localhost:5003')}/api/predict"
+            url = f"{CHRONOS_URL}/api/predict"
             response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': analysis_type})
             return response.json() if response.ok else {'error': f'Chronos API error: {response.status_code}'}
             
         elif agent_name == 'sentio':
             # Sentio 분석 - employee_id로 감정 분석 (post 데이터 불필요)
-            url = f"{os.getenv('SENTIO_URL', 'http://localhost:5004')}/analyze_sentiment"
+            url = f"{SENTIO_URL}/analyze_sentiment"
             response = requests.post(url, json={'employee_id': employee_id, 'analysis_type': 'batch'})
             return response.json() if response.ok else {'error': f'Sentio API error: {response.status_code}'}
             
         elif agent_name == 'agora':
             # Agora 분석 - 실제 직원 데이터를 전달하여 정확한 시장 분석 수행
-            url = f"{os.getenv('AGORA_URL', 'http://localhost:5005')}/api/agora/comprehensive-analysis"
+            url = f"{AGORA_URL}/api/agora/comprehensive-analysis"
             
             employee_data = None
             if 'employees' in request_data:
@@ -844,33 +852,33 @@ def post_analysis():
                 try:
                     if agent_type == 'structura':
                         # Structura API 호출
-                        response = requests.get(f'http://localhost:5001/api/predict/{employee_id}', timeout=10)
+                        response = requests.get(f'{STRUCTURA_URL}/api/predict/{employee_id}', timeout=10)
                         if response.status_code == 200:
                             employee_result['agent_results']['structura'] = response.json()
                     
                     elif agent_type == 'cognita':
                         # Cognita API 호출
-                        response = requests.get(f'http://localhost:5002/api/analyze/employee/{employee_id}', timeout=10)
+                        response = requests.get(f'{COGNITA_URL}/api/analyze/employee/{employee_id}', timeout=10)
                         if response.status_code == 200:
                             employee_result['agent_results']['cognita'] = response.json()
                     
                     elif agent_type == 'chronos':
                         # Chronos API 호출
-                        response = requests.post(f'http://localhost:5003/api/predict', 
+                        response = requests.post(f'{CHRONOS_URL}/api/predict', 
                                                json={'employee_id': employee_id}, timeout=10)
                         if response.status_code == 200:
                             employee_result['agent_results']['chronos'] = response.json()
                     
                     elif agent_type == 'sentio':
                         # Sentio API 호출
-                        response = requests.post(f'http://localhost:5004/analyze_sentiment', 
+                        response = requests.post(f'{SENTIO_URL}/analyze_sentiment', 
                                                json={'employee_id': employee_id}, timeout=10)
                         if response.status_code == 200:
                             employee_result['agent_results']['sentio'] = response.json()
                     
                     elif agent_type == 'agora':
                         # Agora API 호출
-                        response = requests.post(f'http://localhost:5005/api/agora/comprehensive-analysis', 
+                        response = requests.post(f'{AGORA_URL}/api/agora/comprehensive-analysis', 
                                                json={'employee_id': employee_id}, timeout=10)
                         if response.status_code == 200:
                             employee_result['agent_results']['agora'] = response.json()
@@ -1827,7 +1835,7 @@ def structura_predict():
         # Structura API 호출
         import requests
         response = requests.post(
-            'http://localhost:5001/api/predict',
+            STRUCTURA_URL + '/api/predict',
             json=data,
             timeout=30
         )
@@ -1860,7 +1868,7 @@ def cognita_analyze_employee(employee_id):
         # Cognita API 호출
         import requests
         response = requests.get(
-            f'http://localhost:5002/api/analyze/employee/{employee_id}',
+            f'{COGNITA_URL}/api/analyze/employee/{employee_id}',
             timeout=30
         )
         
@@ -1893,7 +1901,7 @@ def cognita_get_departments():
         # Cognita API 호출
         import requests
         response = requests.get(
-            'http://localhost:5002/api/departments',
+            COGNITA_URL + '/api/departments',
             timeout=30
         )
         
@@ -1929,7 +1937,7 @@ def cognita_get_employees():
         # Cognita API 호출
         import requests
         response = requests.get(
-            f'http://localhost:5002/api/employees?limit={limit}&offset={offset}',
+            f'{COGNITA_URL}/api/employees?limit={limit}&offset={offset}',
             timeout=30
         )
         
@@ -1968,7 +1976,7 @@ def cognita_analyze_department():
         # Cognita API 호출
         import requests
         response = requests.post(
-            'http://localhost:5002/api/analyze/department',
+            COGNITA_URL + '/api/analyze/department',
             json=data,
             timeout=30
         )
@@ -2008,7 +2016,7 @@ def cognita_setup_neo4j():
         # Cognita API 호출
         import requests
         response = requests.post(
-            'http://localhost:5002/api/setup/neo4j',
+            COGNITA_URL + '/api/setup/neo4j',
             json=data,
             timeout=30
         )
@@ -2048,7 +2056,7 @@ def chronos_predict():
         # Chronos API 호출
         import requests
         response = requests.post(
-            'http://localhost:5003/api/predict',
+            CHRONOS_URL + '/api/predict',
             json=data,
             timeout=30
         )
@@ -2088,7 +2096,7 @@ def sentio_analyze_sentiment():
         # Sentio API 호출
         import requests
         response = requests.post(
-            'http://localhost:5004/analyze_sentiment',
+            SENTIO_URL + '/analyze_sentiment',
             json=data,
             timeout=30
         )
@@ -2128,7 +2136,7 @@ def agora_comprehensive_analysis():
         # Agora API 호출
         import requests
         response = requests.post(
-            'http://localhost:5005/api/agora/comprehensive-analysis',
+            AGORA_URL + '/api/agora/comprehensive-analysis',
             json=data,
             timeout=30
         )
@@ -2168,7 +2176,7 @@ def integration_predict_employee():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/predict_employee',
+            INTEGRATION_URL + '/predict_employee',
             json=data,
             timeout=30
         )
@@ -2208,7 +2216,7 @@ def integration_generate_report():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/generate_report',
+            INTEGRATION_URL + '/generate_report',
             json=data,
             timeout=60  # 레포트 생성은 시간이 더 걸릴 수 있음
         )
@@ -2248,7 +2256,7 @@ def integration_generate_batch_analysis_report():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/generate_batch_analysis_report',
+            INTEGRATION_URL + '/generate_batch_analysis_report',
             json=data,
             timeout=120  # 배치 보고서 생성은 시간이 더 걸릴 수 있음
         )
@@ -2288,7 +2296,7 @@ def integration_load_data():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/load_data',
+            INTEGRATION_URL + '/load_data',
             json=data,
             timeout=30
         )
@@ -2323,7 +2331,7 @@ def integration_calculate_thresholds():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/calculate_thresholds',
+            INTEGRATION_URL + '/calculate_thresholds',
             json=data,
             timeout=60  # 임계값 계산은 시간이 걸릴 수 있음
         )
@@ -2358,7 +2366,7 @@ def integration_optimize_weights():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/optimize_weights',
+            INTEGRATION_URL + '/optimize_weights',
             json=data,
             timeout=120  # 가중치 최적화는 시간이 많이 걸릴 수 있음
         )
@@ -2391,7 +2399,7 @@ def integration_get_results():
         # Integration API 호출
         import requests
         response = requests.get(
-            'http://localhost:5007/get_results',
+            INTEGRATION_URL + '/get_results',
             timeout=30
         )
         
@@ -2425,7 +2433,7 @@ def integration_compare_methods():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/compare_methods',
+            INTEGRATION_URL + '/compare_methods',
             json=data,
             timeout=180  # 방법 비교는 시간이 많이 걸릴 수 있음
         )
@@ -2465,7 +2473,7 @@ def integration_generate_batch_reports():
         # Integration API 호출
         import requests
         response = requests.post(
-            'http://localhost:5007/generate_batch_reports',
+            INTEGRATION_URL + '/generate_batch_reports',
             json=data,
             timeout=300  # 일괄 레포트 생성은 시간이 많이 걸릴 수 있음
         )
@@ -2513,7 +2521,7 @@ def integration_upload_employee_data():
         import requests
         files = {'file': (file.filename, file.read(), 'text/csv')}
         response = requests.post(
-            'http://localhost:5007/upload/employee_data',
+            INTEGRATION_URL + '/upload/employee_data',
             files=files,
             timeout=60
         )
@@ -2546,7 +2554,7 @@ def integration_get_employee_list():
         # Integration API 호출
         import requests
         response = requests.get(
-            'http://localhost:5007/get_employee_list',
+            INTEGRATION_URL + '/get_employee_list',
             timeout=30
         )
         
@@ -2600,9 +2608,9 @@ def upload_data_to_workers():
         
         # 각 워커에 파일 업로드 시도
         worker_endpoints = {
-            'structura': 'http://localhost:5001/api/upload/data',
-            'chronos': 'http://localhost:5003/api/upload/timeseries',
-            'sentio': 'http://localhost:5004/upload/text_data'
+            'structura': STRUCTURA_URL + '/api/upload/data',
+            'chronos': CHRONOS_URL + '/api/upload/timeseries',
+            'sentio': SENTIO_URL + '/upload/text_data'
         }
         
         import requests
@@ -3583,7 +3591,7 @@ def call_integration_api(endpoint, data):
     """Integration API 호출 헬퍼 함수"""
     import requests
     
-    url = f"http://localhost:5007/{endpoint}"
+    url = f"{INTEGRATION_URL}/{endpoint}"
     response = requests.post(url, json=data, timeout=60)
     
     if response.status_code == 200:
