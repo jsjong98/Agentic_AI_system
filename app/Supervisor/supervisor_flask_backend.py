@@ -910,15 +910,18 @@ def post_analysis():
 
 
 # ── Authentication ──────────────────────────────────
-# 비밀번호는 환경변수 AUTH_PASSWORD에서 읽음 (Railway dashboard에서 설정)
-_AUTH_PW = os.environ.get('AUTH_PASSWORD', '')
-AUTH_USERS = {
-    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Admin User 1', 'initials': 'JO'},
-    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Admin User 2', 'initials': 'CC'},
-    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Admin User 3', 'initials': 'JK'},
-    '***@redacted': {'password': _AUTH_PW, 'role': 'admin', 'name': 'Developer', 'initials': 'DV'},
-    '***@redacted': {'password': _AUTH_PW, 'role': 'hr', 'name': 'HR Manager', 'initials': 'HR'},
-}
+# 사용자 정보는 환경변수 AUTH_USERS_JSON에서 읽음 (코드에 개인정보 없음)
+# 형식: [{"email":"...", "password":"...", "role":"admin|hr", "name":"...", "initials":".."}]
+def _load_auth_users():
+    raw = os.environ.get('AUTH_USERS_JSON', '[]')
+    try:
+        users_list = json.loads(raw)
+        return {u['email'].strip().lower(): u for u in users_list}
+    except Exception as e:
+        logger.warning(f"AUTH_USERS_JSON 파싱 실패: {e}")
+        return {}
+
+AUTH_USERS = _load_auth_users()
 
 @app.route('/api/auth/login', methods=['POST'])
 def auth_login():
