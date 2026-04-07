@@ -52,6 +52,12 @@ app/Supervisor/
 ├── supervisor_flask_backend.py     # Flask REST API 서버
 ├── run_supervisor_server.py        # 서버 실행 스크립트
 ├── test_supervisor_api.py          # API 테스트 스크립트
+├── mcp_server.py                   # 🆕 MCP 프로토콜 서버
+├── mcp_tools.py                    # 🆕 MCP 도구 인터페이스
+├── mcp_adapter.py                  # 🆕 MCP 어댑터 레이어
+├── mcp_config.json                 # 🆕 MCP 서버 설정
+├── test_mcp_integration.py         # 🆕 MCP 통합 테스트
+├── MCP_INTEGRATION_GUIDE.md        # 🆕 MCP 통합 가이드
 ├── requirements.txt                # Python 의존성
 └── README.md                       # 이 파일
 ```
@@ -415,6 +421,63 @@ Error in synthesis: Memory allocation failed
    curl http://localhost:5006/get_workflow_status/{session_id}
    ```
 
+## 🔄 MCP (Model Context Protocol) 통합
+
+### 개요
+Supervisor Agent에 MCP 지원이 추가되어 Claude Desktop, IDE, 그리고 다른 MCP 클라이언트와 원활하게 통합할 수 있습니다.
+
+### 주요 기능
+- ✅ **8개의 MCP 도구**: 5개 워커 + 3개 관리 도구
+- ✅ **표준화된 인터페이스**: MCP 프로토콜 완전 지원
+- ✅ **하위 호환성**: 기존 REST API와 병행 사용 가능
+- ✅ **세션 관리**: 멀티 세션 동시 처리 지원
+
+### 사용 가능한 MCP 도구
+
+1. **analyze_structura** - 정형 데이터 분석
+2. **analyze_cognita** - 지식 그래프 분석
+3. **analyze_chronos** - 시계열 분석
+4. **analyze_sentio** - NLP 감성 분석
+5. **analyze_agora** - 외부 시장 분석
+6. **route_workflow** - 워크플로우 라우팅
+7. **get_workflow_status** - 상태 조회
+8. **create_error_report** - 오류 보고서 생성
+
+### 빠른 시작
+
+#### 1. Claude Desktop 연동
+`claude_desktop_config.json`에 추가:
+```json
+{
+  "mcpServers": {
+    "supervisor-mcp-server": {
+      "command": "python",
+      "args": ["-m", "app.Supervisor.mcp_server"],
+      "env": {
+        "OPENAI_API_KEY": "your_key_here"
+      }
+    }
+  }
+}
+```
+
+#### 2. Python 프로그래밍 방식
+```python
+from app.Supervisor.mcp_adapter import SupervisorMCPAdapter
+
+# 어댑터 초기화
+adapter = SupervisorMCPAdapter(enable_mcp_server=False)
+
+# MCP를 통한 워크플로우 실행
+result = await adapter.execute_workflow(
+    employee_id="EMP001",
+    use_mcp=True
+)
+```
+
+### 자세한 정보
+MCP 통합에 대한 상세 가이드는 [MCP_INTEGRATION_GUIDE.md](./MCP_INTEGRATION_GUIDE.md)를 참조하세요.
+
 ## 🔮 향후 개선사항
 
 ### 성능 최적화
@@ -426,6 +489,7 @@ Error in synthesis: Memory allocation failed
 - [ ] 실시간 워크플로우 모니터링 대시보드
 - [ ] 워커별 성능 메트릭 수집
 - [ ] A/B 테스트를 위한 다중 AHP 가중치 지원
+- [x] **MCP (Model Context Protocol) 통합** ✨ **NEW!**
 
 ### 운영 개선
 - [ ] Kubernetes 배포 지원
@@ -434,4 +498,4 @@ Error in synthesis: Memory allocation failed
 
 ---
 
-**Supervisor Agent v1.0.0** - LangGraph 기반의 지능형 HR Attrition 예측 워크플로우 오케스트레이터
+**Supervisor Agent v1.1.0** - LangGraph 기반의 지능형 HR Attrition 예측 워크플로우 오케스트레이터 (MCP 지원 추가)

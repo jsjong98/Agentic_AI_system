@@ -161,7 +161,8 @@ def run_server():
         print("\n⏹️ 서버 중지: Ctrl+C")
         print("=" * 60)
         
-        app.run(host='0.0.0.0', port=5007, debug=True)
+        port = int(os.environ.get('PORT', 5007))
+        app.run(host='0.0.0.0', port=port, debug=False)
         
     except ImportError as e:
         print(f"모듈 import 오류: {e}")

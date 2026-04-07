@@ -41,10 +41,11 @@ def main():
         print("=" * 60)
         
         # 서버 실행
+        port = int(os.environ.get('PORT', 5004))
         app.run(
             host='0.0.0.0',
-            port=5004,
-            debug=True,
+            port=port,
+            debug=False,
             threaded=True
         )
         

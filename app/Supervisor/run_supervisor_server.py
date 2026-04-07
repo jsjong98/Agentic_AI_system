@@ -124,7 +124,7 @@ def main():
         app = create_app()
         
         # 서버 설정
-        port = int(os.getenv('SUPERVISOR_PORT', '5006'))
+        port = int(os.getenv('PORT', os.getenv('SUPERVISOR_PORT', '5006')))
         debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
         
         print(f"\n>> Server Information:")

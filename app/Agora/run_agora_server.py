@@ -66,10 +66,11 @@ def main():
         from agora_flask_backend import app
         
         print("✅ Agora 서버 시작 중...")
+        port = int(os.environ.get('PORT', 5005))
         app.run(
             host='0.0.0.0',
-            port=5005,
-            debug=True,
+            port=port,
+            debug=False,
             threaded=True
         )
         

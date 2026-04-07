@@ -115,7 +115,8 @@ def run_server():
         print("=" * 50)
         
         # debug=False로 설정하여 reloader 문제 방지
-        app.run(host='0.0.0.0', port=5003, debug=False)
+        port = int(os.environ.get('PORT', 5003))
+        app.run(host='0.0.0.0', port=port, debug=False)
         
     except KeyboardInterrupt:
         print("\n👋 서버가 종료되었습니다.")
