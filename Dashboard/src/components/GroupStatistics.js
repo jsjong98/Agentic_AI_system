@@ -26,6 +26,9 @@ import {
 const { Title, Text } = Typography;
 const { Option } = Select;
 
+const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
+const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+
 const GroupStatistics = ({ 
   loading, 
   setLoading, 
@@ -53,7 +56,6 @@ const GroupStatistics = ({
     setIsLoading(true);
     try {
       console.log('📂 /api/results/list-all-employees 호출 중...');
-      const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
       const response = await fetch(`${INTEGRATION_URL}/api/results/list-all-employees`);
       
       if (!response.ok) {
@@ -511,8 +513,6 @@ const GroupStatistics = ({
       }
 
       // 먼저 저장된 파일에서 로드 시도 (Integration 서버 5007)
-      const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
-      const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
       console.log('📁 저장된 파일에서 통계 로드 시도...');
       let response = await fetch(`${INTEGRATION_URL}/api/statistics/load-from-files?${params}`);
 

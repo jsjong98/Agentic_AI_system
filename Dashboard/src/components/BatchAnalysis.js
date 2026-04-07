@@ -40,6 +40,15 @@ import {
 import { predictionService } from '../services/predictionService';
 import networkManager from '../utils/networkManager';
 
+// API base URLs from environment variables
+const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
+const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+const STRUCTURA_URL = process.env.REACT_APP_STRUCTURA_URL || 'http://localhost:5001';
+const COGNITA_URL = process.env.REACT_APP_COGNITA_URL || 'http://localhost:5002';
+const CHRONOS_URL = process.env.REACT_APP_CHRONOS_URL || 'http://localhost:5003';
+const SENTIO_URL = process.env.REACT_APP_SENTIO_URL || 'http://localhost:5004';
+const AGORA_URL = process.env.REACT_APP_AGORA_URL || 'http://localhost:5005';
+
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 
@@ -106,7 +115,7 @@ const BatchAnalysis = ({
       // 1. results 폴더에서 직접 로드 (보고서 출력과 동일한 API)
       try {
         console.log('📂 /api/results/list-all-employees 호출 중...');
-        const response = await fetch('http://localhost:5007/api/results/list-all-employees');
+        const response = await fetch(`${INTEGRATION_URL}/api/results/list-all-employees`);
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.results && data.results.length > 0) {
@@ -314,7 +323,7 @@ const BatchAnalysis = ({
         
         try {
           // 저장된 배치 분석 파일에서 데이터 로드 (Integration 서버)
-          const response = await fetch(`http://localhost:5007/api/batch-analysis/load-results?timestamp=${encodeURIComponent(cachedResult.timestamp)}`);
+          const response = await fetch(`${INTEGRATION_URL}/api/batch-analysis/load-results?timestamp=${encodeURIComponent(cachedResult.timestamp)}`);
           
           if (response.ok) {
             const savedData = await response.json();
@@ -428,7 +437,7 @@ const BatchAnalysis = ({
       setLoading(true);
       console.log('🔄 미분류 폴더 정리 시작...');
       
-      const response = await fetch('http://localhost:5007/api/batch-analysis/cleanup-misclassified', {
+      const response = await fetch(`${INTEGRATION_URL}/api/batch-analysis/cleanup-misclassified`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -468,7 +477,7 @@ const BatchAnalysis = ({
       if (cachedResult.source === 'saved_file' && cachedResult.filename) {
         console.log('🗑️ 저장된 파일 삭제:', cachedResult.filename);
         
-        const response = await fetch('http://localhost:5007/api/batch-analysis/delete-saved-file', {
+        const response = await fetch(`${INTEGRATION_URL}/api/batch-analysis/delete-saved-file`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json'
@@ -1372,7 +1381,7 @@ const BatchAnalysis = ({
       formData.append('agent_type', agentType);
       formData.append('analysis_type', 'batch'); // 배치 분석용
       
-      const uploadResponse = await fetch('http://localhost:5006/upload_file', {
+      const uploadResponse = await fetch(`${SUPERVISOR_URL}/upload_file`, {
         method: 'POST',
         body: formData
       });
@@ -1764,7 +1773,7 @@ const BatchAnalysis = ({
             console.log(`📊 Structura: 배치 분석 시작 (Post 학습 → Batch 예측)`);
             updateAgentProgress('structura', 30);
             
-            const response = await fetch('http://localhost:5001/api/batch-analysis', {
+            const response = await fetch(`${STRUCTURA_URL}/api/batch-analysis`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1787,7 +1796,7 @@ const BatchAnalysis = ({
             console.log(`📈 Chronos: 배치 분석 시작 (Post 학습 → Batch 예측)`);
             updateAgentProgress('chronos', 30);
             
-            const response = await fetch('http://localhost:5003/api/batch-analysis', {
+            const response = await fetch(`${CHRONOS_URL}/api/batch-analysis`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1862,7 +1871,7 @@ const BatchAnalysis = ({
               first_employee_sample: sentioEmployees[0]
             });
             
-            const response = await fetch('http://localhost:5004/analyze_sentiment', {
+            const response = await fetch(`${SENTIO_URL}/analyze_sentiment`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1924,7 +1933,7 @@ const BatchAnalysis = ({
                   console.log(`🔄 Cognita: ${i}/${employee_ids.length}명 완료 (${progress}%)`);
                 }
                 
-                const response = await fetch(`http://localhost:5002/api/analyze/employee/${empId}`);
+                const response = await fetch(`${COGNITA_URL}/api/analyze/employee/${empId}`);
                 
                 if (response.ok) {
                   const result = await response.json();
@@ -1986,7 +1995,7 @@ const BatchAnalysis = ({
             console.log(`🔍 Agora 배치 분석 데이터 준비 완료: ${agoraEmployees.length}명`);
             updateAgentProgress('agora', 20);
             
-            const response = await fetch('http://localhost:5005/analyze/batch', {
+            const response = await fetch(`${AGORA_URL}/analyze/batch`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -2341,7 +2350,7 @@ const BatchAnalysis = ({
       console.log('💾 배치 분석 결과를 계층적 구조로 저장 중...');
       try {
         // Integration 서버 상태 확인 (올바른 포트 사용)
-        const integrationHealthCheck = await fetch('http://localhost:5007/health', {
+        const integrationHealthCheck = await fetch(`${INTEGRATION_URL}/health`, {
           method: 'GET',
           signal: AbortSignal.timeout(5000) // 5초 타임아웃
         });
@@ -2475,7 +2484,7 @@ const BatchAnalysis = ({
         results: chunk.data // 원본 데이터 그대로 보존
       };
       
-      const response = await fetch('http://localhost:5007/api/batch-analysis/save-chunk', {
+      const response = await fetch(`${INTEGRATION_URL}/api/batch-analysis/save-chunk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2503,7 +2512,7 @@ const BatchAnalysis = ({
   // 서버 연결 상태 확인 함수
   const checkServerConnection = async () => {
     try {
-      const response = await fetch('http://localhost:5006/health', {
+      const response = await fetch(`${SUPERVISOR_URL}/health`, {
         method: 'GET'
         // 타임아웃 제거 - 무제한 대기
       });
@@ -2712,7 +2721,7 @@ const BatchAnalysis = ({
           try {
             console.log(`📦 청크 ${i + 1}/${totalDepartments} 전송 중 (${department} 부서)...`);
             
-            const chunkResponse = await fetch('http://localhost:5006/api/batch-analysis/save-hierarchical-results', {
+            const chunkResponse = await fetch(`${SUPERVISOR_URL}/api/batch-analysis/save-hierarchical-results`, {
               method: 'POST',
               headers: { 
                 'Content-Type': 'application/json',
@@ -2774,7 +2783,7 @@ const BatchAnalysis = ({
         };
         
         // 압축된 데이터로 저장 요청 (Supervisor로 전송 - 실제 저장 담당)
-        const saveResponse = await fetch('http://localhost:5006/api/batch-analysis/save-hierarchical-results', {
+        const saveResponse = await fetch(`${SUPERVISOR_URL}/api/batch-analysis/save-hierarchical-results`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(summaryData)
@@ -2796,7 +2805,7 @@ const BatchAnalysis = ({
         const attemptSave = async (attemptNumber) => {
           console.log(`💾 계층적 저장 시도 ${attemptNumber}/${maxAttempts}...`);
           
-          const saveResponse = await fetch('http://localhost:5006/api/batch-analysis/save-hierarchical-results', {
+          const saveResponse = await fetch(`${SUPERVISOR_URL}/api/batch-analysis/save-hierarchical-results`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -3465,7 +3474,7 @@ const BatchAnalysis = ({
         request_type: 'individual_report'
       };
 
-      const response = await fetch('http://localhost:5006/api/generate-employee-report', {
+      const response = await fetch(`${SUPERVISOR_URL}/api/generate-employee-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

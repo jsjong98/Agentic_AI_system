@@ -40,6 +40,15 @@ const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
 const { Dragger } = Upload;
 
+// API Base URLs from environment variables
+const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
+const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+const STRUCTURA_URL = process.env.REACT_APP_STRUCTURA_URL || 'http://localhost:5001';
+const COGNITA_URL = process.env.REACT_APP_COGNITA_URL || 'http://localhost:5002';
+const CHRONOS_URL = process.env.REACT_APP_CHRONOS_URL || 'http://localhost:5003';
+const SENTIO_URL = process.env.REACT_APP_SENTIO_URL || 'http://localhost:5004';
+const AGORA_URL = process.env.REACT_APP_AGORA_URL || 'http://localhost:5005';
+
 const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('agent-analysis');
 
@@ -128,7 +137,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     
     while (Date.now() - startTime < maxWaitTime) {
       try {
-        const statusResponse = await fetch(`http://localhost:5006/batch_status/${batchId}`);
+        const statusResponse = await fetch(`${SUPERVISOR_URL}/batch_status/${batchId}`);
         
         if (statusResponse.ok) {
           const statusData = await statusResponse.json();
@@ -144,7 +153,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
             console.log('✅ 배치 처리 완료! 결과를 조회합니다.');
             
             // 결과 조회
-            const resultsResponse = await fetch(`http://localhost:5006/batch_results/${batchId}`);
+            const resultsResponse = await fetch(`${SUPERVISOR_URL}/batch_results/${batchId}`);
             if (resultsResponse.ok) {
               return await resultsResponse.json();
             } else {
@@ -177,7 +186,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       console.log('🔗 Cognita 서버 및 Neo4j 연결 상태 확인 중...');
       try {
         // Supervisor 서버를 통해 Cognita 상태를 확인
-        const healthResponse = await fetch('http://localhost:5006/health');
+        const healthResponse = await fetch(`${SUPERVISOR_URL}/health`);
         
         if (healthResponse.ok) {
           const healthData = await healthResponse.json();
@@ -203,7 +212,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     const attemptNeo4jReconnection = async () => {
       try {
         console.log('🔄 Neo4j 재연결 시도 중...');
-        const response = await fetch('http://localhost:5006/api/cognita/setup/neo4j', {
+        const response = await fetch(`${SUPERVISOR_URL}/api/cognita/setup/neo4j`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -273,7 +282,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       formData.append('agent_type', agentType);
       formData.append('analysis_type', 'post'); // 사후 분석용
       
-      const uploadResponse = await fetch('http://localhost:5006/upload_file', {
+      const uploadResponse = await fetch(`${SUPERVISOR_URL}/upload_file`, {
         method: 'POST',
         body: formData
       });
@@ -414,7 +423,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       console.log('🔗 Supervisor를 통한 Cognita 연결 테스트 시작...');
       
       // 1단계: Supervisor 서버 상태 확인
-      const supervisorResponse = await fetch('http://localhost:5006/health');
+      const supervisorResponse = await fetch(`${SUPERVISOR_URL}/health`);
       
       if (!supervisorResponse.ok) {
         throw new Error(`Supervisor 서버 응답 오류: ${supervisorResponse.status}`);
@@ -429,7 +438,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       
       // 2단계: Cognita 서버 직접 상태 확인 (임시)
       console.log('🔗 Cognita 서버 직접 상태 확인...');
-      const cognitaResponse = await fetch('http://localhost:5002/api/health');
+      const cognitaResponse = await fetch(`${COGNITA_URL}/api/health`);
       
       if (!cognitaResponse.ok) {
         throw new Error(`Cognita 서버 응답 오류: ${cognitaResponse.status}`);
@@ -463,7 +472,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       
       console.log('🎯 위험도 임계값 업데이트 요청:', riskThresholds);
       
-      const response = await fetch('http://localhost:5007/api/post-analysis/update-risk-thresholds', {
+      const response = await fetch(`${INTEGRATION_URL}/api/post-analysis/update-risk-thresholds`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -519,7 +528,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
         total_employees: adjustedRiskResults.total_employees
       });
       
-      const response = await fetch('http://localhost:5007/api/post-analysis/save-final-settings', {
+      const response = await fetch(`${INTEGRATION_URL}/api/post-analysis/save-final-settings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -720,7 +729,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       // progressInterval = setInterval(async () => {
       //   try {
       //     console.log('📊 진행률 조회 시도...');
-      //     const progressResponse = await fetch('http://localhost:5006/batch_status');  // 배치 상태 확인
+      //     const progressResponse = await fetch(`${SUPERVISOR_URL}/batch_status`);  // 배치 상태 확인
       //     
       //     if (progressResponse.ok) {
       //       const progressData = await progressResponse.json();
@@ -902,7 +911,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
               
-              const response = await fetch('http://localhost:5001/api/predict/batch', {
+              const response = await fetch(`${STRUCTURA_URL}/api/predict/batch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -943,7 +952,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               try {
                 // 1단계: 모델 학습
                 console.log('🔧 Chronos: 모델 학습 시작...');
-                const trainResponse = await fetch('http://localhost:5003/api/train', {
+                const trainResponse = await fetch(`${CHRONOS_URL}/api/train`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -965,7 +974,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                 
                 // 2단계: 예측 수행 (employee_ids를 비워서 전체 직원 예측)
                 console.log('🔮 Chronos: 예측 수행 시작... (post 데이터의 모든 직원 대상)');
-                const predictResponse = await fetch('http://localhost:5003/api/predict', {
+                const predictResponse = await fetch(`${CHRONOS_URL}/api/predict`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -996,7 +1005,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                 }
               } catch (error) {
                 console.error('❌ Chronos API 호출 실패:', error);
-                console.log('⚠️ Chronos API 호출 실패 - 원인:', error.message);
+                console.log('⚠️ Chronos API 호출 ��패 - 원인:', error.message);
                 console.log('📝 해결 방법: 1) Chronos 서버 상태 확인, 2) post 데이터 파일 확인, 3) 모델 학습 상태 확인');
                 console.log('🔄 기본 데이터로 대체하여 분석을 계속합니다.');
                 updateAgentProgress('chronos', 100); // 실패해도 완료로 표시
@@ -1009,7 +1018,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               
               try {
                 // 먼저 Neo4j 연결 상태 확인
-                const healthResponse = await fetch('http://localhost:5002/api/health');
+                const healthResponse = await fetch(`${COGNITA_URL}/api/health`);
                 if (!healthResponse.ok) {
                   throw new Error(`Cognita 서버 응답 오류: ${healthResponse.status}`);
                 }
@@ -1045,7 +1054,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
                         
-                        const response = await fetch(`http://localhost:5002/api/analyze/employee/${employeeId}`, {
+                        const response = await fetch(`${COGNITA_URL}/api/analyze/employee/${employeeId}`, {
                           signal: controller.signal
                         });
                         
@@ -1153,7 +1162,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
               
               console.log(`✅ Sentio: ${validTextCount}명의 유효한 텍스트 데이터 확인됨`);
               
-              const response = await fetch('http://localhost:5004/analyze_sentiment', {
+              const response = await fetch(`${SENTIO_URL}/analyze_sentiment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1192,7 +1201,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
                 try {
                   // 타임아웃 완전 제거 - 무제한 대기
                   const controller = new AbortController();
-                  const response = await fetch('http://localhost:5005/api/agora/comprehensive-analysis', {
+                  const response = await fetch(`${AGORA_URL}/api/agora/comprehensive-analysis`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     signal: controller.signal,
@@ -1376,7 +1385,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
         console.log('📁 에이전트 모델을 app/results/models에 저장 중...');
         
         try {
-          const saveResponse = await fetch('http://localhost:5007/save_agent_models', {
+          const saveResponse = await fetch(`${INTEGRATION_URL}/save_agent_models`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1492,7 +1501,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
       console.log('📊 전송할 analysisResults:', analysisResults);
       console.log('📊 analysisResults 구조:', Object.keys(analysisResults));
       
-      const response = await fetch('http://localhost:5007/api/post-analysis/bayesian-optimization', {
+      const response = await fetch(`${INTEGRATION_URL}/api/post-analysis/bayesian-optimization`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1570,7 +1579,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
           // 2. 서버 파일 시스템에 최종 모델 저장
           console.log('📁 최적화된 모델을 app/results/models에 저장 중...');
           
-          const saveOptimizedResponse = await fetch('http://localhost:5007/save_optimized_models', {
+          const saveOptimizedResponse = await fetch(`${INTEGRATION_URL}/save_optimized_models`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1632,7 +1641,7 @@ const PostAnalysis = ({ loading, setLoading, onNavigate }) => {
     }
 
     try {
-      const response = await fetch('http://localhost:5006/api/post-analysis/risk-classification', {
+      const response = await fetch(`${SUPERVISOR_URL}/api/post-analysis/risk-classification`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -39,6 +39,10 @@ import {
 } from '@ant-design/icons';
 import { predictionService } from '../services/predictionService';
 
+// API Base URLs from environment variables
+const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
+const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
@@ -237,7 +241,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
     try {
       // 1순위: API에서 최신 데이터 로드 (comprehensive_report.json 기반)
       console.log('🔄 API에서 comprehensive_report.json 기반 히스토리 로드...');
-      const response = await fetch('http://localhost:5007/api/results/list-all-employees');
+      const response = await fetch(`${INTEGRATION_URL}/api/results/list-all-employees`);
       
       if (response.ok) {
         const data = await response.json();
@@ -329,7 +333,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       } : {};
 
       // Supervisor LLM API 호출 (GPT-5-nano-2025-08-07) - Supervisor 서버를 통해
-      const response = await fetch('http://localhost:5006/api/chat', {
+      const response = await fetch(`${SUPERVISOR_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -406,7 +410,7 @@ const Home = ({ globalBatchResults, lastAnalysisTimestamp, onNavigate }) => {
       } : {};
       
       // Supervisor의 LLM 채팅 API 호출
-      const response = await fetch('http://localhost:5006/api/chat', {
+      const response = await fetch(`${SUPERVISOR_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

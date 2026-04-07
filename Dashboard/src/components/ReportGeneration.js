@@ -30,6 +30,9 @@ const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 const { Option } = Select;
 
+const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
+const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+
 const ReportGeneration = () => {
   const [batchResults, setBatchResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -139,7 +142,7 @@ const ReportGeneration = () => {
   const loadFromServer = async () => {
     try {
       console.log('🌐 서버에서 저장된 파일 조회 중...');
-      const response = await fetch('http://localhost:5007/api/batch-analysis/list-saved-files');
+      const response = await fetch(`${INTEGRATION_URL}/api/batch-analysis/list-saved-files`);
       
       if (!response.ok) {
         console.log('서버에서 파일 목록 조회 실패');
@@ -156,7 +159,7 @@ const ReportGeneration = () => {
       const latestFile = data.files[0];
       console.log(`📥 최근 파일 로드 시도: ${latestFile.filename}`);
 
-      const fileResponse = await fetch(`http://localhost:5007/api/batch-analysis/load-file/${latestFile.filename}`);
+      const fileResponse = await fetch(`${INTEGRATION_URL}/api/batch-analysis/load-file/${latestFile.filename}`);
       if (!fileResponse.ok) {
         console.log('파일 로드 실패');
         return null;
@@ -262,7 +265,7 @@ const ReportGeneration = () => {
   const loadFromResultsFolder = async () => {
     try {
       console.log('📂 results 폴더에서 직원 목록 조회 중...');
-      const response = await fetch('http://localhost:5007/api/results/list-all-employees');
+      const response = await fetch(`${INTEGRATION_URL}/api/results/list-all-employees`);
       
       if (!response.ok) {
         console.log('results 폴더 조회 실패');
@@ -637,7 +640,7 @@ const ReportGeneration = () => {
       });
 
       // Integration 서버에 보고서 생성 요청
-      const response = await fetch('http://localhost:5007/api/generate-employee-report', {
+      const response = await fetch(`${INTEGRATION_URL}/api/generate-employee-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
