@@ -37,10 +37,12 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
+RUN chmod +x /app/start.sh
+
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 # OPENAI_API_KEY → set in Railway dashboard
 
 EXPOSE 5007
 
-CMD ["python", "run_integration_server.py"]
+CMD ["/app/start.sh"]
