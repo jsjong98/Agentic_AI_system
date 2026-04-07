@@ -1,0 +1,133 @@
+{
+  "employee_id": "1372",
+  "department": "Sales",
+  "job_role": "Sales Executive",
+  "job_level": "4",
+  "analysis_timestamp": "2026-04-07T16-33-32",
+  "comprehensive_assessment": {
+    "overall_risk_score": 0.6174,
+    "overall_risk_level": "MEDIUM",
+    "risk_category": "주의군",
+    "actual_attrition": "Yes",
+    "persona_code": "S03",
+    "persona_name": "내재 동기 전문가",
+    "risk_tier": "Stable",
+    "agent_scores": {
+      "structura": 0.9991,
+      "chronos": 0.7944,
+      "cognita": 0.285,
+      "sentio": 0.277,
+      "agora": 0.209
+    },
+    "employee_profile": {
+      "age": "55",
+      "gender": "Male",
+      "marital_status": "Single",
+      "department": "Sales",
+      "job_role": "Sales Executive",
+      "job_level": "4",
+      "education_field": "Marketing",
+      "business_travel": "Travel_Rarely",
+      "monthly_income": "13695",
+      "years_at_company": "19",
+      "job_satisfaction": "3",
+      "work_life_balance": "2",
+      "performance_rating": "3",
+      "overtime": "Yes"
+    }
+  },
+  "rule_based_interpretation": {
+    "risk_summary": "주의군 (0.62)",
+    "key_drivers": [
+      "Structura(HR): 1.00",
+      "Chronos(시계열): 0.79",
+      "Sentio(감성): 0.28"
+    ],
+    "recommended_action": "모니터링 권장"
+  },
+  "agent_results": {
+    "structura": {
+      "attrition_probability": 0.9991,
+      "predicted_attrition": 1,
+      "confidence": 0.85,
+      "feature_importance": {
+        "OverTime": 0.18,
+        "JobSatisfaction": 0.1,
+        "WorkLifeBalance": 0.112,
+        "YearsAtCompany": 0.114,
+        "MonthlyIncome": 0.0
+      },
+      "xai_explanation": {
+        "top_factors": [
+          "OverTime",
+          "JobSatisfaction",
+          "WorkLifeBalance"
+        ],
+        "interpretation": "이탈 확률 99.9%로 예측됨. 페르소나: 내재 동기 전문가"
+      }
+    },
+    "chronos": {
+      "risk_score": 0.7944,
+      "anomaly_score": 0.8738,
+      "trend_analysis": {
+        "trend_direction": "increasing",
+        "volatility": "high",
+        "seasonal_pattern": "detected"
+      },
+      "xai_explanation": {
+        "temporal_factors": [
+          "workload_pattern",
+          "collaboration_trend"
+        ],
+        "interpretation": "시계열 위험도 79.4%로 분석됨"
+      },
+      "attention_weights": {
+        "recent_period": 0.45,
+        "mid_period": 0.35,
+        "early_period": 0.2
+      },
+      "sequence_importance": {
+        "last_3_months": 0.5,
+        "last_6_months": 0.3,
+        "last_12_months": 0.2
+      }
+    },
+    "cognita": {
+      "overall_risk_score": 0.285,
+      "network_centrality": 0.2565,
+      "relationship_strength": 0.8575,
+      "influence_score": 0.1995
+    },
+    "sentio": {
+      "sentiment_score": 0.723,
+      "risk_score": 0.277,
+      "keyword_analysis": {
+        "negative_keywords": [],
+        "positive_keywords": [
+          "성장",
+          "협업"
+        ]
+      },
+      "emotion_distribution": {
+        "negative": 0.277,
+        "neutral": 0.523,
+        "positive": 0.1446
+      }
+    },
+    "agora": {
+      "market_risk_score": 0.209,
+      "industry_trend": {
+        "job_market_demand": "moderate",
+        "salary_competitiveness": "moderate"
+      },
+      "job_market_analysis": {
+        "external_opportunity": 0.209
+      },
+      "external_factors": {
+        "industry_growth": "stable",
+        "market_competition": "moderate"
+      }
+    }
+  },
+  "source": "test_data_draft"
+}

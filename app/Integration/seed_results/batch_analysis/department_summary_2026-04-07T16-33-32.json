@@ -1,0 +1,45 @@
+{
+  "analysis_timestamp": "2026-04-07T16-33-32",
+  "total_employees": 1470,
+  "total_departments": 3,
+  "department_results": {
+    "Sales": {
+      "department": "Sales",
+      "total_employees": 446,
+      "risk_distribution": {
+        "고위험군": 38,
+        "주의군": 65,
+        "안전군": 343
+      }
+    },
+    "Research_&_Development": {
+      "department": "Research_&_Development",
+      "total_employees": 961,
+      "risk_distribution": {
+        "고위험군": 50,
+        "주의군": 95,
+        "안전군": 816
+      }
+    },
+    "Human_Resources": {
+      "department": "Human_Resources",
+      "total_employees": 63,
+      "risk_distribution": {
+        "고위험군": 6,
+        "주의군": 9,
+        "안전군": 48
+      }
+    }
+  },
+  "applied_settings": {
+    "source": "test_data_draft"
+  },
+  "summary_statistics": {
+    "overall_risk_distribution": {
+      "고위험군": 94,
+      "주의군": 169,
+      "안전군": 1207
+    }
+  },
+  "source": "test_data_draft"
+}

@@ -1,0 +1,133 @@
+{
+  "employee_id": "1242",
+  "department": "Research & Development",
+  "job_role": "Research Director",
+  "job_level": "3",
+  "analysis_timestamp": "2026-04-07T16-33-32",
+  "comprehensive_assessment": {
+    "overall_risk_score": 0.1761,
+    "overall_risk_level": "LOW",
+    "risk_category": "안전군",
+    "actual_attrition": "No",
+    "persona_code": "P01",
+    "persona_name": "번아웃에 직면한 직원",
+    "risk_tier": "High",
+    "agent_scores": {
+      "structura": 0.0176,
+      "chronos": 0.0,
+      "cognita": 0.285,
+      "sentio": 0.5182,
+      "agora": 0.244
+    },
+    "employee_profile": {
+      "age": "42",
+      "gender": "Female",
+      "marital_status": "Married",
+      "department": "Research & Development",
+      "job_role": "Research Director",
+      "job_level": "3",
+      "education_field": "Medical",
+      "business_travel": "Travel_Frequently",
+      "monthly_income": "13191",
+      "years_at_company": "1",
+      "job_satisfaction": "1",
+      "work_life_balance": "3",
+      "performance_rating": "3",
+      "overtime": "Yes"
+    }
+  },
+  "rule_based_interpretation": {
+    "risk_summary": "안전군 (0.18)",
+    "key_drivers": [
+      "Structura(HR): 0.02",
+      "Chronos(시계열): 0.00",
+      "Sentio(감성): 0.52"
+    ],
+    "recommended_action": "정기 점검"
+  },
+  "agent_results": {
+    "structura": {
+      "attrition_probability": 0.0176,
+      "predicted_attrition": 0,
+      "confidence": 0.85,
+      "feature_importance": {
+        "OverTime": 0.18,
+        "JobSatisfaction": 0.2,
+        "WorkLifeBalance": 0.075,
+        "YearsAtCompany": 0.006,
+        "MonthlyIncome": 0.0
+      },
+      "xai_explanation": {
+        "top_factors": [
+          "OverTime",
+          "JobSatisfaction",
+          "WorkLifeBalance"
+        ],
+        "interpretation": "이탈 확률 1.8%로 예측됨. 페르소나: 번아웃에 직면한 직원"
+      }
+    },
+    "chronos": {
+      "risk_score": 0.0,
+      "anomaly_score": 0.0,
+      "trend_analysis": {
+        "trend_direction": "stable",
+        "volatility": "low",
+        "seasonal_pattern": "detected"
+      },
+      "xai_explanation": {
+        "temporal_factors": [
+          "workload_pattern",
+          "collaboration_trend"
+        ],
+        "interpretation": "시계열 위험도 0.0%로 분석됨"
+      },
+      "attention_weights": {
+        "recent_period": 0.45,
+        "mid_period": 0.35,
+        "early_period": 0.2
+      },
+      "sequence_importance": {
+        "last_3_months": 0.5,
+        "last_6_months": 0.3,
+        "last_12_months": 0.2
+      }
+    },
+    "cognita": {
+      "overall_risk_score": 0.285,
+      "network_centrality": 0.2565,
+      "relationship_strength": 0.8575,
+      "influence_score": 0.1995
+    },
+    "sentio": {
+      "sentiment_score": 0.4818,
+      "risk_score": 0.5182,
+      "keyword_analysis": {
+        "negative_keywords": [
+          "업무 부담",
+          "번아웃"
+        ],
+        "positive_keywords": []
+      },
+      "emotion_distribution": {
+        "negative": 0.5182,
+        "neutral": 0.2818,
+        "positive": 0.0964
+      }
+    },
+    "agora": {
+      "market_risk_score": 0.244,
+      "industry_trend": {
+        "job_market_demand": "moderate",
+        "salary_competitiveness": "moderate"
+      },
+      "job_market_analysis": {
+        "external_opportunity": 0.244
+      },
+      "external_factors": {
+        "industry_growth": "stable",
+        "market_competition": "moderate"
+      }
+    }
+  },
+  "source": "test_data_draft"
+}

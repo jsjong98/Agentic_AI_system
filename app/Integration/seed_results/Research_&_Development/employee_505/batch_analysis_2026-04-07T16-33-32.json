@@ -1,0 +1,100 @@
+{
+  "analysis_type": "batch_analysis",
+  "timestamp": "2026-04-07T16-33-32",
+  "employee_result": {
+    "employee_id": "505",
+    "department": "Research & Development",
+    "risk_score": 0.1171,
+    "risk_level": "low",
+    "analysis_timestamp": "2026-04-07T16-33-32",
+    "agent_results": {
+      "structura": {
+        "attrition_probability": 0.0,
+        "predicted_attrition": 0,
+        "confidence": 0.85,
+        "feature_importance": {
+          "OverTime": 0.18,
+          "JobSatisfaction": 0.05,
+          "WorkLifeBalance": 0.075,
+          "YearsAtCompany": 0.03,
+          "MonthlyIncome": 0.0
+        },
+        "xai_explanation": {
+          "top_factors": [
+            "OverTime",
+            "JobSatisfaction",
+            "WorkLifeBalance"
+          ],
+          "interpretation": "이탈 확률 0.0%로 예측됨. 페르소나: 내재 동기 전문가"
+        }
+      },
+      "chronos": {
+        "risk_score": 0.0,
+        "anomaly_score": 0.0,
+        "trend_analysis": {
+          "trend_direction": "stable",
+          "volatility": "low",
+          "seasonal_pattern": "detected"
+        },
+        "xai_explanation": {
+          "temporal_factors": [
+            "workload_pattern",
+            "collaboration_trend"
+          ],
+          "interpretation": "시계열 위험도 0.0%로 분석됨"
+        },
+        "attention_weights": {
+          "recent_period": 0.45,
+          "mid_period": 0.35,
+          "early_period": 0.2
+        },
+        "sequence_importance": {
+          "last_3_months": 0.5,
+          "last_6_months": 0.3,
+          "last_12_months": 0.2
+        }
+      },
+      "cognita": {
+        "overall_risk_score": 0.285,
+        "network_centrality": 0.2565,
+        "relationship_strength": 0.8575,
+        "influence_score": 0.1995
+      },
+      "sentio": {
+        "sentiment_score": 0.8213,
+        "risk_score": 0.1787,
+        "keyword_analysis": {
+          "negative_keywords": [],
+          "positive_keywords": [
+            "성장",
+            "협업"
+          ]
+        },
+        "emotion_distribution": {
+          "negative": 0.1787,
+          "neutral": 0.6213,
+          "positive": 0.1643
+        }
+      },
+      "agora": {
+        "market_risk_score": 0.386,
+        "industry_trend": {
+          "job_market_demand": "moderate",
+          "salary_competitiveness": "moderate"
+        },
+        "job_market_analysis": {
+          "external_opportunity": 0.386
+        },
+        "external_factors": {
+          "industry_growth": "stable",
+          "market_competition": "moderate"
+        }
+      }
+    }
+  },
+  "applied_settings": {
+    "source": "test_data_draft"
+  },
+  "xai_included": true,
+  "visualizations_generated": false
+}
