@@ -5,7 +5,6 @@ Integration 서버 실행 스크립트
 import os
 import sys
 import subprocess
-import shutil
 from pathlib import Path
 
 def check_requirements():
@@ -174,66 +173,16 @@ def run_server():
         return False
 
 
-def seed_results_if_empty():
-    """seed_results/ → results/ 초기 데이터 복사 (Volume이 비어있을 때만)"""
-    integration_dir = Path(__file__).parent
-    seed_dir   = integration_dir / 'seed_results'
-    results_dir = integration_dir.parent.parent / 'app' / 'results'
-
-    # results_dir이 /app/results 인 경우 (Railway 컨테이너 환경)
-    # __file__ = /app/run_integration_server.py → parent = /app
-    # 그러므로 results_dir = /app/../../app/results 가 아닌 /app/results 로 설정
-    container_results = Path('/app/results')
-    if container_results.exists() or not results_dir.exists():
-        results_dir = container_results
-
-    if not seed_dir.exists():
-        print("⚠️  seed_results/ 디렉토리 없음, 초기화 건너뜀")
-        return
-
-    # results/ 안에 이미 직원 폴더가 있으면 건너뜀
-    existing = [p for p in results_dir.iterdir() if p.is_dir()] if results_dir.exists() else []
-    if existing:
-        print(f"✅ results/ 에 기존 데이터 있음 ({len(existing)}개 폴더), seed 건너뜀")
-        return
-
-    print(f"📦 seed_results/ → {results_dir} 초기 데이터 복사 중...")
-    results_dir.mkdir(parents=True, exist_ok=True)
-    for item in seed_dir.iterdir():
-        dest = results_dir / item.name
-        if item.is_dir():
-            shutil.copytree(str(item), str(dest), dirs_exist_ok=True)
-        else:
-            shutil.copy2(str(item), str(dest))
-    count = sum(1 for _ in results_dir.rglob('*.json'))
-    print(f"✅ seed 완료: {count}개 JSON 파일 복사됨")
-
-
 def main():
     """메인 함수"""
     print("Integration 서버 설정 및 실행")
     print("=" * 50)
 
-    # 0. 초기 seed 데이터 복사 (Volume 마운트 후 비어있을 때)
-    seed_results_if_empty()
+    # 패키지/데이터 체크는 참고용 로그만 출력하고 서버는 무조건 시작
+    check_requirements()
+    check_data_files()
 
-    # 1. 패키지 확인
-    if not check_requirements():
-        print("\n필수 패키지가 누락되어 서버를 시작할 수 없습니다.")
-        
-        # requirements.txt 생성
-        req_file = create_requirements_file()
-        print(f"\n다음 명령어로 필요한 패키지를 설치하세요:")
-        print(f"pip install -r {req_file}")
-        return
-    
-    # 2. 데이터 파일 확인 (Railway 환경에서는 API로 데이터를 수신하므로 non-fatal)
-    if not check_data_files():
-        print("\n⚠️ 데이터 파일이 없습니다. API를 통해 데이터를 수신합니다.")
-
-    print("\n✅ 모든 사전 조건이 충족되었습니다.")
-    
-    # 3. 서버 실행
+    # 서버 실행
     run_server()
 
 
