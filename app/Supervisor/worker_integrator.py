@@ -11,7 +11,7 @@ from datetime import datetime
 import json
 import traceback
 
-from .agent_state import AgentState, WorkerType, AnalysisStatus
+from agent_state import AgentState, WorkerType, AnalysisStatus
 
 
 class WorkerClient:

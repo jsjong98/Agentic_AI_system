@@ -6,6 +6,11 @@ set -e
 
 echo "Injecting runtime environment variables..."
 
+# Substitute PORT into nginx config (Railway injects PORT env var)
+export PORT="${PORT:-80}"
+envsubst '${PORT}' < /etc/nginx/conf.d/default.conf > /tmp/nginx_port.conf \
+  && mv /tmp/nginx_port.conf /etc/nginx/conf.d/default.conf
+
 # Replace placeholder values in built JS files with actual env var values
 find /usr/share/nginx/html -name "*.js" | while read file; do
   sed -i \

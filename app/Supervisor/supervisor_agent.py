@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
-from .agent_state import AgentState, WorkerType, AnalysisStatus, ErrorLog
+from agent_state import AgentState, WorkerType, AnalysisStatus, ErrorLog
 
 
 class SupervisorAgent:

@@ -12,7 +12,7 @@ import numpy as np
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from .agent_state import WorkerType, FinalReport
+from agent_state import WorkerType, FinalReport
 
 
 class SynthesizerAgent:

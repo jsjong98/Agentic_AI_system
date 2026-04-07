@@ -13,10 +13,10 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_openai import ChatOpenAI
 
-from .agent_state import AgentState, WorkerType, AnalysisStatus, FinalReport
-from .supervisor_agent import SupervisorAgent, SupervisorRouter
-from .worker_integrator import WorkerIntegrator, DEFAULT_WORKER_CONFIGS
-from .synthesizer import SynthesizerAgent
+from agent_state import AgentState, WorkerType, AnalysisStatus, FinalReport
+from supervisor_agent import SupervisorAgent, SupervisorRouter
+from worker_integrator import WorkerIntegrator, DEFAULT_WORKER_CONFIGS
+from synthesizer import SynthesizerAgent
 
 
 class WorkflowNodes:
