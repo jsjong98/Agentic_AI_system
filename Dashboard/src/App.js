@@ -15,9 +15,9 @@ import PostAnalysis from './components/PostAnalysis';
 import ReportGeneration from './components/ReportGeneration';
 import RelationshipAnalysis from './components/RelationshipAnalysis';
 import GroupStatistics from './components/GroupStatistics';
+import Login, { getStoredUser, logout, PWC_LOGO } from './components/Login';
 import { apiService } from './services/apiService';
 import './styles/typography.css'; // 통일된 폰트 크기 체계
-// import storageManager from './utils/storageManager'; // 현재 사용하지 않음
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -187,16 +187,24 @@ const { Title } = Typography;
   };
 
 const App = () => {
+  const [user, setUser] = useState(getStoredUser());
   const [collapsed, setCollapsed] = useState(false);
   const [selectedKey, setSelectedKey] = useState('home');
   const [loading, setLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
-  
+
   // 전역 배치 분석 결과 상태 (페이지 간 공유)
   const [globalBatchResults, setGlobalBatchResults] = useState(null);
   const [lastAnalysisTimestamp, setLastAnalysisTimestamp] = useState(null);
   const [dataLoaded] = useState(true); // 데이터 로딩 상태를 기본적으로 활성화
   const isInitializedRef = useRef(false); // 초기화 중복 방지
+
+  // 로그인 전이면 로그인 화면 표시
+  if (!user) {
+    return <Login onLogin={setUser} />;
+  }
+
+  const isAdmin = user.role === 'admin';
 
   // 전역 에러 핸들러
   useEffect(() => {
@@ -260,39 +268,24 @@ const App = () => {
     };
   }, []);
 
-  // 메뉴 아이템 - 홈 화면을 첫 번째로 배치
-  const menuItems = [
-    {
-      key: 'home',
-      icon: <HomeOutlined />,
-      label: '🏠 홈',
-    },
-    {
-      key: 'batch',
-      icon: <RobotOutlined />,
-      label: '🎯 배치 분석',
-    },
-    {
-      key: 'group-statistics',
-      icon: <TeamOutlined />,
-      label: '📊 단체 통계',
-    },
-    {
-      key: 'cognita',
-      icon: <ApiOutlined />,
-      label: '🕸️ 개별 관계분석',
-    },
-    {
-      key: 'post-analysis',
-      icon: <BarChartOutlined />,
-      label: '🔍 사후 분석',
-    },
-    {
-      key: 'report-generation',
-      icon: <FileTextOutlined />,
-      label: '📄 보고서 출력',
-    },
+  // HR 메뉴
+  const hrMenuItems = [
+    { key: 'home', icon: <HomeOutlined />, label: '인원현황' },
+    { key: 'group-statistics', icon: <TeamOutlined />, label: '단체 통계' },
+    { key: 'report-generation', icon: <FileTextOutlined />, label: '보고서 출력' },
   ];
+
+  // Admin 메뉴
+  const adminMenuItems = [
+    { key: 'home', icon: <HomeOutlined />, label: '인원현황' },
+    { key: 'batch', icon: <RobotOutlined />, label: '배치 분석' },
+    { key: 'group-statistics', icon: <TeamOutlined />, label: '단체 통계' },
+    { key: 'cognita', icon: <ApiOutlined />, label: '개별 관계분석' },
+    { key: 'post-analysis', icon: <BarChartOutlined />, label: '사후 분석' },
+    { key: 'report-generation', icon: <FileTextOutlined />, label: '보고서 출력' },
+  ];
+
+  const menuItems = isAdmin ? adminMenuItems : hrMenuItems;
 
   // 서버 상태 확인 및 IndexedDB/localStorage에서 배치 결과 복원
   useEffect(() => {
@@ -769,23 +762,22 @@ const App = () => {
           boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
         }}
       >
-        <div style={{ 
-          padding: '20px 16px', 
+        <div style={{
+          padding: '16px',
           textAlign: 'center',
-          borderBottom: '1px solid #f0f0f0',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          height: '84px',
+          borderBottom: '3px solid #d93954',
+          background: '#fff',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center'
+          alignItems: 'center',
+          gap: 8,
         }}>
-          <Title level={4} style={{ margin: 0, color: 'white' }}>
-            Retain Sentinel 360
-          </Title>
-          <div style={{ fontSize: 'var(--font-small)', opacity: 0.9 }}>
-            AI 기반 이직 예측 시스템
-          </div>
+          <img src={PWC_LOGO} alt="PwC" style={{ height: 28 }} />
+          {!collapsed && (
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#2d2d2d' }}>
+              퇴사위험 대시보드
+            </div>
+          )}
         </div>
         
         <Menu
@@ -836,19 +828,40 @@ const App = () => {
               </span>
             </div>
             
-            {/* 새로고침 버튼 */}
+            {/* 유저 정보 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: '#d93954', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 600,
+              }}>
+                {user.initials}
+              </div>
+              <span style={{ fontSize: 13, color: '#555', fontWeight: 500 }}>
+                {user.name}
+              </span>
+              <span style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                background: isAdmin ? '#fde8ec' : '#e8f0fe',
+                color: isAdmin ? '#d93954' : '#2563eb',
+                fontWeight: 600,
+              }}>
+                {isAdmin ? 'ADMIN' : 'HR'}
+              </span>
+            </div>
+
+            {/* 로그아웃 */}
             <button
-              onClick={checkServerStatus}
+              onClick={() => { logout(); setUser(null); }}
               style={{
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: 'var(--font-medium)',
-                color: '#1890ff'
+                border: '1px solid #ddd', background: '#fff',
+                borderRadius: 6, padding: '5px 12px',
+                cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                color: '#666', fontWeight: 500,
               }}
-              title="서버 상태 새로고침"
             >
-              🔄 다시 확인
+              로그아웃
             </button>
           </div>
         </Header>
