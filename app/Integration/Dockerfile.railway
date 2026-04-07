@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-RUN mkdir -p results cache logs temp uploads
+RUN mkdir -p results outputs cache logs temp uploads results/models outputs/reports
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
