@@ -14,13 +14,16 @@ if (typeof document !== 'undefined' && !document.getElementById('home-main-style
     @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
     @keyframes flowPulse{0%{opacity:1;transform:scaleY(1)}50%{opacity:0.5;transform:scaleY(0.8)}100%{opacity:1;transform:scaleY(1)}}
     @keyframes agentGlow{0%,100%{box-shadow:0 0 8px rgba(217,57,84,.4)}50%{box-shadow:0 0 20px rgba(217,57,84,.8)}}
-    @keyframes dotFlow{0%{transform:translateY(0);opacity:1}100%{transform:translateY(30px);opacity:0}}
     @keyframes fadeSlide{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+    @keyframes scanPulse{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}
+    @keyframes progressGlow{0%{box-shadow:0 0 4px rgba(217,57,84,.3)}50%{box-shadow:0 0 12px rgba(217,57,84,.6)}100%{box-shadow:0 0 4px rgba(217,57,84,.3)}}
+    @keyframes barStripe{0%{background-position:0 0}100%{background-position:20px 0}}
   `;
   document.head.appendChild(s);
 }
 
 // ─────────────────────────── Animated Workflow ──────────────────────────────
+const TOTAL_EMPLOYEES = 1470;
 const AGENTS = [
   { n: 'Structura', c: '#d93954', i: '📊', desc: '정형 데이터' },
   { n: 'Cognita',   c: '#2563eb', i: '🔗', desc: '관계망' },
@@ -29,129 +32,285 @@ const AGENTS = [
   { n: 'Agora',     c: '#2ea44f', i: '🎯', desc: '외부시장' },
 ];
 
-const STATUS_MSGS = [
-  '시스템 대기 중...',
-  'Supervisor Agent: 분석 요청 수신',
-  'Worker Agents에게 작업 분배 중...',
-  'Structura: 정형 데이터 분석 완료 ✓',
-  'Cognita: 관계망 분석 완료 ✓',
-  'Chronos: 시계열 분석 완료 ✓',
-  'Sentio: 감성 분석 완료 ✓',
-  'Agora: 외부 시장 분석 완료 ✓',
-  '분석 결과 종합 중...',
-  'Synthesize Agent: 위험도 산출 완료 ✓',
-  '분석 사이클 완료 — 재시작 중...',
-];
-
+/* ── phases: 'idle' | 'init' | 'dispatch' | 'scanning' | 'synthesize' | 'done' ── */
 const AgentWorkflow = ({ isDark }) => {
-  const [phase, setPhase] = useState(0);
+  const [phase, setPhase] = useState('idle');
+  const [agentProgress, setAgentProgress] = useState([0, 0, 0, 0, 0]);
+  const [agentEmpId, setAgentEmpId] = useState([0, 0, 0, 0, 0]);
+  const [synProgress, setSynProgress] = useState(0);
+  const [cycleCount, setCycleCount] = useState(0);
+  const cancelRef = useRef(false);
+  const frameRef = useRef(null);
 
   useEffect(() => {
-    let cancelled = false;
-    const steps = [
-      [0, 1500], [1, 1500], [2, 900],
-      [3, 900], [4, 900], [5, 900], [6, 900], [7, 900],
-      [8, 900], [9, 2500], [10, 1500],
-    ];
-    const run = async () => {
-      while (!cancelled) {
-        for (const [p, d] of steps) {
-          if (cancelled) return;
-          setPhase(p);
-          await new Promise(r => setTimeout(r, d));
+    cancelRef.current = false;
+    const wait = (ms) => new Promise(r => { const t = setTimeout(r, ms); return () => clearTimeout(t); });
+
+    const runCycle = async () => {
+      while (!cancelRef.current) {
+        // Phase: idle
+        setPhase('idle');
+        setAgentProgress([0, 0, 0, 0, 0]);
+        setAgentEmpId([0, 0, 0, 0, 0]);
+        setSynProgress(0);
+        await wait(1200);
+        if (cancelRef.current) return;
+
+        // Phase: init
+        setPhase('init');
+        await wait(1000);
+        if (cancelRef.current) return;
+
+        // Phase: dispatch
+        setPhase('dispatch');
+        await wait(800);
+        if (cancelRef.current) return;
+
+        // Phase: scanning — all 5 agents scan 1470 employees simultaneously
+        setPhase('scanning');
+        const speeds = [1.0, 0.85, 0.92, 0.78, 0.95]; // each agent slightly different speed
+        const prog = [0, 0, 0, 0, 0];
+        const empIds = [0, 0, 0, 0, 0];
+        const sampleIds = Array.from({ length: TOTAL_EMPLOYEES }, (_, i) => i + 1);
+        // shuffle for random-looking employee IDs
+        for (let k = sampleIds.length - 1; k > 0; k--) {
+          const j = Math.floor(Math.random() * (k + 1));
+          [sampleIds[k], sampleIds[j]] = [sampleIds[j], sampleIds[k]];
         }
+
+        await new Promise((resolve) => {
+          const start = performance.now();
+          const SCAN_DURATION = 6000; // 6 seconds to scan all
+          const tick = (now) => {
+            if (cancelRef.current) { resolve(); return; }
+            const elapsed = now - start;
+            const baseT = Math.min(elapsed / SCAN_DURATION, 1);
+            // ease-in-out for smoother feel
+            const eased = baseT < 0.5
+              ? 2 * baseT * baseT
+              : 1 - Math.pow(-2 * baseT + 2, 2) / 2;
+
+            let allDone = true;
+            for (let i = 0; i < 5; i++) {
+              const agentT = Math.min(eased * (1 / speeds[i]), 1);
+              prog[i] = Math.floor(agentT * TOTAL_EMPLOYEES);
+              empIds[i] = prog[i] > 0 ? sampleIds[Math.min(prog[i] - 1, TOTAL_EMPLOYEES - 1)] : 0;
+              if (prog[i] < TOTAL_EMPLOYEES) allDone = false;
+            }
+            setAgentProgress([...prog]);
+            setAgentEmpId([...empIds]);
+
+            if (allDone) {
+              resolve();
+            } else {
+              frameRef.current = requestAnimationFrame(tick);
+            }
+          };
+          frameRef.current = requestAnimationFrame(tick);
+        });
+        if (cancelRef.current) return;
+
+        // small pause after all agents done
+        await wait(600);
+        if (cancelRef.current) return;
+
+        // Phase: synthesize — combining results
+        setPhase('synthesize');
+        await new Promise((resolve) => {
+          const start = performance.now();
+          const SYN_DURATION = 2500;
+          const tick = (now) => {
+            if (cancelRef.current) { resolve(); return; }
+            const t = Math.min((now - start) / SYN_DURATION, 1);
+            const count = Math.floor(t * TOTAL_EMPLOYEES);
+            setSynProgress(count);
+            if (count >= TOTAL_EMPLOYEES) { resolve(); return; }
+            frameRef.current = requestAnimationFrame(tick);
+          };
+          frameRef.current = requestAnimationFrame(tick);
+        });
+        if (cancelRef.current) return;
+
+        // Phase: done
+        setPhase('done');
+        setCycleCount(c => c + 1);
+        await wait(4000);
       }
     };
-    run();
-    return () => { cancelled = true; };
+
+    runCycle();
+    return () => {
+      cancelRef.current = true;
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
   }, []);
 
-  const supActive  = phase >= 1;
-  const dispFlow   = phase >= 2;
-  const agDone     = (i) => phase >= 3 + i;
-  const resultFlow = phase >= 8;
-  const synActive  = phase >= 9;
-  const done       = phase >= 9;
+  const supActive = phase !== 'idle';
+  const dispFlow = phase === 'dispatch' || phase === 'scanning' || phase === 'synthesize' || phase === 'done';
+  const isScanning = phase === 'scanning';
+  const resultFlow = phase === 'synthesize' || phase === 'done';
+  const synActive = phase === 'synthesize' || phase === 'done';
+  const allDone = phase === 'done';
+
+  const totalScanned = agentProgress.reduce((s, v) => s + v, 0);
+  const overallPct = Math.min(totalScanned / (TOTAL_EMPLOYEES * 5) * 100, 100);
 
   const card = { borderRadius: 10, padding: '0 8px', fontFamily: 'inherit', transition: 'all 0.45s' };
   const C = isDark ? { bg: '#151c2c', sub: '#6b7280' } : { bg: '#fff', sub: '#888' };
+
+  // Dynamic status message
+  const getStatusMsg = () => {
+    switch (phase) {
+      case 'idle': return '시스템 대기 중...';
+      case 'init': return `Supervisor Agent: ${TOTAL_EMPLOYEES}명 직원 분석 요청 수신`;
+      case 'dispatch': return 'Worker Agents에게 작업 분배 중...';
+      case 'scanning': {
+        const done = agentProgress.filter(p => p >= TOTAL_EMPLOYEES).length;
+        const scanning = agentProgress.filter(p => p > 0 && p < TOTAL_EMPLOYEES).length;
+        if (done === 5) return '모든 Agent 분석 완료 ✓';
+        return `분석 진행 중 — ${done}/5 완료, ${scanning}개 스캔 중...`;
+      }
+      case 'synthesize':
+        return `Synthesize: 결과 종합 중... ${synProgress.toLocaleString()}/${TOTAL_EMPLOYEES.toLocaleString()}`;
+      case 'done':
+        return `✓ ${TOTAL_EMPLOYEES.toLocaleString()}명 분석 완료 — 사이클 #${cycleCount}`;
+      default: return '';
+    }
+  };
+
+  // Progress bar component
+  const ProgressBar = ({ pct, color, height = 3 }) => (
+    <div style={{
+      width: '100%', height, borderRadius: height / 2,
+      background: isDark ? '#1a2333' : '#e8e8e8', overflow: 'hidden',
+    }}>
+      <div style={{
+        width: `${pct}%`, height: '100%', borderRadius: height / 2,
+        background: pct >= 100
+          ? color
+          : `repeating-linear-gradient(90deg,${color},${color} 8px,${color}cc 8px,${color}cc 16px)`,
+        backgroundSize: pct < 100 ? '20px 100%' : 'auto',
+        animation: pct > 0 && pct < 100 ? 'barStripe 0.6s linear infinite' : 'none',
+        transition: 'width 0.15s linear',
+      }} />
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
       {/* Status badge */}
       <div style={{
-        marginBottom: 14, fontSize: 12, fontWeight: 600,
-        color: done ? '#2ea44f' : '#d93954',
-        background: done ? '#e6f6ec' : '#fde8ec',
+        marginBottom: 10, fontSize: 11, fontWeight: 600,
+        color: allDone ? '#2ea44f' : '#d93954',
+        background: allDone ? '#e6f6ec' : '#fde8ec',
         padding: '4px 14px', borderRadius: 20,
         transition: 'all 0.4s',
-        animation: 'fadeSlide 0.3s ease',
-        minWidth: 260, textAlign: 'center',
+        animation: isScanning ? 'scanPulse 1.5s ease-in-out infinite' : 'fadeSlide 0.3s ease',
+        minWidth: 280, textAlign: 'center',
       }}>
-        {STATUS_MSGS[phase]}
+        {getStatusMsg()}
       </div>
+
+      {/* Overall progress bar */}
+      {(isScanning || phase === 'synthesize') && (
+        <div style={{ width: '90%', marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.sub, marginBottom: 3 }}>
+            <span>전체 진행률</span>
+            <span style={{ fontWeight: 700, color: '#d93954', fontVariantNumeric: 'tabular-nums' }}>
+              {phase === 'synthesize'
+                ? `종합 ${synProgress.toLocaleString()} / ${TOTAL_EMPLOYEES.toLocaleString()}`
+                : `${Math.round(overallPct)}%`}
+            </span>
+          </div>
+          <ProgressBar pct={phase === 'synthesize' ? (synProgress / TOTAL_EMPLOYEES * 100) : overallPct} color="#d93954" height={4} />
+        </div>
+      )}
 
       {/* Supervisor */}
       <div style={{
         ...card,
-        padding: '10px 36px', fontWeight: 700, fontSize: 13,
+        padding: '8px 28px', fontWeight: 700, fontSize: 12,
         background: supActive ? '#2d2d2d' : (isDark ? '#1e2a3a' : '#f0f0f0'),
         color: supActive ? '#fff' : C.sub,
         border: supActive ? '2px solid #d93954' : `2px solid ${isDark ? '#2a3a4a' : '#e0e0e0'}`,
         boxShadow: supActive ? '0 0 20px rgba(217,57,84,.45)' : 'none',
+        animation: (phase === 'init' || phase === 'dispatch') ? 'progressGlow 1.5s ease-in-out infinite' : 'none',
       }}>
         🤖 Supervisor Agent
+        {supActive && (
+          <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 8, opacity: 0.8 }}>
+            ({TOTAL_EMPLOYEES.toLocaleString()}명)
+          </span>
+        )}
       </div>
 
       {/* Arrow: Supervisor → Agents */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 36, justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 28, justifyContent: 'center' }}>
         <div style={{
-          width: 2, height: 24,
+          width: 2, height: 18,
           background: dispFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0'),
           animation: dispFlow ? 'flowPulse 0.9s ease-in-out infinite' : 'none',
           transition: 'background 0.4s',
         }} />
         <div style={{
           width: 0, height: 0,
-          borderLeft: '6px solid transparent', borderRight: '6px solid transparent',
-          borderTop: `8px solid ${dispFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
+          borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+          borderTop: `6px solid ${dispFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
           transition: 'border-color 0.4s',
         }} />
       </div>
 
       {/* Agents row */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-        {AGENTS.map((a, i) => (
-          <div key={a.n} style={{
-            border: `2px solid ${agDone(i) ? a.c : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
-            borderRadius: 10, padding: '8px 10px', textAlign: 'center', minWidth: 68,
-            background: agDone(i) ? `${a.c}1A` : (isDark ? '#1e2a3a' : '#fafafa'),
-            color: agDone(i) ? a.c : C.sub,
-            boxShadow: agDone(i) ? `0 0 14px ${a.c}55` : 'none',
-            transition: 'all 0.45s',
-          }}>
-            <div style={{ fontSize: 20, marginBottom: 2 }}>{a.i}</div>
-            <div style={{ fontSize: 11, fontWeight: 700 }}>{a.n}</div>
-            <div style={{ fontSize: 10, marginTop: 1, color: agDone(i) ? a.c : (isDark ? '#3a4a5a' : '#ccc') }}>
-              {a.desc}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', width: '100%' }}>
+        {AGENTS.map((a, i) => {
+          const pct = (agentProgress[i] / TOTAL_EMPLOYEES) * 100;
+          const done = agentProgress[i] >= TOTAL_EMPLOYEES;
+          const active = agentProgress[i] > 0;
+          return (
+            <div key={a.n} style={{
+              border: `2px solid ${done ? a.c : active ? `${a.c}88` : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
+              borderRadius: 10, padding: '6px 6px 8px', textAlign: 'center', minWidth: 72, flex: '1 1 0',
+              background: done ? `${a.c}1A` : active ? `${a.c}0A` : (isDark ? '#1e2a3a' : '#fafafa'),
+              color: active ? a.c : C.sub,
+              boxShadow: done ? `0 0 14px ${a.c}55` : active ? `0 0 6px ${a.c}22` : 'none',
+              transition: 'all 0.3s',
+            }}>
+              <div style={{ fontSize: 16, marginBottom: 1 }}>{a.i}</div>
+              <div style={{ fontSize: 10, fontWeight: 700 }}>{a.n}</div>
+              <div style={{ fontSize: 9, marginTop: 1, color: active ? a.c : (isDark ? '#3a4a5a' : '#ccc') }}>
+                {a.desc}
+              </div>
+              {/* Progress bar per agent */}
+              <div style={{ margin: '4px 0 2px', padding: '0 2px' }}>
+                <ProgressBar pct={pct} color={a.c} height={3} />
+              </div>
+              {/* Count / Employee ID */}
+              <div style={{ fontSize: 9, fontWeight: 600, minHeight: 14, fontVariantNumeric: 'tabular-nums' }}>
+                {done ? (
+                  <span style={{ color: '#2ea44f' }}>✓ {TOTAL_EMPLOYEES.toLocaleString()}</span>
+                ) : active ? (
+                  <span style={{ color: a.c, animation: 'scanPulse 0.8s ease infinite' }}>
+                    #{agentEmpId[i]} ({agentProgress[i].toLocaleString()}/{TOTAL_EMPLOYEES.toLocaleString()})
+                  </span>
+                ) : (
+                  <span style={{ color: C.sub }}>대기</span>
+                )}
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: '#2ea44f', marginTop: 2, minHeight: 14 }}>
-              {agDone(i) ? '✓' : ''}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Arrow: Agents → Synthesize */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 36, justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 28, justifyContent: 'center' }}>
         <div style={{
           width: 0, height: 0,
-          borderLeft: '6px solid transparent', borderRight: '6px solid transparent',
-          borderBottom: `8px solid ${resultFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
+          borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+          borderBottom: `6px solid ${resultFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
           transition: 'border-color 0.4s',
         }} />
         <div style={{
-          width: 2, height: 24,
+          width: 2, height: 18,
           background: resultFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0'),
           animation: resultFlow ? 'flowPulse 0.9s ease-in-out infinite' : 'none',
           transition: 'background 0.4s',
@@ -161,26 +320,37 @@ const AgentWorkflow = ({ isDark }) => {
       {/* Synthesize */}
       <div style={{
         ...card,
-        padding: '10px 36px', fontWeight: 700, fontSize: 13,
-        background: synActive ? '#d93954' : (isDark ? '#1e2a3a' : '#f0f0f0'),
+        padding: '8px 28px', fontWeight: 700, fontSize: 12,
+        background: synActive ? (allDone ? '#2ea44f' : '#d93954') : (isDark ? '#1e2a3a' : '#f0f0f0'),
         color: synActive ? '#fff' : C.sub,
-        border: synActive ? '2px solid #d93954' : `2px solid ${isDark ? '#2a3a4a' : '#e0e0e0'}`,
-        boxShadow: synActive ? '0 0 24px rgba(217,57,84,.55)' : 'none',
+        border: synActive ? `2px solid ${allDone ? '#2ea44f' : '#d93954'}` : `2px solid ${isDark ? '#2a3a4a' : '#e0e0e0'}`,
+        boxShadow: synActive ? `0 0 24px ${allDone ? 'rgba(46,164,79,.55)' : 'rgba(217,57,84,.55)'}` : 'none',
+        transition: 'all 0.5s',
       }}>
         ⚡ Synthesize Agent
+        {synActive && (
+          <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 8, opacity: 0.8 }}>
+            {allDone ? '✓ 완료' : `${synProgress.toLocaleString()}/${TOTAL_EMPLOYEES.toLocaleString()}`}
+          </span>
+        )}
       </div>
 
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: C.sub }}>
-          <div style={{ width: 24, height: 3, background: '#d93954', borderRadius: 2 }} /> 데이터 흐름
+      {/* Legend + stats */}
+      <div style={{ display: 'flex', gap: 12, marginTop: 10, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: C.sub }}>
+          <div style={{ width: 20, height: 3, background: '#d93954', borderRadius: 2 }} /> 데이터 흐름
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: C.sub }}>
-          <div style={{ width: 10, height: 10, background: '#2ea44f', borderRadius: '50%' }} /> 완료
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: C.sub }}>
+          <div style={{ width: 8, height: 8, background: '#2ea44f', borderRadius: '50%' }} /> 완료
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, color: C.sub }}>
-          <div style={{ width: 10, height: 10, background: '#e0e0e0', borderRadius: '50%', border: '1px solid #ccc' }} /> 대기
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: C.sub }}>
+          <div style={{ width: 8, height: 8, background: isDark ? '#2a3a4a' : '#e0e0e0', borderRadius: '50%', border: '1px solid #ccc' }} /> 대기
         </div>
+        {cycleCount > 0 && (
+          <div style={{ fontSize: 10, color: C.sub, marginLeft: 4, fontVariantNumeric: 'tabular-nums' }}>
+            | 완료 사이클: {cycleCount}
+          </div>
+        )}
       </div>
     </div>
   );
