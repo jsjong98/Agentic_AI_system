@@ -534,6 +534,10 @@ const HomeMain = ({ user }) => {
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || loading) return;
+    const historySnapshot = messages
+      .filter(m => !m.typing && m.content)
+      .slice(-10)
+      .map(m => ({ role: m.role, content: m.content }));
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setLoading(true);
@@ -543,7 +547,7 @@ const HomeMain = ({ user }) => {
     try {
       const res  = await fetch(`${SUPERVISOR_URL}/api/chat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, isAdmin: user?.role === 'admin' }),
+        body: JSON.stringify({ message: text, isAdmin: user?.role === 'admin', history: historySnapshot }),
       });
       const data = await res.json();
       typeResponse(data.response || data.message || '분석을 완료했습니다.');
@@ -552,7 +556,7 @@ const HomeMain = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, runWorkflow, typeResponse]);
+  }, [input, loading, messages, runWorkflow, typeResponse]);
 
   const handleKey = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }

@@ -963,6 +963,7 @@ def chat_with_llm():
         user_message = data['message']
         is_admin = data.get('isAdmin', False)
         context = data.get('context', {})  # 프론트엔드에서 전달된 컨텍스트
+        history  = data.get('history', []) # 이전 대화 기록 (최근 N개)
 
         if not openai_client:
             return jsonify({"error": "OpenAI API가 초기화되지 않았습니다."}), 500
@@ -982,29 +983,47 @@ def chat_with_llm():
         # 시스템 프롬프트 생성 (분석 데이터 포함)
         system_prompt = create_system_prompt(enriched_context, is_simple_greeting)
         
+        # 대화 히스토리를 텍스트로 변환 (GPT-5-nano용)
+        history_text = ""
+        for msg in history[-10:]:  # 최근 10개만
+            role = msg.get('role', '')
+            content = (msg.get('content') or '').strip()
+            if not content:
+                continue
+            if role == 'user':
+                history_text += f"\nUser: {content}"
+            elif role == 'assistant':
+                history_text += f"\nAssistant: {content}"
+
+        # 대화 히스토리를 messages 배열로 변환 (GPT-4o-mini용)
+        chat_messages = [{"role": "system", "content": system_prompt}]
+        for msg in history[-10:]:
+            role = msg.get('role', '')
+            content = (msg.get('content') or '').strip()
+            if role in ('user', 'assistant') and content:
+                chat_messages.append({"role": role, "content": content})
+        chat_messages.append({"role": "user", "content": user_message})
+
         # OpenAI API 호출 (GPT-5-nano-2025-08-07 사용)
         try:
             # GPT-5-nano 모델 사용 시도 (짧은 답변 요청)
             response = openai_client.responses.create(
                 model="gpt-5-nano-2025-08-07",
-                input=f"{system_prompt}\n\nUser: {user_message}",
-                reasoning={"effort": "low"},  # low로 변경하여 간결한 답변 유도
-                text={"verbosity": "low"}  # low로 변경하여 간결한 답변 유도
+                input=f"{system_prompt}{history_text}\n\nUser: {user_message}",
+                reasoning={"effort": "low"},
+                text={"verbosity": "low"}
             )
             ai_response = response.output_text
             model_used = "gpt-5-nano-2025-08-07"
-            tokens_used = len(ai_response.split())  # 대략적인 토큰 수
-            
+            tokens_used = len(ai_response.split())
+
         except Exception as e:
             logger.warning(f"GPT-5-nano 호출 실패, GPT-4o-mini로 fallback: {e}")
-            # Fallback to GPT-4o-mini
+            # Fallback to GPT-4o-mini — with full conversation history
             response = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                max_tokens=500,  # 짧은 답변을 위해 500으로 제한
+                messages=chat_messages,
+                max_tokens=600,
                 temperature=0.7
             )
             ai_response = response.choices[0].message.content
