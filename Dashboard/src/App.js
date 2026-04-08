@@ -882,7 +882,8 @@ const App = () => {
           ))}
         </nav>
 
-        {/* 둘째 행: Admin 탭 */}
+        {/* 둘째 행: Admin 탭 — Admin 권한 보유자만 표시 */}
+        {user?.role === 'admin' && (
         <nav style={{
           display: 'flex', alignItems: 'center', padding: '0 24px',
           overflowX: 'auto', scrollbarWidth: 'none',
@@ -912,6 +913,7 @@ const App = () => {
             >{item.label}</button>
           ))}
         </nav>
+        )}
       </div>
 
       {/* 조직 View 표시 */}

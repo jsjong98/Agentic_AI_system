@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   Radar, Legend, ResponsiveContainer, Tooltip,
 } from 'recharts';
+
+const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
 
 /* ── colour tokens ── */
 const C = {
@@ -119,6 +121,45 @@ const secTitle = (icon, text) => (
 const RADAR_COLORS = [C.red, C.blue, C.orange, C.purple];
 
 function RiskFactors() {
+  const [radarReal, setRadarReal] = useState(null);
+
+  useEffect(() => {
+    fetch(`${INTEGRATION_URL}/api/results/list-all-employees`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success || !data.results?.length) return;
+        const all = data.results;
+        const depts = ['Research & Development', 'Sales', 'Human Resources'];
+        const keys  = ['structura_score', 'cognita_score', 'chronos_score', 'sentio_score', 'agora_score'];
+        const dims  = ['구조적 불만족', '관계적 단절', '행동적 이탈', '심리적 소진', '외부 Pull'];
+        const labels = { 'Research & Development': 'R&D', 'Sales': 'Sales', 'Human Resources': 'HR' };
+
+        const avgFor = (pool, key) => {
+          const vals = pool.map(e => (e[key] || 0)).filter(v => v > 0);
+          return vals.length ? Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 100) : 0;
+        };
+
+        const highAll = all.filter(e => e.risk_level === 'HIGH');
+        const computed = dims.map((factor, i) => {
+          const row = { factor };
+          row['전사'] = avgFor(highAll, keys[i]);
+          depts.forEach(d => {
+            const pool = all.filter(e => e.department === d && e.risk_level === 'HIGH');
+            row[labels[d]] = avgFor(pool, keys[i]);
+          });
+          return row;
+        });
+        setRadarReal(computed);
+      })
+      .catch(() => {});
+  }, []);
+
+  const activeRadarData   = radarReal || radarData;
+  const activeRadarKeys   = radarReal ? ['전사', 'R&D', 'Sales', 'HR'] : ['P01', 'P02', 'P03', 'P04'];
+  const activeLegendLabels = radarReal
+    ? { '전사': '전사 고위험', 'R&D': 'R&D', 'Sales': 'Sales', 'HR': 'HR' }
+    : { P01: 'P01 번아웃', P02: 'P02 보상실망', P03: 'P03 성장정체', P04: 'P04 보상체감' };
+
   return (
     <div>
       {/* ── Section title ── */}
@@ -154,11 +195,11 @@ function RiskFactors() {
           </div>
         </div>
 
-        {/* Right: Agent별 위험 요인 기여도 (Radar) */}
+        {/* Right: Agent별 위험 요인 기여도 (Radar) — 실제 데이터 */}
         <div style={cardS}>
-          {secTitle('◉', 'Agent별 위험 요인 기여도')}
+          {secTitle('◉', radarReal ? '부서별 위험 요인 기여도 (실제)' : 'Agent별 위험 요인 기여도')}
           <ResponsiveContainer width="100%" height={300}>
-            <RadarChart data={radarData}>
+            <RadarChart data={activeRadarData}>
               <PolarGrid stroke="var(--border,#e5e7eb)" />
               <PolarAngleAxis
                 dataKey="factor"
@@ -170,10 +211,10 @@ function RiskFactors() {
                 tickCount={4}
               />
               <Tooltip
-                formatter={(v, name) => [`${v}점`, name]}
+                formatter={(v, name) => [`${v}점`, activeLegendLabels[name] || name]}
                 contentStyle={{ fontSize: 12, borderRadius: 8 }}
               />
-              {['P01', 'P02', 'P03', 'P04'].map((p, i) => (
+              {activeRadarKeys.map((p, i) => (
                 <Radar
                   key={p} name={p} dataKey={p}
                   stroke={RADAR_COLORS[i]}
@@ -184,10 +225,7 @@ function RiskFactors() {
               ))}
               <Legend
                 wrapperStyle={{ fontSize: 11, fontFamily: 'inherit', paddingTop: 8 }}
-                formatter={(value) => {
-                  const labels = { P01: 'P01 번아웃', P02: 'P02 보상실망', P03: 'P03 성장정체', P04: 'P04 보상체감' };
-                  return labels[value] || value;
-                }}
+                formatter={(value) => activeLegendLabels[value] || value}
               />
             </RadarChart>
           </ResponsiveContainer>
