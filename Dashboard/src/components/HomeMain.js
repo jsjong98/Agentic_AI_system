@@ -305,6 +305,20 @@ const buildNodes = (phase, agentStatuses, scanCounts) => {
   ];
 };
 
+/* Active edge style — uses inline strokeDasharray+animation so it works
+   regardless of ReactFlow CSS load order. animated:false to avoid conflicts. */
+const activeEdgeStyle = (color) => ({
+  stroke: color,
+  strokeWidth: 3.5,
+  strokeDasharray: '10 5',
+  animation: 'wf-dash 0.4s linear infinite',
+  filter: `drop-shadow(0 0 6px ${color}bb)`,
+});
+const idleEdgeStyle = () => ({
+  stroke: '#cbd5e1',
+  strokeWidth: 1.5,
+});
+
 const buildEdges = (phase, agentStatuses) => {
   const dispatched  = ['dispatching','synthesizing','reporting','done'].includes(phase);
   const synthActive = ['synthesizing','reporting','done'].includes(phase);
@@ -312,39 +326,27 @@ const buildEdges = (phase, agentStatuses) => {
 
   return [
     /* Supervisor → each Agent */
-    ...AGENTS.map((ag, i) => ({
-      id: `sup-${ag.id}`, source: 'supervisor', target: ag.id, type: 'smoothstep',
-      animated: dispatched,
-      style: {
-        stroke: dispatched ? ag.color : 'var(--border,#e2e8f0)',
-        strokeWidth: dispatched ? 3 : 1.5,
-        filter: dispatched ? `drop-shadow(0 0 5px ${ag.color}99)` : 'none',
-      },
+    ...AGENTS.map(ag => ({
+      id: `sup-${ag.id}`, source: 'supervisor', target: ag.id,
+      type: 'smoothstep', animated: false,
+      style: dispatched ? activeEdgeStyle(ag.color) : idleEdgeStyle(),
       markerEnd: { type: MarkerType.ArrowClosed, color: dispatched ? ag.color : '#cbd5e1', width: 14, height: 14 },
     })),
     /* each Agent → Synthesize */
     ...AGENTS.map(ag => {
       const flow = synthActive && agentStatuses[ag.id] === 'done';
       return {
-        id: `${ag.id}-syn`, source: ag.id, target: 'synthesize', type: 'smoothstep',
-        animated: flow,
-        style: {
-          stroke: flow ? ag.color : 'var(--border,#e2e8f0)',
-          strokeWidth: flow ? 3 : 1.5,
-          filter: flow ? `drop-shadow(0 0 5px ${ag.color}99)` : 'none',
-        },
+        id: `${ag.id}-syn`, source: ag.id, target: 'synthesize',
+        type: 'smoothstep', animated: false,
+        style: flow ? activeEdgeStyle(ag.color) : idleEdgeStyle(),
         markerEnd: { type: MarkerType.ArrowClosed, color: flow ? ag.color : '#cbd5e1', width: 14, height: 14 },
       };
     }),
     /* Synthesize → Report */
     {
-      id: 'syn-rep', source: 'synthesize', target: 'report', type: 'smoothstep',
-      animated: repActive,
-      style: {
-        stroke: repActive ? '#16a34a' : 'var(--border,#e2e8f0)',
-        strokeWidth: repActive ? 3 : 1.5,
-        filter: repActive ? 'drop-shadow(0 0 5px #16a34a99)' : 'none',
-      },
+      id: 'syn-rep', source: 'synthesize', target: 'report',
+      type: 'smoothstep', animated: false,
+      style: repActive ? activeEdgeStyle('#16a34a') : idleEdgeStyle(),
       markerEnd: { type: MarkerType.ArrowClosed, color: repActive ? '#16a34a' : '#cbd5e1', width: 14, height: 14 },
     },
   ];
@@ -608,17 +610,16 @@ const HomeMain = () => {
     <div style={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
       <style>{`
         @keyframes wf-blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
-
-        /* Animated ReactFlow edges — flowing dash */
-        .react-flow__edge.animated .react-flow__edge-path {
-          stroke-dasharray: 10 5 !important;
-          animation: wf-dash 0.4s linear infinite !important;
-        }
-        @keyframes wf-dash { to { stroke-dashoffset: -15; } }
+        @keyframes wf-dash  { to { stroke-dashoffset: -15; } }
 
         .react-flow__attribution { display: none !important; }
-        .react-flow__handle       { display: none !important; }
-        .react-flow__node         { cursor: default !important; }
+        /* Hide handle dots visually but keep in DOM for edge routing */
+        .react-flow__handle {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          width: 4px !important; height: 4px !important;
+        }
+        .react-flow__node { cursor: default !important; }
       `}</style>
 
       {/* ══ LEFT: Workflow canvas ══════════════════════════════════ */}
