@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactFlow, {
   Background, useNodesState, useEdgesState, MarkerType,
+  Handle, Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -51,6 +52,11 @@ function useDarkMode() {
   return isDark;
 }
 
+/* invisible handle style — stays in DOM for edge routing */
+const HS = { background: 'transparent', border: 'none', width: 1, height: 1, minWidth: 1, minHeight: 1 };
+/* uniform width for top/bottom nodes */
+const NODE_W = 200;
+
 /* ─────────────────────────────────────────
    Custom node: Supervisor
 ───────────────────────────────────────── */
@@ -60,41 +66,31 @@ const SupervisorNode = ({ data }) => {
   const done   = ['synthesizing', 'reporting', 'done'].includes(phase);
 
   return (
-    <div style={{
-      minWidth: 190, textAlign: 'center',
-      borderRadius: 14, padding: '14px 24px',
-      background: active
-        ? 'linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%)'
-        : done
-          ? 'linear-gradient(135deg,#0f172a 0%,#163460 100%)'
-          : 'var(--card,#fff)',
-      border: `2px solid ${active ? '#60a5fa' : done ? '#3b82f688' : 'var(--border,#e2e8f0)'}`,
-      color: active || done ? '#fff' : 'var(--sub,#94a3b8)',
-      boxShadow: active
-        ? '0 0 30px rgba(96,165,250,0.55), 0 4px 16px rgba(0,0,0,.25)'
-        : done
-          ? '0 0 16px rgba(96,165,250,0.2)'
-          : '0 1px 4px rgba(0,0,0,.08)',
-      transition: 'all 0.5s ease',
-    }}>
-      <div style={{ fontSize: 24, marginBottom: 6, filter: active || done ? 'none' : 'grayscale(0.6) opacity(0.6)' }}>🧠</div>
-      <div style={{ fontWeight: 700, fontSize: 13 }}>Supervisor Agent</div>
-      <div style={{ fontSize: 10, opacity: 0.65, marginTop: 3 }}>오케스트레이션 · 태스크 배분</div>
-
-      {phase === 'idle' && (
-        <div style={{ fontSize: 10, marginTop: 8, color: 'var(--sub,#cbd5e1)', letterSpacing: 1 }}>
-          ○ 대기 중
-        </div>
-      )}
-      {active && (
-        <div style={{ fontSize: 10, color: '#93c5fd', marginTop: 8, animation: 'wf-blink 1.1s ease-in-out infinite' }}>
-          ▶ 1,470명 분석 태스크 배분 중...
-        </div>
-      )}
-      {done && !active && (
-        <div style={{ fontSize: 10, color: '#86efac', marginTop: 8 }}>✓ 배분 완료</div>
-      )}
-    </div>
+    <>
+      <Handle type="source" position={Position.Bottom} style={HS} />
+      <div style={{
+        width: NODE_W, textAlign: 'center',
+        borderRadius: 14, padding: '14px 24px',
+        background: active
+          ? 'linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%)'
+          : done
+            ? 'linear-gradient(135deg,#0f172a 0%,#163460 100%)'
+            : 'var(--card,#fff)',
+        border: `2px solid ${active ? '#60a5fa' : done ? '#3b82f688' : 'var(--border,#e2e8f0)'}`,
+        color: active || done ? '#fff' : 'var(--sub,#94a3b8)',
+        boxShadow: active
+          ? '0 0 30px rgba(96,165,250,0.55), 0 4px 16px rgba(0,0,0,.25)'
+          : done ? '0 0 16px rgba(96,165,250,0.2)' : '0 1px 4px rgba(0,0,0,.08)',
+        transition: 'all 0.5s ease',
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 6, filter: active || done ? 'none' : 'grayscale(0.6) opacity(0.6)' }}>🧠</div>
+        <div style={{ fontWeight: 700, fontSize: 13 }}>Supervisor Agent</div>
+        <div style={{ fontSize: 10, opacity: 0.65, marginTop: 3 }}>오케스트레이션 · 태스크 배분</div>
+        {phase === 'idle' && <div style={{ fontSize: 10, marginTop: 8, color: 'var(--sub,#cbd5e1)' }}>○ 대기 중</div>}
+        {active && <div style={{ fontSize: 10, color: '#93c5fd', marginTop: 8, animation: 'wf-blink 1.1s ease-in-out infinite' }}>▶ 1,470명 분석 태스크 배분 중...</div>}
+        {done && !active && <div style={{ fontSize: 10, color: '#86efac', marginTop: 8 }}>✓ 배분 완료</div>}
+      </div>
+    </>
   );
 };
 
@@ -112,65 +108,45 @@ const AgentNode = ({ data }) => {
   const pct   = Math.round((end / TOTAL_EMP) * 100);
 
   return (
-    <div style={{
-      minWidth: 135, textAlign: 'center',
-      borderRadius: 12, padding: '10px 14px',
-      background: isActive
-        ? `${color}1a`
-        : isDone
-          ? `${color}0d`
-          : 'var(--card,#fff)',
-      border: `2px solid ${isActive ? color : isDone ? color + '77' : 'var(--border,#e2e8f0)'}`,
-      color: isActive ? color : isDone ? color + 'cc' : 'var(--sub,#94a3b8)',
-      boxShadow: isActive
-        ? `0 0 20px ${color}55, 0 2px 8px rgba(0,0,0,.1)`
-        : isDone
-          ? `0 0 8px ${color}22`
-          : '0 1px 3px rgba(0,0,0,.06)',
-      transition: 'all 0.4s ease',
-    }}>
-      {/* header */}
-      <div style={{ fontWeight: 700, fontSize: 12 }}>{label}</div>
-      <div style={{ fontSize: 9, opacity: 0.75, marginTop: 2 }}>{sub}</div>
-
-      {/* idle */}
-      {isIdle && (
-        <div style={{ fontSize: 9, marginTop: 6, color: 'var(--sub,#cbd5e1)' }}>○ 대기</div>
-      )}
-
-      {/* active: scan counter */}
-      {isActive && (
-        <div style={{ marginTop: 7 }}>
-          <div style={{
-            fontSize: 9, fontWeight: 600, color,
-            background: `${color}15`, border: `1px solid ${color}44`,
-            borderRadius: 5, padding: '3px 6px', marginBottom: 4,
-          }}>
-            #{String(start).padStart(4,'0')} ~ #{String(end).padStart(4,'0')}
-          </div>
-          {/* progress bar */}
-          <div style={{ height: 3, borderRadius: 2, background: `${color}25`, overflow: 'hidden' }}>
+    <>
+      <Handle type="target" position={Position.Top}    style={HS} />
+      <Handle type="source" position={Position.Bottom} style={HS} />
+      <div style={{
+        width: 138, textAlign: 'center',
+        borderRadius: 12, padding: '10px 12px',
+        background: isActive ? `${color}1a` : isDone ? `${color}0d` : 'var(--card,#fff)',
+        border: `2px solid ${isActive ? color : isDone ? color + '77' : 'var(--border,#e2e8f0)'}`,
+        color: isActive ? color : isDone ? color + 'cc' : 'var(--sub,#94a3b8)',
+        boxShadow: isActive
+          ? `0 0 20px ${color}55, 0 2px 8px rgba(0,0,0,.1)`
+          : isDone ? `0 0 8px ${color}22` : '0 1px 3px rgba(0,0,0,.06)',
+        transition: 'all 0.4s ease',
+      }}>
+        <div style={{ fontWeight: 700, fontSize: 12 }}>{label}</div>
+        <div style={{ fontSize: 9, opacity: 0.75, marginTop: 2 }}>{sub}</div>
+        {isIdle && <div style={{ fontSize: 9, marginTop: 6, color: 'var(--sub,#cbd5e1)' }}>○ 대기</div>}
+        {isActive && (
+          <div style={{ marginTop: 7 }}>
             <div style={{
-              height: '100%', borderRadius: 2,
-              background: color,
-              width: `${pct}%`,
-              transition: 'width 0.05s linear',
-            }} />
+              fontSize: 9, fontWeight: 600, color,
+              background: `${color}15`, border: `1px solid ${color}44`,
+              borderRadius: 5, padding: '3px 5px', marginBottom: 4,
+            }}>
+              #{String(start).padStart(4,'0')}~#{String(end).padStart(4,'0')}
+            </div>
+            <div style={{ height: 3, borderRadius: 2, background: `${color}25`, overflow: 'hidden' }}>
+              <div style={{ height: '100%', borderRadius: 2, background: color, width: `${pct}%`, transition: 'width 0.05s linear' }} />
+            </div>
+            <div style={{ fontSize: 8, color, marginTop: 3 }}>{pct}% · 분석 중</div>
           </div>
-          <div style={{ fontSize: 8, color, marginTop: 3 }}>{pct}% · 분석 중</div>
-        </div>
-      )}
-
-      {/* done */}
-      {isDone && (
-        <div style={{
-          marginTop: 6, fontSize: 9, fontWeight: 600,
-          background: `${color}12`, borderRadius: 5, padding: '3px 6px',
-        }}>
-          ✓ 1,470명 완료
-        </div>
-      )}
-    </div>
+        )}
+        {isDone && (
+          <div style={{ marginTop: 6, fontSize: 9, fontWeight: 600, background: `${color}12`, borderRadius: 5, padding: '3px 6px' }}>
+            ✓ 1,470명 완료
+          </div>
+        )}
+      </div>
+    </>
   );
 };
 
@@ -182,40 +158,33 @@ const SynthesizeNode = ({ data }) => {
   const color = C.amber;
 
   return (
-    <div style={{
-      minWidth: 190, textAlign: 'center',
-      borderRadius: 14, padding: '14px 24px',
-      background: active
-        ? '#fffbeb'
-        : done ? '#fefce8' : 'var(--card,#fff)',
-      border: `2px solid ${active ? color : done ? color + '88' : 'var(--border,#e2e8f0)'}`,
-      color: active || done ? '#92400e' : 'var(--sub,#94a3b8)',
-      boxShadow: active
-        ? `0 0 28px ${color}55, 0 4px 16px rgba(0,0,0,.12)`
-        : done ? `0 0 10px ${color}22` : '0 1px 4px rgba(0,0,0,.06)',
-      transition: 'all 0.5s ease',
-    }}>
-      <div style={{ fontSize: 24, marginBottom: 6, filter: active || done ? 'none' : 'grayscale(0.6) opacity(0.6)' }}>⚡</div>
-      <div style={{ fontWeight: 700, fontSize: 13 }}>Synthesize Agent</div>
-      <div style={{ fontSize: 10, opacity: 0.65, marginTop: 3 }}>통합 분석 · 최종 위험도 판정</div>
-
-      {!active && !done && (
-        <div style={{ fontSize: 10, marginTop: 8, color: 'var(--sub,#cbd5e1)' }}>○ 대기 중</div>
-      )}
-      {active && (
-        <div style={{ fontSize: 10, color, marginTop: 8, animation: 'wf-blink 1.1s ease-in-out infinite' }}>
-          ▶ 5개 Agent 결과 통합 분석 중...
-        </div>
-      )}
-      {done && !active && (
-        <div style={{ fontSize: 10, color: '#d97706', marginTop: 8 }}>✓ 통합 완료</div>
-      )}
-    </div>
+    <>
+      <Handle type="target" position={Position.Top}    style={HS} />
+      <Handle type="source" position={Position.Bottom} style={HS} />
+      <div style={{
+        width: NODE_W, textAlign: 'center',
+        borderRadius: 14, padding: '14px 24px',
+        background: active ? '#fffbeb' : done ? '#fefce8' : 'var(--card,#fff)',
+        border: `2px solid ${active ? color : done ? color + '88' : 'var(--border,#e2e8f0)'}`,
+        color: active || done ? '#92400e' : 'var(--sub,#94a3b8)',
+        boxShadow: active
+          ? `0 0 28px ${color}55, 0 4px 16px rgba(0,0,0,.12)`
+          : done ? `0 0 10px ${color}22` : '0 1px 4px rgba(0,0,0,.06)',
+        transition: 'all 0.5s ease',
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 6, filter: active || done ? 'none' : 'grayscale(0.6) opacity(0.6)' }}>⚡</div>
+        <div style={{ fontWeight: 700, fontSize: 13 }}>Synthesize Agent</div>
+        <div style={{ fontSize: 10, opacity: 0.65, marginTop: 3 }}>통합 분석 · 최종 위험도 판정</div>
+        {!active && !done && <div style={{ fontSize: 10, marginTop: 8, color: 'var(--sub,#cbd5e1)' }}>○ 대기 중</div>}
+        {active && <div style={{ fontSize: 10, color, marginTop: 8, animation: 'wf-blink 1.1s ease-in-out infinite' }}>▶ 5개 Agent 결과 통합 분석 중...</div>}
+        {done && !active && <div style={{ fontSize: 10, color: '#d97706', marginTop: 8 }}>✓ 통합 완료</div>}
+      </div>
+    </>
   );
 };
 
 /* ─────────────────────────────────────────
-   Custom node: Report (new!)
+   Custom node: Report
 ───────────────────────────────────────── */
 const ReportNode = ({ data }) => {
   const { phase } = data;
@@ -225,54 +194,40 @@ const ReportNode = ({ data }) => {
   const color      = '#16a34a';
 
   return (
-    <div style={{
-      minWidth: 210, textAlign: 'center',
-      borderRadius: 14, padding: '14px 24px',
-      background: generating
-        ? '#f0fdf4'
-        : done ? '#f0fdf4' : 'var(--card,#fff)',
-      border: `2px solid ${active ? color + (done ? 'bb' : 'ff') : 'var(--border,#e2e8f0)'}`,
-      color: active ? '#14532d' : 'var(--sub,#94a3b8)',
-      boxShadow: generating
-        ? `0 0 28px ${color}44, 0 4px 16px rgba(0,0,0,.1)`
-        : done ? `0 0 12px ${color}22` : '0 1px 4px rgba(0,0,0,.06)',
-      transition: 'all 0.5s ease',
-    }}>
-      <div style={{ fontSize: 24, marginBottom: 6, filter: active ? 'none' : 'grayscale(0.6) opacity(0.6)' }}>📋</div>
-      <div style={{ fontWeight: 700, fontSize: 13 }}>리포트 생성</div>
-      <div style={{ fontSize: 10, opacity: 0.65, marginTop: 3 }}>퇴사위험 분석 보고서</div>
-
-      {!active && (
-        <div style={{ fontSize: 10, marginTop: 8, color: 'var(--sub,#cbd5e1)' }}>○ 대기 중</div>
-      )}
-      {generating && (
-        <div style={{ fontSize: 10, color, marginTop: 8, animation: 'wf-blink 1.1s ease-in-out infinite' }}>
-          ▶ 보고서 생성 중...
-        </div>
-      )}
-      {done && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 4,
-          }}>
-            {[
-              { label: '고위험군', value: '486명', sub: '33.1%' },
-              { label: '즉시 개입', value: '101명', sub: '번아웃' },
-            ].map(s => (
-              <div key={s.label} style={{
-                background: color + '18', borderRadius: 6, padding: '4px 6px',
-                border: `1px solid ${color}33`,
-              }}>
-                <div style={{ fontSize: 8, color, opacity: 0.8 }}>{s.label}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color }}>{s.value}</div>
-                <div style={{ fontSize: 8, color, opacity: 0.6 }}>{s.sub}</div>
-              </div>
-            ))}
+    <>
+      <Handle type="target" position={Position.Top} style={HS} />
+      <div style={{
+        width: NODE_W, textAlign: 'center',
+        borderRadius: 14, padding: '14px 24px',
+        background: active ? '#f0fdf4' : 'var(--card,#fff)',
+        border: `2px solid ${generating ? color : done ? color + 'bb' : 'var(--border,#e2e8f0)'}`,
+        color: active ? '#14532d' : 'var(--sub,#94a3b8)',
+        boxShadow: generating
+          ? `0 0 28px ${color}44, 0 4px 16px rgba(0,0,0,.1)`
+          : done ? `0 0 12px ${color}22` : '0 1px 4px rgba(0,0,0,.06)',
+        transition: 'all 0.5s ease',
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 6, filter: active ? 'none' : 'grayscale(0.6) opacity(0.6)' }}>📋</div>
+        <div style={{ fontWeight: 700, fontSize: 13 }}>리포트 생성</div>
+        <div style={{ fontSize: 10, opacity: 0.65, marginTop: 3 }}>퇴사위험 분석 보고서</div>
+        {!active && <div style={{ fontSize: 10, marginTop: 8, color: 'var(--sub,#cbd5e1)' }}>○ 대기 중</div>}
+        {generating && <div style={{ fontSize: 10, color, marginTop: 8, animation: 'wf-blink 1.1s ease-in-out infinite' }}>▶ 보고서 생성 중...</div>}
+        {done && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 4 }}>
+              {[{ label: '고위험군', value: '486명', sub: '33.1%' }, { label: '즉시 개입', value: '101명', sub: '번아웃' }].map(s => (
+                <div key={s.label} style={{ background: color + '18', borderRadius: 6, padding: '4px 6px', border: `1px solid ${color}33` }}>
+                  <div style={{ fontSize: 8, color, opacity: 0.8 }}>{s.label}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color }}>{s.value}</div>
+                  <div style={{ fontSize: 8, color, opacity: 0.6 }}>{s.sub}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 9, color, fontWeight: 600 }}>✓ 분석 보고서 완료</div>
           </div>
-          <div style={{ fontSize: 9, color: '#16a34a', fontWeight: 600 }}>✓ 분석 보고서 완료</div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 };
 
@@ -315,8 +270,8 @@ const activeEdgeStyle = (color) => ({
   filter: `drop-shadow(0 0 6px ${color}bb)`,
 });
 const idleEdgeStyle = () => ({
-  stroke: '#cbd5e1',
-  strokeWidth: 1.5,
+  stroke: '#94a3b8',
+  strokeWidth: 2,
 });
 
 const buildEdges = (phase, agentStatuses) => {
@@ -613,11 +568,15 @@ const HomeMain = () => {
         @keyframes wf-dash  { to { stroke-dashoffset: -15; } }
 
         .react-flow__attribution { display: none !important; }
-        /* Hide handle dots visually but keep in DOM for edge routing */
+        /* Hide handle dots but keep in DOM for edge routing */
         .react-flow__handle {
           opacity: 0 !important;
           pointer-events: none !important;
-          width: 4px !important; height: 4px !important;
+          width: 1px !important;
+          height: 1px !important;
+          min-width: 1px !important;
+          min-height: 1px !important;
+          border: none !important;
         }
         .react-flow__node { cursor: default !important; }
       `}</style>
