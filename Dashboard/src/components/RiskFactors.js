@@ -41,32 +41,32 @@ const radarData = [
 
 const personas = [
   {
-    id: 'P01', title: '번아웃 직전',   count: '77명', avg: '0.84',
+    id: 'P01', title: '번아웃에 직면한 직원', count: '101명', avg: '0.84',
     tagBg: '#fde8ec', tagColor: C.red,
     factors: [
-      { name: '초과근무시간', pct: 78, color: C.red    },
-      { name: '직무만족도',   pct: 45, color: C.red    },
-      { name: '감성 부정지수', pct: 62, color: C.orange },
+      { name: '초과근무시간',   pct: 78, color: C.red    },
+      { name: '직무만족도 저하', pct: 45, color: C.red    },
+      { name: '감성 부정지수',  pct: 62, color: C.orange },
     ],
   },
   {
-    id: 'P02', title: '보상 실망',     count: '12명', avg: '0.79',
+    id: 'P02', title: '온보딩에 실패한 직원', count: '185명', avg: '0.79',
     tagBg: '#e8f0fe', tagColor: C.blue,
     factors: [
-      { name: '보상 격차 (vs 동료)', pct: 72, color: C.red    },
-      { name: '외부 보상 비교',      pct: 65, color: C.orange },
+      { name: '재직 연수 짧음 (≤2년)',  pct: 72, color: C.red    },
+      { name: '관계망 미형성',          pct: 65, color: C.orange },
     ],
   },
   {
-    id: 'P03', title: '성장 정체',     count: '40명', avg: '0.73',
+    id: 'P03', title: '성장이 정체된 직원',   count: '8명',  avg: '0.73',
     tagBg: '#fef3e2', tagColor: C.orange,
     factors: [
-      { name: '승진후 경과기간', pct: 68, color: C.orange },
-      { name: 'PM 경험 부족',   pct: 55, color: C.orange },
+      { name: '승진 후 경과기간', pct: 68, color: C.orange },
+      { name: '직급 대비 연봉',   pct: 55, color: C.orange },
     ],
   },
   {
-    id: 'P04', title: '보상체감 낮음', count: '26명', avg: '0.68',
+    id: 'P04', title: '저평가된 전문가',       count: '192명', avg: '0.68',
     tagBg: '#f3e8fd', tagColor: C.purple,
     factors: [
       { name: '인센티브 미수령',  pct: 58, color: C.orange },
@@ -158,7 +158,7 @@ function RiskFactors() {
   const activeRadarKeys   = radarReal ? ['전사', 'R&D', 'Sales', 'HR'] : ['P01', 'P02', 'P03', 'P04'];
   const activeLegendLabels = radarReal
     ? { '전사': '전사 고위험', 'R&D': 'R&D', 'Sales': 'Sales', 'HR': 'HR' }
-    : { P01: 'P01 번아웃', P02: 'P02 보상실망', P03: 'P03 성장정체', P04: 'P04 보상체감' };
+    : { P01: 'P01 번아웃직면', P02: 'P02 온보딩실패', P03: 'P03 성장정체', P04: 'P04 저평가전문가' };
 
   return (
     <div>

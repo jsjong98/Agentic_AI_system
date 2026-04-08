@@ -74,8 +74,8 @@ const InsightCard = ({ emoji, title, body, chips, borderColor }) => (
 const LEFT_INSIGHTS = [
   {
     emoji: '🚨', borderColor: C.red,
-    title: '번아웃 직전 그룹(P01)의 급속 확산',
-    body: '고위험군 155명 중 50%(77명)이 번아웃 직전 상태. Strategy& · Operation 부서 집중. 평균 초과근무시간 전사 대비 2.3배, 직무만족도 하위 15%.',
+    title: '번아웃에 직면한 직원(P01) 그룹 확산',
+    body: '고위험군 486명 중 P01(번아웃) 101명, P04(저평가 전문가) 192명이 다수. R&D 부서 집중. 평균 초과근무시간 전사 대비 2.3배, 직무만족도 하위 15%.',
     chips: [{ name: 'Structura', score: 0.87 }, { name: 'Sentio', score: 0.82 }, { name: 'Chronos', score: 0.76 }],
   },
   {
@@ -96,7 +96,7 @@ const RIGHT_INSIGHTS = [
   {
     emoji: '💬', borderColor: C.purple,
     title: '감성 분석: 부정 감정 키워드 급증',
-    body: "코칭 면담 및 자기평가 텍스트에서 '소진', '불확실', '답답함' 등 부정 키워드 전년 대비 45% 증가. ME~IP 직급 집중.",
+    body: "코칭 면담 및 자기평가 텍스트에서 '소진', '불확실', '답답함' 등 부정 키워드 전년 대비 45% 증가. JobLevel 1~2 (Research Scientist, Laboratory Technician) 집중.",
     chips: [{ name: 'Sentio', score: 0.85 }],
   },
   {

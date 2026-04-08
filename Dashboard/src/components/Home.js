@@ -45,55 +45,56 @@ const TREND_BY_DEPT = {
   ],
 };
 
+// JobLevel 1~5 기반 직급별 퇴사위험 분포
 const PERF_RISK_ALL = [
-  { grade: 'EP', 고위험: 20, 잠재위험: 15, 안정: 45 },
-  { grade: 'HP', 고위험: 36, 잠재위험: 28, 안정: 62 },
-  { grade: 'ME', 고위험: 17, 잠재위험: 22, 안정: 55 },
-  { grade: 'IP', 고위험: 32, 잠재위험: 25, 안정: 70 },
-  { grade: 'BE', 고위험: 12, 잠재위험: 18, 안정: 48 },
+  { grade: 'Lv.1', 고위험: 48, 잠재위험: 112, 안정: 384 },
+  { grade: 'Lv.2', 고위험: 72, 잠재위험: 148, 안정: 314 },
+  { grade: 'Lv.3', 고위험: 22, 잠재위험: 68,  안정: 128 },
+  { grade: 'Lv.4', 고위험: 9,  잠재위험: 42,  안정: 59  },
+  { grade: 'Lv.5', 고위험: 4,  잠재위험: 17,  안정: 55  },
 ];
 const PERF_RISK_BY_DEPT = {
   'Research & Development': [
-    { grade: 'EP', 고위험: 10, 잠재위험: 8,  안정: 24 }, { grade: 'HP', 고위험: 19, 잠재위험: 14, 안정: 33 },
-    { grade: 'ME', 고위험: 9,  잠재위험: 12, 안정: 28 }, { grade: 'IP', 고위험: 17, 잠재위험: 13, 안정: 37 },
-    { grade: 'BE', 고위험: 6,  잠재위험: 9,  안정: 25 },
+    { grade: 'Lv.1', 고위험: 28, 잠재위험: 72, 안정: 234 }, { grade: 'Lv.2', 고위험: 38, 잠재위험: 82, 안정: 161 },
+    { grade: 'Lv.3', 고위험: 10, 잠재위험: 36, 안정:  75 }, { grade: 'Lv.4', 고위험: 3,  잠재위험: 22, 안정:  44 },
+    { grade: 'Lv.5', 고위험: 1,  잠재위험: 9,  안정:  38 },
   ],
   'Sales': [
-    { grade: 'EP', 고위험: 8,  잠재위험: 6,  안정: 16 }, { grade: 'HP', 고위험: 14, 잠재위험: 11, 안정: 22 },
-    { grade: 'ME', 고위험: 6,  잠재위험: 8,  안정: 20 }, { grade: 'IP', 고위험: 13, 잠재위험: 10, 안정: 28 },
-    { grade: 'BE', 고위험: 5,  잠재위험: 7,  안정: 18 },
+    { grade: 'Lv.1', 고위험: 16, 잠재위험: 30, 안정:  30 }, { grade: 'Lv.2', 고위험: 30, 잠재위험: 58, 안정: 145 },
+    { grade: 'Lv.3', 고위험: 10, 잠재위험: 24, 안정:  45 }, { grade: 'Lv.4', 고위험: 6,  잠재위험: 14, 안정:  14 },
+    { grade: 'Lv.5', 고위험: 4,  잠재위험: 6,  안정:  16 },
   ],
   'Human Resources': [
-    { grade: 'EP', 고위험: 2, 잠재위험: 2, 안정: 6 }, { grade: 'HP', 고위험: 3, 잠재위험: 3, 안정: 8 },
-    { grade: 'ME', 고위험: 2, 잠재위험: 2, 안정: 7 }, { grade: 'IP', 고위험: 2, 잠재위험: 2, 안정: 6 },
-    { grade: 'BE', 고위험: 1, 잠재위험: 2, 안정: 5 },
+    { grade: 'Lv.1', 고위험: 4,  잠재위험: 10, 안정: 19 }, { grade: 'Lv.2', 고위험: 4,  잠재위험: 8,  안정:  9 },
+    { grade: 'Lv.3', 고위험: 1,  잠재위험: 4,  안정:  8 }, { grade: 'Lv.4', 고위험: 0,  잠재위험: 6,  안정:  1 },
+    { grade: 'Lv.5', 고위험: 0,  잠재위험: 2,  안정:  1 },
   ],
 };
 
 const PERSONA_ALL = [
-  { t: 'P01', l: '번아웃 직전',   c: 77, p: '50%', bg: '#fde8ec', cl: '#d93954' },
-  { t: 'P02', l: '보상 실망',     c: 12, p: '8%',  bg: '#e8f0fe', cl: '#2563eb' },
-  { t: 'P03', l: '성장 정체',     c: 40, p: '26%', bg: '#fef3e2', cl: '#e8721a' },
-  { t: 'P04', l: '보상체감 낮음', c: 26, p: '16%', bg: '#f3e8fd', cl: '#7c3aed' },
+  { t: 'P01', l: '번아웃에 직면한 직원',   c: 101, p: '21%', bg: '#fde8ec', cl: '#d93954' },
+  { t: 'P02', l: '온보딩에 실패한 직원',   c: 185, p: '38%', bg: '#e8f0fe', cl: '#2563eb' },
+  { t: 'P03', l: '성장이 정체된 직원',     c:   8, p:  '2%', bg: '#fef3e2', cl: '#e8721a' },
+  { t: 'P04', l: '저평가된 전문가',        c: 192, p: '40%', bg: '#f3e8fd', cl: '#7c3aed' },
 ];
 const PERSONA_BY_DEPT = {
   'Research & Development': [
-    { t: 'P01', l: '번아웃 직전',   c: 40, p: '50%', bg: '#fde8ec', cl: '#d93954' },
-    { t: 'P02', l: '보상 실망',     c: 6,  p: '8%',  bg: '#e8f0fe', cl: '#2563eb' },
-    { t: 'P03', l: '성장 정체',     c: 24, p: '30%', bg: '#fef3e2', cl: '#e8721a' },
-    { t: 'P04', l: '보상체감 낮음', c: 10, p: '12%', bg: '#f3e8fd', cl: '#7c3aed' },
+    { t: 'P01', l: '번아웃에 직면한 직원', c: 52, p: '28%', bg: '#fde8ec', cl: '#d93954' },
+    { t: 'P02', l: '온보딩에 실패한 직원', c: 68, p: '37%', bg: '#e8f0fe', cl: '#2563eb' },
+    { t: 'P03', l: '성장이 정체된 직원',   c:  4, p:  '2%', bg: '#fef3e2', cl: '#e8721a' },
+    { t: 'P04', l: '저평가된 전문가',      c: 60, p: '33%', bg: '#f3e8fd', cl: '#7c3aed' },
   ],
   'Sales': [
-    { t: 'P01', l: '번아웃 직전',   c: 28, p: '42%', bg: '#fde8ec', cl: '#d93954' },
-    { t: 'P02', l: '보상 실망',     c: 4,  p: '6%',  bg: '#e8f0fe', cl: '#2563eb' },
-    { t: 'P03', l: '성장 정체',     c: 14, p: '21%', bg: '#fef3e2', cl: '#e8721a' },
-    { t: 'P04', l: '보상체감 낮음', c: 20, p: '30%', bg: '#f3e8fd', cl: '#7c3aed' },
+    { t: 'P01', l: '번아웃에 직면한 직원', c: 38, p: '22%', bg: '#fde8ec', cl: '#d93954' },
+    { t: 'P02', l: '온보딩에 실패한 직원', c: 96, p: '56%', bg: '#e8f0fe', cl: '#2563eb' },
+    { t: 'P03', l: '성장이 정체된 직원',   c:  4, p:  '2%', bg: '#fef3e2', cl: '#e8721a' },
+    { t: 'P04', l: '저평가된 전문가',      c: 33, p: '19%', bg: '#f3e8fd', cl: '#7c3aed' },
   ],
   'Human Resources': [
-    { t: 'P01', l: '번아웃 직전',   c: 4,  p: '44%', bg: '#fde8ec', cl: '#d93954' },
-    { t: 'P02', l: '보상 실망',     c: 1,  p: '11%', bg: '#e8f0fe', cl: '#2563eb' },
-    { t: 'P03', l: '성장 정체',     c: 2,  p: '22%', bg: '#fef3e2', cl: '#e8721a' },
-    { t: 'P04', l: '보상체감 낮음', c: 2,  p: '22%', bg: '#f3e8fd', cl: '#7c3aed' },
+    { t: 'P01', l: '번아웃에 직면한 직원', c: 11, p: '24%', bg: '#fde8ec', cl: '#d93954' },
+    { t: 'P02', l: '온보딩에 실패한 직원', c: 21, p: '46%', bg: '#e8f0fe', cl: '#2563eb' },
+    { t: 'P03', l: '성장이 정체된 직원',   c:  0, p:  '0%', bg: '#fef3e2', cl: '#e8721a' },
+    { t: 'P04', l: '저평가된 전문가',      c: 14, p: '31%', bg: '#f3e8fd', cl: '#7c3aed' },
   ],
 };
 
@@ -291,7 +292,7 @@ const Home = ({ viewMode = 'all' }) => {
         <span style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>필터:</span>
         {[
           { val: deptFilter,  set: setDeptFilter,  opts: ['전체 부서', 'Research & Development', 'Sales', 'Human Resources'] },
-          { val: gradeFilter, set: setGradeFilter, opts: ['전체 직급', 'EP', 'HP', 'ME', 'IP', 'BE'] },
+          { val: gradeFilter, set: setGradeFilter, opts: ['전체 직급', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5'] },
           { val: riskFilter,  set: setRiskFilter,  opts: ['전체 위험등급', '고위험', '잠재적 위험', '저위험'] },
         ].map((f, i) => (
           <select key={i} value={f.val} onChange={e => f.set(e.target.value)}
@@ -428,7 +429,7 @@ const Home = ({ viewMode = 'all' }) => {
 
         {/* 성과등급별 퇴사위험자 분포 */}
         <div style={cardS}>
-          {secTitle('▣', '성과등급별 퇴사위험자 분포')}
+          {secTitle('▣', '직급별 퇴사위험자 분포 (JobLevel 1~5)')}
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={perfRisk} margin={{ top: 4, right: 8, bottom: 4, left: -16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border,#f0f0f0)" vertical={false} />
