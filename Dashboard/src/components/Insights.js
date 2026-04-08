@@ -240,7 +240,7 @@ const Insights = () => {
                 <Tooltip content={<AgentTooltip />} />
                 <Bar
                   dataKey="avg" radius={[6, 6, 0, 0]}
-                  label={{ position: 'top', fontSize: 11, fontWeight: 700, formatter: v => v.toFixed(2) }}
+                  label={{ position: 'top', fontSize: 12, fontWeight: 500, fill: '#555', formatter: v => v.toFixed(2) }}
                 >
                   {agentAvg.map((entry, i) => (
                     <Cell key={i} fill={`${entry.color}CC`} stroke={entry.color} strokeWidth={1.5} />
