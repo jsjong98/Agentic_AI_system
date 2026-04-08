@@ -708,6 +708,7 @@ const App = () => {
       globalBatchResults,
       lastAnalysisTimestamp,
       updateBatchResults, // 배치 결과 업데이트 함수
+      user,
     };
 
     switch (selectedKey) {

@@ -401,9 +401,24 @@ const PHASE_LABEL = {
 };
 
 /* ─────────────────────────────────────────
+   Attrition keyword detection
+───────────────────────────────────────── */
+const ATTRITION_KEYWORDS = [
+  '위험', '퇴사', '이직', '직원', '분석', '부서', '고위험', '번아웃',
+  '인원', '현황', '보고', '리포트', '점수', '예측', '개입', '전략',
+  'r&d', '영업', '인사', '통계', '상위', '하위', '누구', '누가',
+  '몇명', '몇 명', '어느', '얼마', '가장',
+];
+
+const isAttritionQuery = (text) => {
+  const lower = text.toLowerCase();
+  return ATTRITION_KEYWORDS.some(k => lower.includes(k));
+};
+
+/* ─────────────────────────────────────────
    Main component
 ───────────────────────────────────────── */
-const HomeMain = () => {
+const HomeMain = ({ user }) => {
   const isDark = useDarkMode();
 
   const [messages, setMessages]     = useState([{
@@ -519,11 +534,13 @@ const HomeMain = () => {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setLoading(true);
-    runWorkflow();
+    if (isAttritionQuery(text)) {
+      runWorkflow();
+    }
     try {
       const res  = await fetch(`${SUPERVISOR_URL}/api/chat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, isAdmin: user?.role === 'admin' }),
       });
       const data = await res.json();
       typeResponse(data.response || data.message || '분석을 완료했습니다.');
