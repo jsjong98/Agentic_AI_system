@@ -1,602 +1,498 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Button, Input, Avatar, Spin } from 'antd';
-import { SendOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import ReactFlow, {
+  Background,
+  useNodesState, useEdgesState,
+  MarkerType,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
 
-const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
-const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
-const { TextArea } = Input;
+const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5000';
 
-// ───────────────────────────── style injection ─────────────────────────────
-if (typeof document !== 'undefined' && !document.getElementById('home-main-style')) {
-  const s = document.createElement('style');
-  s.id = 'home-main-style';
-  s.textContent = `
-    @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
-    @keyframes flowPulse{0%{opacity:1;transform:scaleY(1)}50%{opacity:0.5;transform:scaleY(0.8)}100%{opacity:1;transform:scaleY(1)}}
-    @keyframes agentGlow{0%,100%{box-shadow:0 0 8px rgba(217,57,84,.4)}50%{box-shadow:0 0 20px rgba(217,57,84,.8)}}
-    @keyframes fadeSlide{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-    @keyframes scanPulse{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}
-    @keyframes progressGlow{0%{box-shadow:0 0 4px rgba(217,57,84,.3)}50%{box-shadow:0 0 12px rgba(217,57,84,.6)}100%{box-shadow:0 0 4px rgba(217,57,84,.3)}}
-    @keyframes barStripe{0%{background-position:0 0}100%{background-position:20px 0}}
-  `;
-  document.head.appendChild(s);
-}
+/* ── colour tokens ── */
+const C = {
+  red:    '#d93954',
+  orange: '#e8721a',
+  blue:   '#2563eb',
+  purple: '#7c3aed',
+  green:  '#2ea44f',
+};
 
-// ─────────────────────────── Animated Workflow ──────────────────────────────
-const TOTAL_EMPLOYEES = 1470;
 const AGENTS = [
-  { n: 'Structura', c: '#d93954', i: '📊', desc: '정형 데이터' },
-  { n: 'Cognita',   c: '#2563eb', i: '🔗', desc: '관계망' },
-  { n: 'Chronos',   c: '#e8721a', i: '📈', desc: '시계열' },
-  { n: 'Sentio',    c: '#7c3aed', i: '💬', desc: '감성' },
-  { n: 'Agora',     c: '#2ea44f', i: '🎯', desc: '외부시장' },
+  { id: 'structura', label: 'Structura',  sub: '정형 데이터 분석',  color: C.red    },
+  { id: 'cognita',   label: 'Cognita',    sub: '관계망 분석',       color: C.blue   },
+  { id: 'chronos',   label: 'Chronos',    sub: '시계열 행동 분석',  color: C.orange },
+  { id: 'sentio',    label: 'Sentio',     sub: '자연어 감성 분석',  color: C.purple },
+  { id: 'agora',     label: 'Agora',      sub: '외부 시장 분석',    color: C.green  },
 ];
 
-/* ── phases: 'idle' | 'init' | 'dispatch' | 'scanning' | 'synthesize' | 'done' ── */
-const AgentWorkflow = ({ isDark }) => {
-  const [phase, setPhase] = useState('idle');
-  const [agentProgress, setAgentProgress] = useState([0, 0, 0, 0, 0]);
-  const [agentEmpId, setAgentEmpId] = useState([0, 0, 0, 0, 0]);
-  const [synProgress, setSynProgress] = useState(0);
-  const [cycleCount, setCycleCount] = useState(0);
-  const cancelRef = useRef(false);
-  const frameRef = useRef(null);
-
-  useEffect(() => {
-    cancelRef.current = false;
-    const wait = (ms) => new Promise(r => { const t = setTimeout(r, ms); return () => clearTimeout(t); });
-
-    const runCycle = async () => {
-      while (!cancelRef.current) {
-        // Phase: idle
-        setPhase('idle');
-        setAgentProgress([0, 0, 0, 0, 0]);
-        setAgentEmpId([0, 0, 0, 0, 0]);
-        setSynProgress(0);
-        await wait(1200);
-        if (cancelRef.current) return;
-
-        // Phase: init
-        setPhase('init');
-        await wait(1000);
-        if (cancelRef.current) return;
-
-        // Phase: dispatch
-        setPhase('dispatch');
-        await wait(800);
-        if (cancelRef.current) return;
-
-        // Phase: scanning — all 5 agents scan 1470 employees simultaneously
-        setPhase('scanning');
-        const speeds = [1.0, 0.85, 0.92, 0.78, 0.95]; // each agent slightly different speed
-        const prog = [0, 0, 0, 0, 0];
-        const empIds = [0, 0, 0, 0, 0];
-        const sampleIds = Array.from({ length: TOTAL_EMPLOYEES }, (_, i) => i + 1);
-        // shuffle for random-looking employee IDs
-        for (let k = sampleIds.length - 1; k > 0; k--) {
-          const j = Math.floor(Math.random() * (k + 1));
-          [sampleIds[k], sampleIds[j]] = [sampleIds[j], sampleIds[k]];
-        }
-
-        await new Promise((resolve) => {
-          const start = performance.now();
-          const SCAN_DURATION = 6000; // 6 seconds to scan all
-          const tick = (now) => {
-            if (cancelRef.current) { resolve(); return; }
-            const elapsed = now - start;
-            const baseT = Math.min(elapsed / SCAN_DURATION, 1);
-            // ease-in-out for smoother feel
-            const eased = baseT < 0.5
-              ? 2 * baseT * baseT
-              : 1 - Math.pow(-2 * baseT + 2, 2) / 2;
-
-            let allDone = true;
-            for (let i = 0; i < 5; i++) {
-              const agentT = Math.min(eased * (1 / speeds[i]), 1);
-              prog[i] = Math.floor(agentT * TOTAL_EMPLOYEES);
-              empIds[i] = prog[i] > 0 ? sampleIds[Math.min(prog[i] - 1, TOTAL_EMPLOYEES - 1)] : 0;
-              if (prog[i] < TOTAL_EMPLOYEES) allDone = false;
-            }
-            setAgentProgress([...prog]);
-            setAgentEmpId([...empIds]);
-
-            if (allDone) {
-              resolve();
-            } else {
-              frameRef.current = requestAnimationFrame(tick);
-            }
-          };
-          frameRef.current = requestAnimationFrame(tick);
-        });
-        if (cancelRef.current) return;
-
-        // small pause after all agents done
-        await wait(600);
-        if (cancelRef.current) return;
-
-        // Phase: synthesize — combining results
-        setPhase('synthesize');
-        await new Promise((resolve) => {
-          const start = performance.now();
-          const SYN_DURATION = 2500;
-          const tick = (now) => {
-            if (cancelRef.current) { resolve(); return; }
-            const t = Math.min((now - start) / SYN_DURATION, 1);
-            const count = Math.floor(t * TOTAL_EMPLOYEES);
-            setSynProgress(count);
-            if (count >= TOTAL_EMPLOYEES) { resolve(); return; }
-            frameRef.current = requestAnimationFrame(tick);
-          };
-          frameRef.current = requestAnimationFrame(tick);
-        });
-        if (cancelRef.current) return;
-
-        // Phase: done
-        setPhase('done');
-        setCycleCount(c => c + 1);
-        await wait(4000);
-      }
-    };
-
-    runCycle();
-    return () => {
-      cancelRef.current = true;
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    };
-  }, []);
-
-  const supActive = phase !== 'idle';
-  const dispFlow = phase === 'dispatch' || phase === 'scanning' || phase === 'synthesize' || phase === 'done';
-  const isScanning = phase === 'scanning';
-  const resultFlow = phase === 'synthesize' || phase === 'done';
-  const synActive = phase === 'synthesize' || phase === 'done';
-  const allDone = phase === 'done';
-
-  const totalScanned = agentProgress.reduce((s, v) => s + v, 0);
-  const overallPct = Math.min(totalScanned / (TOTAL_EMPLOYEES * 5) * 100, 100);
-
-  const card = { borderRadius: 10, padding: '0 8px', fontFamily: 'inherit', transition: 'all 0.45s' };
-  const C = isDark ? { bg: '#151c2c', sub: '#6b7280' } : { bg: '#fff', sub: '#888' };
-
-  // Dynamic status message
-  const getStatusMsg = () => {
-    switch (phase) {
-      case 'idle': return '시스템 대기 중...';
-      case 'init': return `Supervisor Agent: ${TOTAL_EMPLOYEES}명 직원 분석 요청 수신`;
-      case 'dispatch': return 'Worker Agents에게 작업 분배 중...';
-      case 'scanning': {
-        const done = agentProgress.filter(p => p >= TOTAL_EMPLOYEES).length;
-        const scanning = agentProgress.filter(p => p > 0 && p < TOTAL_EMPLOYEES).length;
-        if (done === 5) return '모든 Agent 분석 완료 ✓';
-        return `분석 진행 중 — ${done}/5 완료, ${scanning}개 스캔 중...`;
-      }
-      case 'synthesize':
-        return `Synthesize: 결과 종합 중... ${synProgress.toLocaleString()}/${TOTAL_EMPLOYEES.toLocaleString()}`;
-      case 'done':
-        return `✓ ${TOTAL_EMPLOYEES.toLocaleString()}명 분석 완료 — 사이클 #${cycleCount}`;
-      default: return '';
-    }
-  };
-
-  // Progress bar component
-  const ProgressBar = ({ pct, color, height = 3 }) => (
-    <div style={{
-      width: '100%', height, borderRadius: height / 2,
-      background: isDark ? '#1a2333' : '#e8e8e8', overflow: 'hidden',
-    }}>
-      <div style={{
-        width: `${pct}%`, height: '100%', borderRadius: height / 2,
-        background: pct >= 100
-          ? color
-          : `repeating-linear-gradient(90deg,${color},${color} 8px,${color}cc 8px,${color}cc 16px)`,
-        backgroundSize: pct < 100 ? '20px 100%' : 'auto',
-        animation: pct > 0 && pct < 100 ? 'barStripe 0.6s linear infinite' : 'none',
-        transition: 'width 0.15s linear',
-      }} />
-    </div>
-  );
-
+/* ── custom node: Supervisor ── */
+const SupervisorNode = ({ data }) => {
+  const { phase } = data;
+  const pulse = phase === 'supervisor' || phase === 'dispatching';
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none' }}>
-      {/* Status badge */}
-      <div style={{
-        marginBottom: 10, fontSize: 11, fontWeight: 600,
-        color: allDone ? '#2ea44f' : '#d93954',
-        background: allDone ? '#e6f6ec' : '#fde8ec',
-        padding: '4px 14px', borderRadius: 20,
-        transition: 'all 0.4s',
-        animation: isScanning ? 'scanPulse 1.5s ease-in-out infinite' : 'fadeSlide 0.3s ease',
-        minWidth: 280, textAlign: 'center',
-      }}>
-        {getStatusMsg()}
-      </div>
-
-      {/* Overall progress bar */}
-      {(isScanning || phase === 'synthesize') && (
-        <div style={{ width: '90%', marginBottom: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.sub, marginBottom: 3 }}>
-            <span>전체 진행률</span>
-            <span style={{ fontWeight: 700, color: '#d93954', fontVariantNumeric: 'tabular-nums' }}>
-              {phase === 'synthesize'
-                ? `종합 ${synProgress.toLocaleString()} / ${TOTAL_EMPLOYEES.toLocaleString()}`
-                : `${Math.round(overallPct)}%`}
-            </span>
-          </div>
-          <ProgressBar pct={phase === 'synthesize' ? (synProgress / TOTAL_EMPLOYEES * 100) : overallPct} color="#d93954" height={4} />
+    <div style={{
+      background: pulse ? '#1e293b' : '#0f172a',
+      border: `2px solid ${pulse ? '#60a5fa' : '#334155'}`,
+      borderRadius: 12, padding: '12px 24px', color: '#fff',
+      minWidth: 180, textAlign: 'center',
+      boxShadow: pulse ? '0 0 18px rgba(96,165,250,0.45)' : '0 2px 8px rgba(0,0,0,.3)',
+      transition: 'all 0.4s ease',
+    }}>
+      <div style={{ fontSize: 18, marginBottom: 4 }}>🧠</div>
+      <div style={{ fontWeight: 700, fontSize: 13 }}>Supervisor Agent</div>
+      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>오케스트레이션</div>
+      {pulse && (
+        <div style={{ fontSize: 10, color: '#60a5fa', marginTop: 6 }}>
+          ● 워커 에이전트 배분 중...
         </div>
       )}
+    </div>
+  );
+};
 
-      {/* Supervisor */}
+/* ── custom node: Worker Agent ── */
+const AgentNode = ({ data }) => {
+  const { label, sub, color, status } = data;
+  const isActive = status === 'active';
+  const isDone   = status === 'done';
+
+  const bg     = isActive ? `${color}22` : isDone ? `${color}11` : '#f8fafc';
+  const border = isActive ? color : isDone ? `${color}88` : '#e2e8f0';
+  const tc     = isActive || isDone ? color : '#64748b';
+
+  return (
+    <div style={{
+      background: bg, border: `2px solid ${border}`,
+      borderRadius: 12, padding: '10px 18px',
+      minWidth: 130, textAlign: 'center',
+      boxShadow: isActive ? `0 0 14px ${color}55` : '0 1px 4px rgba(0,0,0,.08)',
+      transition: 'all 0.3s ease',
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 12, color: tc }}>{label}</div>
+      <div style={{ fontSize: 10, color: isActive ? color : '#94a3b8', marginTop: 2 }}>{sub}</div>
+      {isActive && <div style={{ fontSize: 9, color, marginTop: 5 }}>● 분석 중...</div>}
+      {isDone   && <div style={{ fontSize: 9, color, marginTop: 5 }}>✓ 완료</div>}
+    </div>
+  );
+};
+
+/* ── custom node: Synthesize ── */
+const SynthesizeNode = ({ data }) => {
+  const { active, done } = data;
+  const color = active || done ? '#f59e0b' : '#94a3b8';
+  return (
+    <div style={{
+      background: active ? '#fffbeb' : done ? '#fefce8' : '#f8fafc',
+      border: `2px solid ${active ? '#f59e0b' : done ? '#fde68a' : '#e2e8f0'}`,
+      borderRadius: 12, padding: '12px 24px',
+      minWidth: 180, textAlign: 'center',
+      boxShadow: active ? '0 0 18px rgba(245,158,11,0.4)' : '0 1px 4px rgba(0,0,0,.06)',
+      transition: 'all 0.4s ease',
+    }}>
+      <div style={{ fontSize: 18, marginBottom: 4 }}>⚡</div>
+      <div style={{ fontWeight: 700, fontSize: 13, color }}>Synthesize Agent</div>
+      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>통합 분석 & 최종 판단</div>
+      {active && <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 6 }}>● 종합 분석 중...</div>}
+      {done   && <div style={{ fontSize: 10, color: '#16a34a', marginTop: 6 }}>✓ 분석 완료</div>}
+    </div>
+  );
+};
+
+const NODE_TYPES = {
+  supervisor: SupervisorNode,
+  agent:      AgentNode,
+  synthesize: SynthesizeNode,
+};
+
+/* ── build nodes ── */
+const buildNodes = (phase, agentStatuses) => {
+  const isSynth = phase === 'synthesizing';
+  const isDone  = phase === 'done';
+  return [
+    {
+      id: 'supervisor', type: 'supervisor',
+      position: { x: 310, y: 20 },
+      data: { phase },
+      draggable: false,
+    },
+    ...AGENTS.map((ag, i) => ({
+      id: ag.id, type: 'agent',
+      position: { x: i * 160, y: 190 },
+      data: { label: ag.label, sub: ag.sub, color: ag.color, status: agentStatuses[ag.id] || 'idle' },
+      draggable: false,
+    })),
+    {
+      id: 'synthesize', type: 'synthesize',
+      position: { x: 310, y: 360 },
+      data: { active: isSynth, done: isDone },
+      draggable: false,
+    },
+  ];
+};
+
+/* ── build edges ── */
+const buildEdges = (phase, agentStatuses) => {
+  const dispatching = ['dispatching', 'analyzing', 'synthesizing', 'done'].includes(phase);
+  const synthActive = phase === 'synthesizing' || phase === 'done';
+
+  return [
+    ...AGENTS.map(ag => ({
+      id: `sup-${ag.id}`, source: 'supervisor', target: ag.id,
+      animated: dispatching,
+      style: { stroke: dispatching ? ag.color : '#cbd5e1', strokeWidth: dispatching ? 2 : 1 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: dispatching ? ag.color : '#cbd5e1' },
+    })),
+    ...AGENTS.map(ag => {
+      const active = synthActive && agentStatuses[ag.id] === 'done';
+      return {
+        id: `${ag.id}-syn`, source: ag.id, target: 'synthesize',
+        animated: active,
+        style: { stroke: active ? ag.color : '#cbd5e1', strokeWidth: active ? 2 : 1 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: active ? ag.color : '#cbd5e1' },
+      };
+    }),
+  ];
+};
+
+/* ── chat message ── */
+const ChatMsg = ({ msg }) => {
+  const isUser = msg.role === 'user';
+  return (
+    <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+      {!isUser && (
+        <div style={{
+          width: 28, height: 28, borderRadius: '50%',
+          background: 'linear-gradient(135deg,#0f172a,#2563eb)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, color: '#fff', flexShrink: 0, marginRight: 8, marginTop: 2,
+        }}>AI</div>
+      )}
       <div style={{
-        ...card,
-        padding: '8px 28px', fontWeight: 700, fontSize: 12,
-        background: supActive ? '#2d2d2d' : (isDark ? '#1e2a3a' : '#f0f0f0'),
-        color: supActive ? '#fff' : C.sub,
-        border: supActive ? '2px solid #d93954' : `2px solid ${isDark ? '#2a3a4a' : '#e0e0e0'}`,
-        boxShadow: supActive ? '0 0 20px rgba(217,57,84,.45)' : 'none',
-        animation: (phase === 'init' || phase === 'dispatch') ? 'progressGlow 1.5s ease-in-out infinite' : 'none',
+        maxWidth: '78%',
+        background: isUser ? '#2563eb' : 'var(--card,#fff)',
+        color: isUser ? '#fff' : 'var(--text,#1e293b)',
+        borderRadius: isUser ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
+        padding: '10px 14px', fontSize: 13, lineHeight: 1.65,
+        boxShadow: '0 1px 4px rgba(0,0,0,.08)',
+        border: isUser ? 'none' : '1px solid var(--border,#e2e8f0)',
+        whiteSpace: 'pre-wrap',
       }}>
-        🤖 Supervisor Agent
-        {supActive && (
-          <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 8, opacity: 0.8 }}>
-            ({TOTAL_EMPLOYEES.toLocaleString()}명)
-          </span>
-        )}
-      </div>
-
-      {/* Arrow: Supervisor → Agents */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 28, justifyContent: 'center' }}>
-        <div style={{
-          width: 2, height: 18,
-          background: dispFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0'),
-          animation: dispFlow ? 'flowPulse 0.9s ease-in-out infinite' : 'none',
-          transition: 'background 0.4s',
-        }} />
-        <div style={{
-          width: 0, height: 0,
-          borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
-          borderTop: `6px solid ${dispFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
-          transition: 'border-color 0.4s',
-        }} />
-      </div>
-
-      {/* Agents row */}
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', width: '100%' }}>
-        {AGENTS.map((a, i) => {
-          const pct = (agentProgress[i] / TOTAL_EMPLOYEES) * 100;
-          const done = agentProgress[i] >= TOTAL_EMPLOYEES;
-          const active = agentProgress[i] > 0;
-          return (
-            <div key={a.n} style={{
-              border: `2px solid ${done ? a.c : active ? `${a.c}88` : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
-              borderRadius: 10, padding: '6px 6px 8px', textAlign: 'center', minWidth: 72, flex: '1 1 0',
-              background: done ? `${a.c}1A` : active ? `${a.c}0A` : (isDark ? '#1e2a3a' : '#fafafa'),
-              color: active ? a.c : C.sub,
-              boxShadow: done ? `0 0 14px ${a.c}55` : active ? `0 0 6px ${a.c}22` : 'none',
-              transition: 'all 0.3s',
-            }}>
-              <div style={{ fontSize: 16, marginBottom: 1 }}>{a.i}</div>
-              <div style={{ fontSize: 10, fontWeight: 700 }}>{a.n}</div>
-              <div style={{ fontSize: 9, marginTop: 1, color: active ? a.c : (isDark ? '#3a4a5a' : '#ccc') }}>
-                {a.desc}
-              </div>
-              {/* Progress bar per agent */}
-              <div style={{ margin: '4px 0 2px', padding: '0 2px' }}>
-                <ProgressBar pct={pct} color={a.c} height={3} />
-              </div>
-              {/* Count / Employee ID */}
-              <div style={{ fontSize: 9, fontWeight: 600, minHeight: 14, fontVariantNumeric: 'tabular-nums' }}>
-                {done ? (
-                  <span style={{ color: '#2ea44f' }}>✓ {TOTAL_EMPLOYEES.toLocaleString()}</span>
-                ) : active ? (
-                  <span style={{ color: a.c, animation: 'scanPulse 0.8s ease infinite' }}>
-                    #{agentEmpId[i]} ({agentProgress[i].toLocaleString()}/{TOTAL_EMPLOYEES.toLocaleString()})
-                  </span>
-                ) : (
-                  <span style={{ color: C.sub }}>대기</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Arrow: Agents → Synthesize */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 28, justifyContent: 'center' }}>
-        <div style={{
-          width: 0, height: 0,
-          borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
-          borderBottom: `6px solid ${resultFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0')}`,
-          transition: 'border-color 0.4s',
-        }} />
-        <div style={{
-          width: 2, height: 18,
-          background: resultFlow ? '#d93954' : (isDark ? '#2a3a4a' : '#e0e0e0'),
-          animation: resultFlow ? 'flowPulse 0.9s ease-in-out infinite' : 'none',
-          transition: 'background 0.4s',
-        }} />
-      </div>
-
-      {/* Synthesize */}
-      <div style={{
-        ...card,
-        padding: '8px 28px', fontWeight: 700, fontSize: 12,
-        background: synActive ? (allDone ? '#2ea44f' : '#d93954') : (isDark ? '#1e2a3a' : '#f0f0f0'),
-        color: synActive ? '#fff' : C.sub,
-        border: synActive ? `2px solid ${allDone ? '#2ea44f' : '#d93954'}` : `2px solid ${isDark ? '#2a3a4a' : '#e0e0e0'}`,
-        boxShadow: synActive ? `0 0 24px ${allDone ? 'rgba(46,164,79,.55)' : 'rgba(217,57,84,.55)'}` : 'none',
-        transition: 'all 0.5s',
-      }}>
-        ⚡ Synthesize Agent
-        {synActive && (
-          <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 8, opacity: 0.8 }}>
-            {allDone ? '✓ 완료' : `${synProgress.toLocaleString()}/${TOTAL_EMPLOYEES.toLocaleString()}`}
-          </span>
-        )}
-      </div>
-
-      {/* Legend + stats */}
-      <div style={{ display: 'flex', gap: 12, marginTop: 10, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: C.sub }}>
-          <div style={{ width: 20, height: 3, background: '#d93954', borderRadius: 2 }} /> 데이터 흐름
-        </div>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: C.sub }}>
-          <div style={{ width: 8, height: 8, background: '#2ea44f', borderRadius: '50%' }} /> 완료
-        </div>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: C.sub }}>
-          <div style={{ width: 8, height: 8, background: isDark ? '#2a3a4a' : '#e0e0e0', borderRadius: '50%', border: '1px solid #ccc' }} /> 대기
-        </div>
-        {cycleCount > 0 && (
-          <div style={{ fontSize: 10, color: C.sub, marginLeft: 4, fontVariantNumeric: 'tabular-nums' }}>
-            | 완료 사이클: {cycleCount}
-          </div>
+        {msg.content}
+        {msg.typing && (
+          <span style={{
+            display: 'inline-block', width: 6, height: 14,
+            background: '#2563eb', marginLeft: 3,
+            animation: 'cursor-blink 1s steps(1) infinite',
+          }} />
         )}
       </div>
     </div>
   );
 };
 
-// ──────────────────────────── HomeMain Component ─────────────────────────────
-const HomeMain = ({ globalBatchResults, lastAnalysisTimestamp }) => {
-  const [chatMessages, setChatMessages] = useState([]);
-  const [currentMessage, setCurrentMessage] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [predictionHistory, setPredictionHistory] = useState([]);
-  const [typingMessageId, setTypingMessageId] = useState(null);
-  const [typingText, setTypingText] = useState('');
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [userHasSentMessage, setUserHasSentMessage] = useState(false);
-  const chatEndRef = useRef(null);
-  const typingIntervalRef = useRef(null);
-  const welcomeMessageShown = useRef(false);
-
-  // Detect dark mode from CSS variable
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const check = () => {
-      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-      setIsDark(bg === '#0e1525' || bg.startsWith('#0'));
-    };
-    check();
-    const obs = new MutationObserver(check);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
-    return () => obs.disconnect();
-  }, []);
-
-  const C = {
-    card: 'var(--card,#fff)', border: 'var(--border,#eee)',
-    sub: 'var(--sub,#888)', text: 'var(--text,#2d2d2d)', bg: 'var(--bg,#fafafa)',
-  };
-  const cardS = {
-    background: C.card, borderRadius: 12, padding: 20,
-    border: `1px solid ${C.border}`, boxShadow: '0 1px 4px rgba(0,0,0,.06)',
-  };
-  const secTitle = (icon, title) => (
-    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
-      <span style={{ color: '#d93954' }}>{icon}</span> {title}
-    </div>
+/* ── main component ── */
+const HomeMain = () => {
+  const [messages, setMessages]    = useState([
+    { role: 'assistant', content: '안녕하세요! HR Agentic AI 시스템입니다.\n분석하고 싶은 직원 정보나 퇴사 위험 현황에 대해 질문해 주세요.' },
+  ]);
+  const [input, setInput]          = useState('');
+  const [loading, setLoading]      = useState(false);
+  const [phase, setPhase]          = useState('idle');
+  const [agentStatuses, setAgents] = useState(
+    Object.fromEntries(AGENTS.map(a => [a.id, 'idle']))
   );
 
-  // ── typing effect ──
-  const startTypingEffect = useCallback((messageId, fullText, onComplete, shouldScroll = true) => {
-    if (typingIntervalRef.current) clearTimeout(typingIntervalRef.current);
-    setTypingMessageId(messageId);
-    setTypingText('');
-    let idx = 0;
-    const type = () => {
-      if (idx < fullText.length) {
-        setTypingText(fullText.substring(0, idx + 1));
-        idx++;
-        if (shouldScroll && userHasSentMessage && !isInitialLoad)
-          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 10);
-        const ch = fullText[idx - 1];
-        const d = ch === '.' || ch === '!' || ch === '?' ? 300 : ch === '\n' ? 200 : ch === ',' ? 150 : 25;
-        typingIntervalRef.current = setTimeout(type, d);
-      } else {
-        setTypingMessageId(null);
-        setTypingText('');
-        if (onComplete) onComplete();
-      }
-    };
-    typingIntervalRef.current = setTimeout(type, 25);
-  }, [userHasSentMessage, isInitialLoad]);
-
-  useEffect(() => { loadPredictionHistory(); }, []);
+  const chatEndRef  = useRef(null);
+  const timerIds    = useRef([]);
 
   useEffect(() => {
-    if (welcomeMessageShown.current) return;
-    const content = '안녕하세요! Retain Sentinel 360 AI 어시스턴트입니다. 분석 결과에 대해 질문하실 수 있습니다.';
-    const msg = { id: 1, type: 'bot', content, timestamp: new Date().toISOString() };
-    welcomeMessageShown.current = true;
-    setTimeout(() => startTypingEffect(msg.id, content, () => { setChatMessages([msg]); setIsInitialLoad(false); }, false), 500);
-  }, [predictionHistory, startTypingEffect]);
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  useEffect(() => { return () => { if (typingIntervalRef.current) clearTimeout(typingIntervalRef.current); }; }, []);
-
-  const loadPredictionHistory = async () => {
-    try {
-      const response = await fetch(`${INTEGRATION_URL}/api/results/list-all-employees`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.results && data.results.length > 0) {
-          const h = data.results.filter(r => r.risk_level === 'HIGH').length;
-          const m = data.results.filter(r => r.risk_level === 'MEDIUM').length;
-          const l = data.results.filter(r => r.risk_level === 'LOW').length;
-          setPredictionHistory([{ id: 'latest', totalEmployees: data.total_employees, highRiskCount: h, mediumRiskCount: m, lowRiskCount: l }]);
-          return;
-        }
-      }
-      setPredictionHistory([]);
-    } catch { setPredictionHistory([]); }
+  const clearTimers = () => {
+    timerIds.current.forEach(clearTimeout);
+    timerIds.current = [];
   };
 
-  const handleSendMessage = async () => {
-    if (!currentMessage.trim()) return;
-    setUserHasSentMessage(true);
-    const userMsg = { id: Date.now(), type: 'user', content: currentMessage, timestamp: new Date().toISOString() };
-    setChatMessages(prev => [...prev, userMsg]);
-    const msg = currentMessage;
-    setCurrentMessage('');
-    setChatLoading(true);
+  const schedule = (fn, delay) => {
+    const id = setTimeout(fn, delay);
+    timerIds.current.push(id);
+  };
+
+  const runWorkflow = useCallback(() => {
+    clearTimers();
+    setPhase('supervisor');
+    setAgents(Object.fromEntries(AGENTS.map(a => [a.id, 'idle'])));
+
+    schedule(() => setPhase('dispatching'), 600);
+
+    AGENTS.forEach((ag, i) => {
+      schedule(() => setAgents(prev => ({ ...prev, [ag.id]: 'active' })), 1200 + i * 280);
+    });
+
+    AGENTS.forEach((ag, i) => {
+      schedule(() => setAgents(prev => ({ ...prev, [ag.id]: 'done' })), 2800 + i * 240);
+    });
+
+    schedule(() => setPhase('synthesizing'), 4100);
+    schedule(() => setPhase('done'), 5700);
+  }, []);
+
+  const typeResponse = useCallback((text) => {
+    const id = Date.now();
+    let i = 0;
+    setMessages(prev => [...prev, { role: 'assistant', content: '', typing: true, id }]);
+    const ticker = setInterval(() => {
+      i++;
+      setMessages(prev =>
+        prev.map(m => m.id === id ? { ...m, content: text.slice(0, i), typing: i < text.length } : m)
+      );
+      if (i >= text.length) clearInterval(ticker);
+    }, 18);
+  }, []);
+
+  const handleSend = useCallback(async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    setLoading(true);
+    runWorkflow();
+
     try {
-      const ctx = predictionHistory[0] || {};
-      const resp = await fetch(`${SUPERVISOR_URL}/api/chat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, context: ctx }),
+      const res  = await fetch(`${SUPERVISOR_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const content = data.fallback_response || data.response;
-      const bot = { id: Date.now() + 1, type: 'bot', content, timestamp: new Date().toISOString() };
-      startTypingEffect(bot.id, content, () => setChatMessages(prev => [...prev, bot]), true);
+      const data = await res.json();
+      typeResponse(data.response || data.message || '분석을 완료했습니다.');
     } catch {
-      const bot = { id: Date.now() + 1, type: 'bot', content: 'AI 서버에 연결할 수 없습니다.', timestamp: new Date().toISOString() };
-      setChatMessages(prev => [...prev, bot]);
-    } finally { setChatLoading(false); }
-  };
+      typeResponse('서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setLoading(false);
+    }
+  }, [input, loading, runWorkflow, typeResponse]);
 
-  const handleKeyPress = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } };
+  const handleKey = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }, [handleSend]);
+
+  /* ReactFlow state synced from phase/agentStatuses */
+  const rfNodes = useMemo(() => buildNodes(phase, agentStatuses), [phase, agentStatuses]);
+  const rfEdges = useMemo(() => buildEdges(phase, agentStatuses), [phase, agentStatuses]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(rfEdges);
+
+  useEffect(() => setNodes(rfNodes), [rfNodes, setNodes]);
+  useEffect(() => setEdges(rfEdges), [rfEdges, setEdges]);
+
+  const phaseLabel = {
+    supervisor:  '🧠 Supervisor 요청 수신...',
+    dispatching: '📡 Worker Agent 배분 중...',
+    analyzing:   '🔍 Agent 분석 진행 중...',
+    synthesizing:'⚡ Synthesize Agent 통합 분석 중...',
+    done:        '✅ 분석 완료',
+  }[phase] || '';
+
+  const QUICK_PROMPTS = [
+    '고위험 직원 현황을 알려줘',
+    'R&D 부서 퇴사 위험 분석해줘',
+    'P01 번아웃 직원 개입 전략은?',
+    '최근 이상 행동 패턴 보고해줘',
+  ];
 
   return (
-    <div>
-      {/* ── Program Description Banner ── */}
+    <div style={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+      <style>{`
+        @keyframes cursor-blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        .react-flow__attribution { display:none !important; }
+      `}</style>
+
+      {/* ── LEFT: workflow diagram ── */}
       <div style={{
-        background: 'linear-gradient(135deg, #2d2d2d 0%, #1a1a2e 60%, #16213e 100%)',
-        borderRadius: 14, padding: '24px 28px', marginBottom: 20, color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap',
-        boxShadow: '0 4px 20px rgba(0,0,0,.18)',
+        flex: '0 0 55%', display: 'flex', flexDirection: 'column',
+        borderRight: '1px solid var(--border,#e2e8f0)',
+        background: 'var(--bg,#f8fafc)',
       }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ background: '#d93954', borderRadius: 8, padding: '4px 12px', fontSize: 13 }}>
-              Retain Sentinel 360
-            </span>
-          </div>
-          <div style={{ fontSize: 14, color: '#e0e0e0', fontWeight: 600, marginBottom: 6 }}>
-            Agentic AI 기반 선제적 퇴사위험 예측 및 관리 시스템
-          </div>
-          <div style={{ fontSize: 12, color: '#aaa', lineHeight: 1.7 }}>
-            5개 전문 Worker Agent(Structura · Cognita · Chronos · Sentio · Agora)의
-            다차원 분석을 통해 조직 인재 이탈 위험을 360도 관점으로 진단하고 선제적 개입 전략을 제시합니다.
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[
-            { n: 'Structura', c: 'rgba(217,57,84,.25)', b: 'rgba(217,57,84,.6)', d: '정형 데이터' },
-            { n: 'Cognita',   c: 'rgba(37,99,235,.25)',  b: 'rgba(37,99,235,.6)',  d: '관계망' },
-            { n: 'Chronos',   c: 'rgba(232,114,26,.25)', b: 'rgba(232,114,26,.6)', d: '시계열' },
-            { n: 'Sentio',    c: 'rgba(124,58,237,.25)', b: 'rgba(124,58,237,.6)', d: '자연어' },
-            { n: 'Agora',     c: 'rgba(46,164,79,.25)',  b: 'rgba(46,164,79,.6)',  d: '외부시장' },
-          ].map(a => (
-            <div key={a.n} style={{
-              padding: '6px 14px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-              background: a.c, border: `1px solid ${a.b}`, textAlign: 'center', color: '#fff',
-            }}>
-              {a.n}<br /><span style={{ fontSize: 10, fontWeight: 400, color: '#ccc' }}>{a.d}</span>
+        {/* header bar */}
+        <div style={{
+          padding: '14px 20px',
+          background: 'linear-gradient(135deg,#0f172a 0%,#1a1a2e 100%)',
+          color: '#fff', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>Agentic AI Workflow</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+              5개 Worker Agent 기반 퇴사위험 분석 파이프라인
             </div>
-          ))}
+          </div>
+          {phase !== 'idle' && (
+            <div style={{
+              fontSize: 11, color: '#60a5fa',
+              background: 'rgba(96,165,250,0.15)',
+              border: '1px solid rgba(96,165,250,0.3)',
+              padding: '4px 12px', borderRadius: 20,
+            }}>
+              {phaseLabel}
+            </div>
+          )}
+        </div>
+
+        {/* canvas */}
+        <div style={{ flex: 1, position: 'relative' }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeTypes={NODE_TYPES}
+            fitView
+            fitViewOptions={{ padding: 0.3 }}
+            panOnDrag={false}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            zoomOnDoubleClick={false}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+          >
+            <Background color="#e2e8f0" gap={20} size={1} />
+          </ReactFlow>
+        </div>
+
+        {/* agent status chips */}
+        <div style={{
+          padding: '10px 16px', flexShrink: 0,
+          borderTop: '1px solid var(--border,#e2e8f0)',
+          background: 'var(--card,#fff)',
+          display: 'flex', gap: 6, flexWrap: 'wrap',
+        }}>
+          {AGENTS.map(ag => {
+            const st = agentStatuses[ag.id];
+            return (
+              <span key={ag.id} style={{
+                padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: st !== 'idle' ? `${ag.color}15` : '#f1f5f9',
+                border: `1px solid ${st !== 'idle' ? ag.color + '55' : '#e2e8f0'}`,
+                color: st !== 'idle' ? ag.color : '#94a3b8',
+                transition: 'all 0.3s',
+              }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: st !== 'idle' ? ag.color : '#cbd5e1',
+                  display: 'inline-block',
+                }} />
+                {ag.label}
+                {st === 'active' && ' ···'}
+                {st === 'done'   && ' ✓'}
+              </span>
+            );
+          })}
         </div>
       </div>
 
-      {/* ── Workflow + Chat ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 16, marginBottom: 20 }}>
-
-        {/* Workflow card */}
-        <div style={cardS}>
-          {secTitle('⚡', '에이전트 워크플로우 (실시간)')}
-          <AgentWorkflow isDark={isDark} />
-          <div style={{ marginTop: 16, padding: '10px 12px', background: isDark ? '#1e2a3a' : '#f8f8f9', borderRadius: 8, fontSize: 11, color: C.sub, lineHeight: 1.6 }}>
-            <strong style={{ color: '#d93954' }}>데이터 흐름:</strong>&nbsp;
-            데이터 수집 → Supervisor 분배 → 개별 Agent 분석 → Synthesize 종합 → 위험도 산출
+      {/* ── RIGHT: chat panel ── */}
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        background: 'var(--bg,#f8fafc)', minWidth: 0,
+      }}>
+        {/* chat header */}
+        <div style={{
+          padding: '14px 20px', flexShrink: 0,
+          background: 'var(--card,#fff)',
+          borderBottom: '1px solid var(--border,#e2e8f0)',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text,#1e293b)' }}>
+            HR AI 어시스턴트
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--sub,#94a3b8)', marginTop: 2 }}>
+            퇴사위험 분석 · 개입 전략 · 인사이트
           </div>
         </div>
 
-        {/* Chat card */}
-        <div style={cardS}>
-          {secTitle('🤖', 'AI 어시스턴트')}
-          <div style={{
-            height: 340, overflowY: 'auto', marginBottom: 12, padding: 8,
-            border: `1px solid ${C.border}`, borderRadius: 8, background: C.bg,
-          }}>
-            {chatMessages.map(msg => (
-              <div key={msg.id} style={{ display: 'flex', justifyContent: msg.type === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
-                <div style={{ maxWidth: '72%', display: 'flex', alignItems: 'flex-start', gap: 8, flexDirection: msg.type === 'user' ? 'row-reverse' : 'row' }}>
-                  <Avatar
-                    icon={msg.type === 'user' ? <UserOutlined /> : <RobotOutlined />}
-                    style={{ backgroundColor: msg.type === 'user' ? '#d93954' : '#2ea44f', flexShrink: 0 }}
-                    size="small"
-                  />
-                  <div style={{
-                    padding: '10px 14px', borderRadius: 12, fontSize: 13,
-                    backgroundColor: msg.type === 'user' ? '#d93954' : C.card,
-                    color: msg.type === 'user' ? '#fff' : C.text,
-                    border: msg.type === 'bot' ? `1px solid ${C.border}` : 'none',
-                    whiteSpace: 'pre-line',
-                  }}>
-                    {msg.content}
-                  </div>
-                </div>
-              </div>
+        {/* message list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+          {messages.map((msg, i) => <ChatMsg key={i} msg={msg} />)}
+          {loading && (
+            <div style={{ display: 'flex', gap: 4, paddingLeft: 36, paddingBottom: 8 }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{
+                  width: 7, height: 7, borderRadius: '50%', background: '#94a3b8',
+                  animation: `cursor-blink 1.2s ${i * 0.2}s steps(1) infinite`,
+                }} />
+              ))}
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* quick prompts */}
+        {messages.length <= 1 && (
+          <div style={{ padding: '0 20px 12px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {QUICK_PROMPTS.map(q => (
+              <button
+                key={q}
+                onClick={() => setInput(q)}
+                style={{
+                  background: 'var(--card,#fff)',
+                  border: '1px solid var(--border,#e2e8f0)',
+                  borderRadius: 20, padding: '5px 12px', fontSize: 11,
+                  color: 'var(--sub,#64748b)', cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border,#e2e8f0)'; e.currentTarget.style.color = 'var(--sub,#64748b)'; }}
+              >
+                {q}
+              </button>
             ))}
-            {typingMessageId && (
-              <div style={{ display: 'flex', marginBottom: 12 }}>
-                <div style={{ maxWidth: '72%', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#2ea44f', flexShrink: 0 }} size="small" />
-                  <div style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: C.card, border: `1px solid ${C.border}`, whiteSpace: 'pre-line', fontSize: 13 }}>
-                    {typingText}
-                    <span style={{ display: 'inline-block', width: 2, height: 14, background: '#d93954', marginLeft: 2, animation: 'blink 1s infinite' }} />
-                  </div>
-                </div>
-              </div>
-            )}
-            {chatLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#2ea44f' }} size="small" />
-                <div style={{ padding: '10px 14px', background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, fontSize: 13 }}>
-                  <Spin size="small" /> 응답 생성 중...
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <TextArea
-              value={currentMessage}
-              onChange={e => setCurrentMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="AI 어시스턴트에게 질문하세요... (예: 고위험 직원 현황은?)"
-              autoSize={{ minRows: 1, maxRows: 3 }}
-              style={{ flex: 1 }}
-            />
-            <Button
-              type="primary" icon={<SendOutlined />}
-              onClick={handleSendMessage} loading={chatLoading}
-              disabled={!currentMessage.trim()}
-              style={{ background: '#d93954', borderColor: '#d93954' }}
-            >
-              전송
-            </Button>
-          </div>
+        )}
+
+        {/* input bar */}
+        <div style={{
+          padding: '12px 20px', flexShrink: 0,
+          background: 'var(--card,#fff)',
+          borderTop: '1px solid var(--border,#e2e8f0)',
+          display: 'flex', gap: 10, alignItems: 'flex-end',
+        }}>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="분석하고 싶은 내용을 입력하세요... (Enter로 전송)"
+            rows={1}
+            style={{
+              flex: 1, resize: 'none',
+              border: '1px solid var(--border,#e2e8f0)',
+              borderRadius: 12, padding: '10px 14px',
+              fontSize: 13, lineHeight: 1.5,
+              background: 'var(--bg,#f8fafc)',
+              color: 'var(--text,#1e293b)',
+              outline: 'none', fontFamily: 'inherit',
+              maxHeight: 120, overflowY: 'auto',
+              transition: 'border-color 0.2s',
+            }}
+            onFocus={e => { e.target.style.borderColor = '#2563eb'; }}
+            onBlur={e => { e.target.style.borderColor = 'var(--border,#e2e8f0)'; }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={loading || !input.trim()}
+            style={{
+              background: loading || !input.trim() ? '#94a3b8' : '#2563eb',
+              color: '#fff', border: 'none', borderRadius: 12,
+              padding: '10px 20px', fontSize: 13, fontWeight: 600,
+              cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+              transition: 'background 0.2s', flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {loading ? '분석 중...' : '전송'}
+          </button>
         </div>
       </div>
     </div>
