@@ -242,21 +242,23 @@ const NODE_TYPES = {
 };
 
 const buildNodes = (phase, agentStatuses, scanCounts) => {
-  const isSynth    = ['synthesizing', 'reporting', 'done'].includes(phase);
-  const synthDone  = ['reporting', 'done'].includes(phase);
-  // 5 agents: x = 0,160,320,480,640 (160px spacing, ~135px wide)
-  // Center of span: (640+135)/2 = 387.5 → supervisor/synthesize/report at x=292 (390-98)
-  const CX = 297;
+  const isSynth   = ['synthesizing', 'reporting', 'done'].includes(phase);
+  const synthDone = ['reporting', 'done'].includes(phase);
+  // 5 agents span: x=0..648+138=786, center=393 → Supervisor/Synth/Report x=393-100=293
+  const CX = 293;
+  // Equal vertical gaps: Supervisor(h≈115) + 60 = Agents y=175
+  //                      Agents(h≈95)    + 60 = Synthesize y=330
+  //                      Synthesize(h≈115)+ 60 = Report y=505
   return [
-    { id: 'supervisor', type: 'supervisor', position: { x: CX, y: 20 },  data: { phase },        draggable: false },
+    { id: 'supervisor', type: 'supervisor', position: { x: CX, y: 0   }, data: { phase }, draggable: false },
     ...AGENTS.map((ag, i) => ({
       id: ag.id, type: 'agent',
-      position: { x: i * 162, y: 185 },
+      position: { x: i * 162, y: 175 },
       data: { label: ag.label, sub: ag.sub, color: ag.color, status: agentStatuses[ag.id] || 'idle', scanCount: scanCounts[ag.id] || 0 },
       draggable: false,
     })),
-    { id: 'synthesize', type: 'synthesize', position: { x: CX, y: 360 }, data: { active: isSynth && !synthDone, done: synthDone }, draggable: false },
-    { id: 'report',     type: 'report',     position: { x: CX, y: 535 }, data: { phase },        draggable: false },
+    { id: 'synthesize', type: 'synthesize', position: { x: CX, y: 330 }, data: { active: isSynth && !synthDone, done: synthDone }, draggable: false },
+    { id: 'report',     type: 'report',     position: { x: CX, y: 505 }, data: { phase }, draggable: false },
   ];
 };
 
@@ -283,7 +285,7 @@ const buildEdges = (phase, agentStatuses) => {
     /* Supervisor → each Agent */
     ...AGENTS.map(ag => ({
       id: `sup-${ag.id}`, source: 'supervisor', target: ag.id,
-      type: 'smoothstep', animated: false,
+      type: 'step', animated: false,
       style: dispatched ? activeEdgeStyle(ag.color) : idleEdgeStyle(),
       markerEnd: { type: MarkerType.ArrowClosed, color: dispatched ? ag.color : '#cbd5e1', width: 14, height: 14 },
     })),
@@ -292,7 +294,7 @@ const buildEdges = (phase, agentStatuses) => {
       const flow = synthActive && agentStatuses[ag.id] === 'done';
       return {
         id: `${ag.id}-syn`, source: ag.id, target: 'synthesize',
-        type: 'smoothstep', animated: false,
+        type: 'step', animated: false,
         style: flow ? activeEdgeStyle(ag.color) : idleEdgeStyle(),
         markerEnd: { type: MarkerType.ArrowClosed, color: flow ? ag.color : '#cbd5e1', width: 14, height: 14 },
       };
@@ -300,7 +302,7 @@ const buildEdges = (phase, agentStatuses) => {
     /* Synthesize → Report */
     {
       id: 'syn-rep', source: 'synthesize', target: 'report',
-      type: 'smoothstep', animated: false,
+      type: 'step', animated: false,
       style: repActive ? activeEdgeStyle('#16a34a') : idleEdgeStyle(),
       markerEnd: { type: MarkerType.ArrowClosed, color: repActive ? '#16a34a' : '#cbd5e1', width: 14, height: 14 },
     },
@@ -401,18 +403,19 @@ const PHASE_LABEL = {
 };
 
 /* ─────────────────────────────────────────
-   Attrition keyword detection
+   Workflow trigger: skip only obvious pure greetings.
+   The LLM backend handles real intent judgment — frontend
+   just avoids animating for clearly non-analysis one-liners.
 ───────────────────────────────────────── */
-const ATTRITION_KEYWORDS = [
-  '위험', '퇴사', '이직', '직원', '분석', '부서', '고위험', '번아웃',
-  '인원', '현황', '보고', '리포트', '점수', '예측', '개입', '전략',
-  'r&d', '영업', '인사', '통계', '상위', '하위', '누구', '누가',
-  '몇명', '몇 명', '어느', '얼마', '가장',
-];
+const PURE_GREETING = /^(안녕|하이|헬로|hello|hi|감사|고마워|알겠어|알겠습니다|네|응|ㅎ|ㅋ|ok|okay|오케|좋아|알아)[\s!~ㅎㅋ.]*$/i;
 
-const isAttritionQuery = (text) => {
-  const lower = text.toLowerCase();
-  return ATTRITION_KEYWORDS.some(k => lower.includes(k));
+const needsWorkflow = (text) => {
+  const t = text.trim();
+  // Very short or obvious greeting → skip animation
+  if (t.length <= 5) return false;
+  if (t.length <= 20 && PURE_GREETING.test(t)) return false;
+  // Everything else: let the workflow run (LLM decides quality of response)
+  return true;
 };
 
 /* ─────────────────────────────────────────
@@ -534,7 +537,7 @@ const HomeMain = ({ user }) => {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setLoading(true);
-    if (isAttritionQuery(text)) {
+    if (needsWorkflow(text)) {
       runWorkflow();
     }
     try {
