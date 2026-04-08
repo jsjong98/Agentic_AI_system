@@ -13,9 +13,7 @@ import {
   Spin,
   Alert,
   Space,
-  Select,
-  Input,
-  Divider
+  Select
 } from 'antd';
 import {
   FileTextOutlined,
@@ -27,11 +25,117 @@ import {
 } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
-const { TextArea } = Input;
 const { Option } = Select;
 
 const SUPERVISOR_URL = process.env.REACT_APP_SUPERVISOR_URL || 'http://localhost:5006';
 const INTEGRATION_URL = process.env.REACT_APP_INTEGRATION_URL || 'http://localhost:5007';
+
+// ── 보고서 생성 헬퍼 ──────────────────────────────────────────────────────────
+
+const AGENT_DESCS = {
+  Structura: '정형 데이터 (보상·직무 구조·재직 기간)',
+  Cognita:   '관계망 분석 (협업 네트워크·소속감)',
+  Chronos:   '시계열 행동 (로그인 패턴·이메일·출퇴근)',
+  Sentio:    '자연어 감성 (면담·자기평가 텍스트)',
+  Agora:     '외부 시장 (보상 벤치마크·이직 플랫폼)',
+};
+
+const AGENT_PERSONA = {
+  Structura: { code: 'P04', name: '저평가된 전문가',      desc: '보상 체계 및 직무 구조 불만족이 주요 이탈 요인입니다.' },
+  Chronos:   { code: 'P01', name: '번아웃에 직면한 직원', desc: '과도한 업무 부담과 행동 패턴 이상이 주요 이탈 요인입니다.' },
+  Cognita:   { code: 'P02', name: '온보딩에 실패한 직원', desc: '관계망 단절 및 조직 내 소외감이 주요 이탈 요인입니다.' },
+  Sentio:    { code: 'P01', name: '번아웃에 직면한 직원', desc: '심리적 소진 및 감성적 부정 상태가 주요 이탈 요인입니다.' },
+  Agora:     { code: 'P03', name: '성장이 정체된 직원',   desc: '외부 시장 매력도에 의한 이탈 위험이 높습니다.' },
+};
+
+const AGENT_INTERPRETATION = {
+  Structura: (lv) => `직무 만족도·보상·직급 등 정형 HR 데이터 분석에서 이탈 가능성이 ${lv}으로 측정되었습니다. 동료 대비 보상 격차 또는 직무 설계 문제가 의심됩니다.`,
+  Cognita:   (lv) => `조직 내 협업 네트워크·커뮤니케이션 분석에서 관계망 단절 위험이 ${lv}으로 측정되었습니다. 팀 소속감 약화 및 관계 복원 개입이 필요합니다.`,
+  Chronos:   (lv) => `로그인 패턴·이메일 빈도·업무 시간 등 행동 데이터에서 이직 준비 징후가 ${lv}으로 탐지되었습니다. 즉각적인 행동 모니터링이 필요합니다.`,
+  Sentio:    (lv) => `자기평가·코칭 면담 텍스트에서 부정 감성 지수가 ${lv}으로 측정되었습니다. 심리적 소진 또는 강한 불만족 상태일 가능성이 높습니다.`,
+  Agora:     (lv) => `외부 채용 플랫폼 접속·시장 보상 비교 행동이 ${lv}으로 탐지되었습니다. 경쟁사 또는 외부 기회를 적극적으로 탐색 중일 가능성이 높습니다.`,
+};
+
+const AGENT_INTERVENTIONS = {
+  Structura: [
+    '총체적 보상 체계 재검토 및 시장 경쟁력 확보 (동료 대비 벤치마킹)',
+    '투명한 승진 기준 및 경력 경로 명확화',
+    '직무 범위·업무량 분배 재검토 및 초과근무 구조 개선',
+  ],
+  Cognita: [
+    '관리자 주도 1:1 커뮤니케이션 체계 정기화',
+    '프로젝트 페어링을 통한 협업 기회 확대',
+    '멘토링 프로그램 연계 및 팀 네트워크 복원 지원',
+  ],
+  Chronos: [
+    '업무 자율성 부여 및 유의미한 업무 재할당',
+    '업무량 및 기대 수준 재조정, 초과근무 억제',
+    '시의적절한 인정·격려 제공 및 주간 체크인 시작',
+  ],
+  Sentio: [
+    'JD-R(Job Demands-Resources) 모델 기반 관리적 개입',
+    'Job Crafting 기법 도입 — 직원 주도 역할 재설계',
+    '웰니스 프로그램 지원 및 EAP(Employee Assistance Program) 연계',
+  ],
+  Agora: [
+    "내부 '탤런트 마켓플레이스' 관점의 관리 — 사내 이동 기회 제공",
+    '시장 벤치마크 기반 전략적 보상 조정',
+    '경쟁력 있는 EVP(Employee Value Proposition) 강화',
+  ],
+};
+
+const getScoreLevel = (score) =>
+  score >= 0.8 ? '매우 높음' : score >= 0.6 ? '높음' : score >= 0.4 ? '중간' : '낮음';
+
+const getScoreBadge = (score) =>
+  score >= 0.8 ? '🔴 위험' : score >= 0.6 ? '🟡 주의' : score >= 0.4 ? '🟠 관찰' : '🟢 양호';
+
+const getActionPlan = (riskLevel, topAgent) => {
+  const agentNote = `${topAgent} 기반 개입 전략을 최우선 적용`;
+  if (riskLevel === 'high') return [
+    { phase: '⚡ 즉시 (72시간 이내)', items: [`관리자 + HR BP 공동 면담 일정 즉시 수립`, `개인 보상 패키지 재검토 의뢰`, agentNote] },
+    { phase: '📅 단기 (1~2주)',        items: ['주간 1:1 체크인 모니터링 시작', '경력 개발 로드맵 수립 면담 예약'] },
+    { phase: '📆 중기 (1~3개월)',      items: ['Retention Interview 실시', '프로젝트 재배치·역할 조정 검토'] },
+  ];
+  if (riskLevel === 'medium') return [
+    { phase: '📋 단기 (1주 이내)',     items: ['Retention Interview 예약', agentNote] },
+    { phase: '📅 단기 (2~4주)',        items: ['격주 체크인 모니터링 시작', '성장 기회 및 프로젝트 배치 논의'] },
+    { phase: '📆 중기 (2~3개월)',      items: ['역량 강화 프로그램 연계', '팀 네트워크 활성화 지원'] },
+  ];
+  return [
+    { phase: '📋 월간 관리',           items: ['월간 1:1 코칭 면담 정기화', '성장 기회 우선 배정 검토'] },
+    { phase: '📆 분기별',              items: ['분기 Pulse Survey 참여 독려', '동료 네트워크 활성화 지원'] },
+  ];
+};
+
+const buildReport = (employee) => {
+  const scores = {
+    Structura: employee.structura_score || 0,
+    Cognita:   employee.cognita_score   || 0,
+    Chronos:   employee.chronos_score   || 0,
+    Sentio:    employee.sentio_score    || 0,
+    Agora:     employee.agora_score     || 0,
+  };
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const [topAgent, topScore] = sorted[0];
+  const [secondAgent, secondScore] = sorted[1];
+  const persona = AGENT_PERSONA[topAgent];
+  const riskLabelMap = { HIGH: '고위험', MED: '잠재적 위험', MEDIUM: '잠재적 위험', LOW: '안정', high: '고위험', medium: '잠재적 위험', low: '안정' };
+  const riskIconMap  = { HIGH: '🔴', MED: '🟡', MEDIUM: '🟡', LOW: '🟢', high: '🔴', medium: '🟡', low: '🟢' };
+  const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  return {
+    meta: { today, employee, riskLabel: riskLabelMap[employee.risk_level] || employee.risk_level, riskIcon: riskIconMap[employee.risk_level] || '⚪', persona },
+    sorted, topAgent, topScore, secondAgent, secondScore,
+    agentScores: scores,
+    actionPlan: getActionPlan(
+      String(employee.risk_level).toLowerCase().replace('medium', 'medium').replace('med', 'medium'),
+      topAgent
+    ),
+  };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const ReportGeneration = () => {
   const [batchResults, setBatchResults] = useState(null);
@@ -625,72 +729,26 @@ const ReportGeneration = () => {
     return departments.filter(dept => dept && dept !== '미분류').concat(['미분류']);
   };
 
-  // 개별 직원 보고서 생성
+  // 개별 직원 맞춤형 보고서 생성 (5개 Agent 데이터 기반)
   const generateEmployeeReport = async (employee) => {
-    try {
-      setReportGenerating(true);
-      setSelectedEmployee(employee);
-      setReportModalVisible(true);
+    setSelectedEmployee(employee);
+    setReportModalVisible(true);
+    setReportGenerating(true);
 
-      console.log('📝 직원 보고서 생성 시작:', {
-        employee_id: employee.employee_id,
-        department: employee.department,
-        job_role: employee.job_role,
-        position: employee.position
-      });
-
-      // Integration 서버에 보고서 생성 요청
-      const response = await fetch(`${INTEGRATION_URL}/api/generate-employee-report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          employee_id: employee.employee_id,
-          department: employee.department,
-          job_role: employee.job_role,
-          position: employee.position,
-          risk_level: employee.risk_level,
-          risk_score: employee.risk_score,
-          agent_scores: {
-            structura: employee.structura_score,
-            chronos: employee.chronos_score,
-            cognita: employee.cognita_score,
-            sentio: employee.sentio_score,
-            agora: employee.agora_score
-          }
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    // 클라이언트 측 즉시 생성 (Agent 점수 기반)
+    setTimeout(() => {
+      try {
+        const report = buildReport(employee);
+        setGeneratedReport(report);
+        message.success('맞춤형 보고서가 생성되었습니다.');
+      } catch (err) {
+        console.error('보고서 생성 오류:', err);
+        message.error('보고서 생성에 실패했습니다.');
+        setGeneratedReport(null);
+      } finally {
+        setReportGenerating(false);
       }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setGeneratedReport(result.report);
-        console.log('✅ 직원 보고서 생성 완료', {
-          has_comprehensive_report: result.has_comprehensive_report,
-          visualization_files: result.visualization_files?.length || 0
-        });
-        
-        if (result.has_comprehensive_report) {
-          message.success('저장된 종합 보고서를 불러왔습니다.');
-        } else {
-          message.success('LLM 기반 보고서가 생성되었습니다.');
-        }
-      } else {
-        throw new Error(result.error || '보고서 생성 실패');
-      }
-
-    } catch (error) {
-      console.error('보고서 생성 실패:', error);
-      message.error(`보고서 생성에 실패했습니다: ${error.message}`);
-      setGeneratedReport('보고서 생성에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setReportGenerating(false);
-    }
+    }, 600); // 생성 중 UX 피드백용 딜레이
   };
 
   // 테이블 컬럼 정의
@@ -945,21 +1003,79 @@ const ReportGeneration = () => {
 
       {/* 보고서 모달 */}
       <Modal
-        title={`직원 보고서 - ${selectedEmployee?.name || selectedEmployee?.employee_id}`}
+        title={
+          <span>
+            <FileTextOutlined style={{ marginRight: 8, color: '#d93954' }} />
+            맞춤형 퇴사위험 분석 보고서 — 직원 {selectedEmployee?.employee_id}
+          </span>
+        }
         open={reportModalVisible}
-        onCancel={() => setReportModalVisible(false)}
-        width={800}
+        onCancel={() => { setReportModalVisible(false); setGeneratedReport(null); }}
+        width={860}
         footer={[
-          <Button key="close" onClick={() => setReportModalVisible(false)}>
+          <Button key="close" onClick={() => { setReportModalVisible(false); setGeneratedReport(null); }}>
             닫기
           </Button>,
           <Button
             key="download"
             type="primary"
             icon={<DownloadOutlined />}
+            disabled={!generatedReport}
             onClick={() => {
-              // 보고서 다운로드 기능 (추후 구현)
-              message.info('다운로드 기능은 추후 구현 예정입니다.');
+              if (!generatedReport) return;
+              const { meta, sorted, topAgent, secondAgent, actionPlan } = generatedReport;
+              const lines = [
+                '════════════════════════════════════════════════════════',
+                '   RETAIN SENTINEL 360 — 맞춤형 퇴사위험 분석 보고서',
+                '════════════════════════════════════════════════════════',
+                `생성일: ${meta.today}`,
+                `직원 ID: ${meta.employee.employee_id}  |  부서: ${meta.employee.department}`,
+                `직무: ${meta.employee.job_role || '-'}  |  직급: Level ${meta.employee.position || '-'}`,
+                '',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                '1. 종합 위험 진단',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                `위험 등급: ${meta.riskIcon} ${meta.riskLabel.toUpperCase()}`,
+                `종합 위험 점수: ${(meta.employee.risk_score * 100).toFixed(1)}%`,
+                `Persona: [${meta.persona.code}] ${meta.persona.name}`,
+                `→ ${meta.persona.desc}`,
+                '',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                '2. 5대 Agent 위험 분석',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                ...sorted.map(([a, s], i) => `  ${i+1}. ${a}  ${AGENT_DESCS[a]}\n     점수: ${(s*100).toFixed(1)}%  ${getScoreBadge(s)}`),
+                '',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                '3. 주요 위험 요인 해석',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                `[주요] ${topAgent}: ${AGENT_INTERPRETATION[topAgent](getScoreLevel(sorted[0][1]))}`,
+                `[보조] ${secondAgent}: ${AGENT_INTERPRETATION[secondAgent](getScoreLevel(sorted[1][1]))}`,
+                '',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                `4. 맞춤형 개입 전략 (${topAgent} 중심)`,
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                ...AGENT_INTERVENTIONS[topAgent].map(t => `  • ${t}`),
+                `\n[보완 — ${secondAgent}]`,
+                `  • ${AGENT_INTERVENTIONS[secondAgent][0]}`,
+                '',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                '5. 우선순위 액션 플랜',
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                ...actionPlan.flatMap(p => [p.phase, ...p.items.map(i => `  • ${i}`)]),
+                '',
+                '════════════════════════════════════════════════════════',
+                '본 보고서는 Retain Sentinel 360 Agentic AI 시스템이',
+                '5개 전문 Worker Agent 분석 결과를 종합하여 생성했습니다.',
+                'PwC Consulting HR Tech © 2025',
+                '════════════════════════════════════════════════════════',
+              ];
+              const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `report_${meta.employee.employee_id}_${new Date().toISOString().slice(0,10)}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
             }}
           >
             다운로드
@@ -967,55 +1083,133 @@ const ReportGeneration = () => {
         ]}
       >
         {reportGenerating ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div style={{ textAlign: 'center', padding: '60px' }}>
             <Spin size="large" />
             <div style={{ marginTop: 16 }}>
-              <Text>LLM으로 보고서를 생성하는 중...</Text>
+              <Text>5개 Agent 분석 데이터로 맞춤형 보고서 생성 중...</Text>
             </div>
           </div>
-        ) : (
-          <div>
-            {selectedEmployee && (
-              <div style={{ marginBottom: 16, padding: 16, backgroundColor: '#f5f5f5', borderRadius: 6 }}>
-                <Row gutter={16}>
-                  <Col span={8}>
-                    <Text strong>직원 ID:</Text> {selectedEmployee.employee_id}<br />
-                    <Text strong>이름:</Text> {selectedEmployee.name}<br />
-                    <Text strong>부서:</Text> {selectedEmployee.department}<br />
-                    <Text strong>직무:</Text> {selectedEmployee.job_role || '-'}<br />
-                    <Text strong>직급:</Text> {selectedEmployee.position || '-'}
-                  </Col>
-                  <Col span={8}>
-                    <Text strong>위험도:</Text> <Tag color={
-                      selectedEmployee.risk_level === 'high' ? 'red' : 
-                      selectedEmployee.risk_level === 'medium' ? 'orange' : 'green'
-                    }>
-                      {selectedEmployee.risk_level === 'high' ? '고위험군' : 
-                       selectedEmployee.risk_level === 'medium' ? '주의군' : '안전군'}
-                    </Tag><br />
-                    <Text strong>위험 점수:</Text> {(selectedEmployee.risk_score * 100).toFixed(1)}%<br />
-                    <Text strong>Structura:</Text> {(selectedEmployee.structura_score * 100).toFixed(1)}%<br />
-                    <Text strong>Chronos:</Text> {(selectedEmployee.chronos_score * 100).toFixed(1)}%
-                  </Col>
-                  <Col span={8}>
-                    <Text strong>Cognita:</Text> {(selectedEmployee.cognita_score * 100).toFixed(1)}%<br />
-                    <Text strong>Sentio:</Text> {(selectedEmployee.sentio_score * 100).toFixed(1)}%<br />
-                    <Text strong>Agora:</Text> {(selectedEmployee.agora_score * 100).toFixed(1)}%
-                  </Col>
-                </Row>
+        ) : generatedReport ? (() => {
+          const { meta, sorted, topAgent, secondAgent, actionPlan } = generatedReport;
+          const riskColor = { '고위험': '#d93954', '잠재적 위험': '#e8721a', '안정': '#2ea44f' }[meta.riskLabel] || '#888';
+          const sec = (title) => (
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#d93954', borderBottom: '1px solid #f0f0f0', paddingBottom: 6, marginBottom: 10, marginTop: 18 }}>
+              {title}
+            </div>
+          );
+          return (
+            <div style={{ fontSize: 13, lineHeight: 1.7, maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* 헤더 */}
+              <div style={{ background: 'linear-gradient(135deg,#2d2d2d,#1a1a2e)', color: '#fff', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>RETAIN SENTINEL 360 — 맞춤형 퇴사위험 분석 보고서</div>
+                <div style={{ fontSize: 11, color: '#aaa' }}>생성일: {meta.today} | 직원 ID: {meta.employee.employee_id}</div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+                  {[
+                    { label: '부서', val: meta.employee.department },
+                    { label: '직무', val: meta.employee.job_role || '-' },
+                    { label: '직급', val: `Level ${meta.employee.position || '-'}` },
+                  ].map(({ label, val }) => (
+                    <span key={label} style={{ fontSize: 11, background: 'rgba(255,255,255,.1)', padding: '2px 10px', borderRadius: 12 }}>
+                      {label}: <strong>{val}</strong>
+                    </span>
+                  ))}
+                </div>
               </div>
-            )}
-            
-            <Divider>생성된 보고서</Divider>
-            
-            <TextArea
-              value={generatedReport}
-              readOnly
-              rows={15}
-              style={{ fontSize: 'var(--font-base)', lineHeight: '1.6' }}
-              placeholder="보고서가 생성되면 여기에 표시됩니다..."
-            />
-          </div>
+
+              {/* 1. 종합 위험 진단 */}
+              {sec('1. 종합 위험 진단')}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                <div style={{ flex: 1, minWidth: 140, background: '#fef2f2', border: `2px solid ${riskColor}`, borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>위험 등급</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: riskColor }}>{meta.riskIcon} {meta.riskLabel}</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 140, background: '#f5f5f5', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>종합 위험 점수</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: riskColor }}>{(meta.employee.risk_score * 100).toFixed(1)}%</div>
+                </div>
+                <div style={{ flex: 2, minWidth: 200, background: '#fde8ec', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>Persona 분류</div>
+                  <div style={{ fontWeight: 700, color: '#d93954' }}>[{meta.persona.code}] {meta.persona.name}</div>
+                  <div style={{ fontSize: 11, color: '#555', marginTop: 4 }}>{meta.persona.desc}</div>
+                </div>
+              </div>
+
+              {/* 2. 5대 Agent 분석 */}
+              {sec('2. 5대 Agent 위험 분석')}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {sorted.map(([agent, score], i) => {
+                  const badge = getScoreBadge(score);
+                  const agentColors = { Structura: '#d93954', Cognita: '#2563eb', Chronos: '#e8721a', Sentio: '#7c3aed', Agora: '#2ea44f' };
+                  const c = agentColors[agent];
+                  return (
+                    <div key={agent} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: i === 0 ? '#fef8f8' : '#fafafa', borderRadius: 8, border: i === 0 ? `1px solid ${c}40` : '1px solid #f0f0f0' }}>
+                      <span style={{ width: 18, fontSize: 11, color: '#999', fontWeight: 700 }}>{i + 1}</span>
+                      <span style={{ width: 70, fontWeight: 700, fontSize: 12, color: c }}>{agent}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 10, color: '#888' }}>{AGENT_DESCS[agent]}</div>
+                        <div style={{ height: 6, background: '#eee', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${score * 100}%`, height: '100%', background: c, borderRadius: 3 }} />
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: c, width: 42, textAlign: 'right' }}>{(score * 100).toFixed(0)}%</span>
+                      <span style={{ fontSize: 11, width: 60 }}>{badge}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 3. 해석 */}
+              {sec('3. 주요 위험 요인 해석')}
+              <div style={{ background: '#fde8ec', borderLeft: '4px solid #d93954', borderRadius: 6, padding: '10px 14px', marginBottom: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 4 }}>[주요] {topAgent}</div>
+                <div style={{ fontSize: 12, color: '#444' }}>{AGENT_INTERPRETATION[topAgent](getScoreLevel(sorted[0][1]))}</div>
+              </div>
+              <div style={{ background: '#f5f5f5', borderLeft: '4px solid #aaa', borderRadius: 6, padding: '10px 14px' }}>
+                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 4 }}>[보조] {secondAgent}</div>
+                <div style={{ fontSize: 12, color: '#444' }}>{AGENT_INTERPRETATION[secondAgent](getScoreLevel(sorted[1][1]))}</div>
+              </div>
+
+              {/* 4. 개입 전략 */}
+              {sec(`4. 맞춤형 개입 전략 (${topAgent} 중심)`)}
+              <div style={{ marginBottom: 10 }}>
+                {AGENT_INTERVENTIONS[topAgent].map((t, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 5, fontSize: 12 }}>
+                    <span style={{ color: '#d93954', fontWeight: 700, flexShrink: 0 }}>✅</span>
+                    <span>{t}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: '#f9f9f9', borderRadius: 6, padding: '8px 12px', marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>보완 전략 — {secondAgent}</div>
+                <div style={{ display: 'flex', gap: 8, fontSize: 12 }}>
+                  <span style={{ color: '#aaa', flexShrink: 0 }}>•</span>
+                  <span>{AGENT_INTERVENTIONS[secondAgent][0]}</span>
+                </div>
+              </div>
+
+              {/* 5. 액션 플랜 */}
+              {sec('5. 우선순위 액션 플랜')}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {actionPlan.map((p, i) => (
+                  <div key={i} style={{ background: '#fafafa', borderRadius: 8, padding: '10px 14px', border: '1px solid #f0f0f0' }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{p.phase}</div>
+                    {p.items.map((item, j) => (
+                      <div key={j} style={{ display: 'flex', gap: 8, fontSize: 12, marginBottom: 3 }}>
+                        <span style={{ color: '#d93954' }}>•</span><span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 20, padding: '10px 16px', background: '#f5f5f5', borderRadius: 8, fontSize: 11, color: '#999', textAlign: 'center' }}>
+                본 보고서는 Retain Sentinel 360 Agentic AI 시스템이 5개 전문 Worker Agent의 분석 결과를 종합하여 생성했습니다.
+                PwC Consulting HR Tech © 2025
+              </div>
+            </div>
+          );
+        })() : (
+          <div style={{ textAlign: 'center', color: '#888', padding: 40 }}>보고서 데이터가 없습니다.</div>
         )}
       </Modal>
     </div>
