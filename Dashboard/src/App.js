@@ -714,7 +714,7 @@ const App = () => {
       case 'home-main':
         return <HomeMain {...commonProps} />;
       case 'home':
-        return <Home />;
+        return <Home viewMode={viewMode} />;
       case 'insights':
         return <Insights />;
       case 'risk-factors':
