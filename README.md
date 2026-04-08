@@ -166,4 +166,4 @@ NEO4J_PASSWORD=your-password
 
 ---
 
-**개발**: PwC RA Team | **버전**: 3.0.0 | **라이센스**: MIT
+**개발**: PwC Strategy& Workforce | **버전**: 3.0.0 | **라이센스**: MIT
